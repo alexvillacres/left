@@ -6,6 +6,10 @@
 	objectVersion = 77;
 	objects = {
 
+/* Begin PBXBuildFile section */
+		064641702FF6F3F000280DEC /* CLAUDE.md in Sources */ = {isa = PBXBuildFile; fileRef = 0646416F2FF6F3EC00280DEC /* CLAUDE.md */; };
+/* End PBXBuildFile section */
+
 /* Begin PBXContainerItemProxy section */
 		064641532FF6F38700280DEC /* PBXContainerItemProxy */ = {
 			isa = PBXContainerItemProxy;
@@ -27,6 +31,7 @@
 		064641432FF6F38500280DEC /* Diem.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Diem.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		064641522FF6F38700280DEC /* DiemTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = DiemTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		0646415C2FF6F38700280DEC /* DiemUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = DiemUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+		0646416F2FF6F3EC00280DEC /* CLAUDE.md */ = {isa = PBXFileReference; lastKnownFileType = net.daringfireball.markdown; path = CLAUDE.md; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
@@ -75,6 +80,7 @@
 		0646413A2FF6F38500280DEC = {
 			isa = PBXGroup;
 			children = (
+				0646416F2FF6F3EC00280DEC /* CLAUDE.md */,
 				064641452FF6F38500280DEC /* Diem */,
 				064641552FF6F38700280DEC /* DiemTests */,
 				0646415F2FF6F38700280DEC /* DiemUITests */,
@@ -236,6 +242,7 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				064641702FF6F3F000280DEC /* CLAUDE.md in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -410,7 +417,7 @@
 					"@executable_path/Frameworks",
 				);
 				MARKETING_VERSION = 1.0;
-				PRODUCT_BUNDLE_IDENTIFIER = goodjobstudio.Diem;
+				PRODUCT_BUNDLE_IDENTIFIER = goodjobstudios.Diem;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				STRING_CATALOG_GENERATE_SYMBOLS = YES;
 				SWIFT_APPROACHABLE_CONCURRENCY = YES;
@@ -442,7 +449,7 @@
 					"@executable_path/Frameworks",
 				);
 				MARKETING_VERSION = 1.0;
-				PRODUCT_BUNDLE_IDENTIFIER = goodjobstudio.Diem;
+				PRODUCT_BUNDLE_IDENTIFIER = goodjobstudios.Diem;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				STRING_CATALOG_GENERATE_SYMBOLS = YES;
 				SWIFT_APPROACHABLE_CONCURRENCY = YES;
