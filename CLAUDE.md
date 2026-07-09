@@ -1,4 +1,4 @@
-# Diem — a minimal daily budget tracker
+# Left — a minimal daily budget tracker
 
 ## What this is
 
@@ -20,16 +20,16 @@ are the only source of truth.
 
 - Swift 5.10+, SwiftUI, SwiftData. iOS 17 minimum.
 - No third-party dependencies. None.
-- Xcode project: Diem (already scaffolded from the SwiftData template).
+- Xcode project: Left (already scaffolded from the SwiftData template).
 - The data model is already written: `BudgetModel.swift`. Use it as-is.
   Do not rename its types or invert its relationships.
-- DiemTests / DiemUITests exist from the template. Leave them untouched
+- LeftTests / LeftUITests exist from the template. Leave them untouched
   in v1. Do not write tests unless asked.
 
 ## Files / structure
 
-    Diem/
-      DiemApp.swift           — @main, ModelContainer, month-boundary check
+    Left/
+      LeftApp.swift           — @main, ModelContainer, month-boundary check
       BudgetModel.swift       — provided; MonthPlan, FixedExpense, Transaction
       Screens/
         TodayView.swift       — home screen (the hero number)
@@ -117,7 +117,7 @@ ContentView.swift is deleted — no vestigial wrapper views.
 
 ## App lifecycle
 
-In DiemApp on launch and on `scenePhase == .active`:
+In LeftApp on launch and on `scenePhase == .active`:
 1. Fetch MonthPlan for the current month (compare normalized monthStart).
 2. If missing and a previous plan exists → `previous.nextMonth()`, insert.
 3. If NO plan exists at all → first launch → present PlanView as a
@@ -144,10 +144,10 @@ In DiemApp on launch and on `scenePhase == .active`:
 build and run in Xcode before continuing)
 
 0. Template cleanup: delete Item.swift. Update the ModelContainer in
-   DiemApp.swift to register [MonthPlan.self, FixedExpense.self,
+   LeftApp.swift to register [MonthPlan.self, FixedExpense.self,
    Transaction.self] and remove all references to Item. Point the root
    at a placeholder TodayView for now. Verify BudgetModel.swift compiles
-   as part of the Diem target.
+   as part of the Left target.
 1. PlanView + first-launch onboarding. Verify a MonthPlan persists
    across relaunch.
 2. TodayView real layout with computed values.
@@ -156,7 +156,7 @@ build and run in Xcode before continuing)
 5. Month-boundary logic + polish pass (dark mode audit, dynamic type).
 6. Delete ContentView.swift if any reference to it still remains.
 
-Note: when creating new .swift files, they must belong to the Diem
+Note: when creating new .swift files, they must belong to the Left
 target. If the build fails with "cannot find type" on a file that
 exists, target membership is the first thing to check.
 

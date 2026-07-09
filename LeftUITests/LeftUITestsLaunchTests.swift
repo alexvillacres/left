@@ -1,13 +1,13 @@
 //
-//  DiemUITestsLaunchTests.swift
-//  DiemUITests
+//  LeftUITestsLaunchTests.swift
+//  LeftUITests
 //
 //  Created by Alex Villacres on 7/2/26.
 //
 
 import XCTest
 
-final class DiemUITestsLaunchTests: XCTestCase {
+final class LeftUITestsLaunchTests: XCTestCase {
 
     override class var runsForEachTargetApplicationUIConfiguration: Bool {
         true

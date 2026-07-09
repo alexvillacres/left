@@ -1,0 +1,71 @@
+import SwiftUI
+
+// 3×4 keypad: 1–9, blank, 0, backspace. Cents-first entry upstream
+// means no "." key is needed.
+struct NumpadView: View {
+    let onDigit: (Int) -> Void
+    let onBackspace: () -> Void
+    @ScaledMetric private var keyHeight = 56
+
+    private let rows: [[Key]] = [
+        [.digit(1), .digit(2), .digit(3)],
+        [.digit(4), .digit(5), .digit(6)],
+        [.digit(7), .digit(8), .digit(9)],
+        [.blank, .digit(0), .backspace],
+    ]
+
+    private enum Key: Hashable {
+        case digit(Int)
+        case blank
+        case backspace
+    }
+
+    var body: some View {
+        Grid(horizontalSpacing: AppSpacing.sm, verticalSpacing: AppSpacing.sm) {
+            ForEach(rows, id: \.self) { row in
+                GridRow {
+                    ForEach(row, id: \.self) { key in
+                        keyView(key)
+                    }
+                }
+            }
+        }
+    }
+
+    @ViewBuilder
+    private func keyView(_ key: Key) -> some View {
+        switch key {
+        case .digit(let n):
+            keyButton { onDigit(n) } label: {
+                Text("\(n)")
+            }
+        case .backspace:
+            keyButton { onBackspace() } label: {
+                Image(systemName: "delete.backward")
+            }
+        case .blank:
+            Color.clear
+                .frame(maxWidth: .infinity)
+                .frame(minHeight: keyHeight)
+        }
+    }
+
+    private func keyButton(action: @escaping () -> Void, @ViewBuilder label: () -> some View) -> some View {
+        Button(action: action) {
+            label()
+                .font(.figtree(.title2, weight: .medium))
+                .foregroundStyle(.primary)
+                .frame(maxWidth: .infinity)
+                .frame(minHeight: keyHeight)
+                .background(Color.budgetSecondaryActionBackground)
+                .clipShape(RoundedRectangle(cornerRadius: 12))
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+    }
+}
+
+#Preview {
+    NumpadView(onDigit: { _ in }, onBackspace: {})
+        .padding(AppSpacing.lg)
+}

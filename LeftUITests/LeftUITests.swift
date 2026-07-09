@@ -1,13 +1,13 @@
 //
-//  DiemUITests.swift
-//  DiemUITests
+//  LeftUITests.swift
+//  LeftUITests
 //
 //  Created by Alex Villacres on 7/2/26.
 //
 
 import XCTest
 
-final class DiemUITests: XCTestCase {
+final class LeftUITests: XCTestCase {
 
     override func setUpWithError() throws {
         // Put setup code here. This method is called before the invocation of each test method in the class.

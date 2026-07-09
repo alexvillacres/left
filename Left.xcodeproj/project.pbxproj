@@ -6,48 +6,57 @@
 	objectVersion = 77;
 	objects = {
 
-/* Begin PBXBuildFile section */
-		064641702FF6F3F000280DEC /* CLAUDE.md in Sources */ = {isa = PBXBuildFile; fileRef = 0646416F2FF6F3EC00280DEC /* CLAUDE.md */; };
-/* End PBXBuildFile section */
-
 /* Begin PBXContainerItemProxy section */
 		064641532FF6F38700280DEC /* PBXContainerItemProxy */ = {
 			isa = PBXContainerItemProxy;
 			containerPortal = 0646413B2FF6F38500280DEC /* Project object */;
 			proxyType = 1;
 			remoteGlobalIDString = 064641422FF6F38500280DEC;
-			remoteInfo = Diem;
+			remoteInfo = Left;
 		};
 		0646415D2FF6F38700280DEC /* PBXContainerItemProxy */ = {
 			isa = PBXContainerItemProxy;
 			containerPortal = 0646413B2FF6F38500280DEC /* Project object */;
 			proxyType = 1;
 			remoteGlobalIDString = 064641422FF6F38500280DEC;
-			remoteInfo = Diem;
+			remoteInfo = Left;
 		};
 /* End PBXContainerItemProxy section */
 
 /* Begin PBXFileReference section */
-		064641432FF6F38500280DEC /* Diem.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Diem.app; sourceTree = BUILT_PRODUCTS_DIR; };
-		064641522FF6F38700280DEC /* DiemTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = DiemTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
-		0646415C2FF6F38700280DEC /* DiemUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = DiemUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+		064641432FF6F38500280DEC /* Left.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Left.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		064641522FF6F38700280DEC /* LeftTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = LeftTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+		0646415C2FF6F38700280DEC /* LeftUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = LeftUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		0646416F2FF6F3EC00280DEC /* CLAUDE.md */ = {isa = PBXFileReference; lastKnownFileType = net.daringfireball.markdown; path = CLAUDE.md; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
+/* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
+		064641702FF78AE000280DEC /* Exceptions for "Left" folder in "Left" target */ = {
+			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
+			membershipExceptions = (
+				Info.plist,
+			);
+			target = 064641422FF6F38500280DEC /* Left */;
+		};
+/* End PBXFileSystemSynchronizedBuildFileExceptionSet section */
+
 /* Begin PBXFileSystemSynchronizedRootGroup section */
-		064641452FF6F38500280DEC /* Diem */ = {
+		064641452FF6F38500280DEC /* Left */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
-			path = Diem;
+			exceptions = (
+				064641702FF78AE000280DEC /* Exceptions for "Left" folder in "Left" target */,
+			);
+			path = Left;
 			sourceTree = "<group>";
 		};
-		064641552FF6F38700280DEC /* DiemTests */ = {
+		064641552FF6F38700280DEC /* LeftTests */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
-			path = DiemTests;
+			path = LeftTests;
 			sourceTree = "<group>";
 		};
-		0646415F2FF6F38700280DEC /* DiemUITests */ = {
+		0646415F2FF6F38700280DEC /* LeftUITests */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
-			path = DiemUITests;
+			path = LeftUITests;
 			sourceTree = "<group>";
 		};
 /* End PBXFileSystemSynchronizedRootGroup section */
@@ -81,9 +90,9 @@
 			isa = PBXGroup;
 			children = (
 				0646416F2FF6F3EC00280DEC /* CLAUDE.md */,
-				064641452FF6F38500280DEC /* Diem */,
-				064641552FF6F38700280DEC /* DiemTests */,
-				0646415F2FF6F38700280DEC /* DiemUITests */,
+				064641452FF6F38500280DEC /* Left */,
+				064641552FF6F38700280DEC /* LeftTests */,
+				0646415F2FF6F38700280DEC /* LeftUITests */,
 				064641442FF6F38500280DEC /* Products */,
 			);
 			sourceTree = "<group>";
@@ -91,9 +100,9 @@
 		064641442FF6F38500280DEC /* Products */ = {
 			isa = PBXGroup;
 			children = (
-				064641432FF6F38500280DEC /* Diem.app */,
-				064641522FF6F38700280DEC /* DiemTests.xctest */,
-				0646415C2FF6F38700280DEC /* DiemUITests.xctest */,
+				064641432FF6F38500280DEC /* Left.app */,
+				064641522FF6F38700280DEC /* LeftTests.xctest */,
+				0646415C2FF6F38700280DEC /* LeftUITests.xctest */,
 			);
 			name = Products;
 			sourceTree = "<group>";
@@ -101,9 +110,9 @@
 /* End PBXGroup section */
 
 /* Begin PBXNativeTarget section */
-		064641422FF6F38500280DEC /* Diem */ = {
+		064641422FF6F38500280DEC /* Left */ = {
 			isa = PBXNativeTarget;
-			buildConfigurationList = 064641662FF6F38700280DEC /* Build configuration list for PBXNativeTarget "Diem" */;
+			buildConfigurationList = 064641662FF6F38700280DEC /* Build configuration list for PBXNativeTarget "Left" */;
 			buildPhases = (
 				0646413F2FF6F38500280DEC /* Sources */,
 				064641402FF6F38500280DEC /* Frameworks */,
@@ -114,18 +123,18 @@
 			dependencies = (
 			);
 			fileSystemSynchronizedGroups = (
-				064641452FF6F38500280DEC /* Diem */,
+				064641452FF6F38500280DEC /* Left */,
 			);
-			name = Diem;
+			name = Left;
 			packageProductDependencies = (
 			);
-			productName = Diem;
-			productReference = 064641432FF6F38500280DEC /* Diem.app */;
+			productName = Left;
+			productReference = 064641432FF6F38500280DEC /* Left.app */;
 			productType = "com.apple.product-type.application";
 		};
-		064641512FF6F38700280DEC /* DiemTests */ = {
+		064641512FF6F38700280DEC /* LeftTests */ = {
 			isa = PBXNativeTarget;
-			buildConfigurationList = 064641692FF6F38700280DEC /* Build configuration list for PBXNativeTarget "DiemTests" */;
+			buildConfigurationList = 064641692FF6F38700280DEC /* Build configuration list for PBXNativeTarget "LeftTests" */;
 			buildPhases = (
 				0646414E2FF6F38700280DEC /* Sources */,
 				0646414F2FF6F38700280DEC /* Frameworks */,
@@ -137,18 +146,18 @@
 				064641542FF6F38700280DEC /* PBXTargetDependency */,
 			);
 			fileSystemSynchronizedGroups = (
-				064641552FF6F38700280DEC /* DiemTests */,
+				064641552FF6F38700280DEC /* LeftTests */,
 			);
-			name = DiemTests;
+			name = LeftTests;
 			packageProductDependencies = (
 			);
-			productName = DiemTests;
-			productReference = 064641522FF6F38700280DEC /* DiemTests.xctest */;
+			productName = LeftTests;
+			productReference = 064641522FF6F38700280DEC /* LeftTests.xctest */;
 			productType = "com.apple.product-type.bundle.unit-test";
 		};
-		0646415B2FF6F38700280DEC /* DiemUITests */ = {
+		0646415B2FF6F38700280DEC /* LeftUITests */ = {
 			isa = PBXNativeTarget;
-			buildConfigurationList = 0646416C2FF6F38700280DEC /* Build configuration list for PBXNativeTarget "DiemUITests" */;
+			buildConfigurationList = 0646416C2FF6F38700280DEC /* Build configuration list for PBXNativeTarget "LeftUITests" */;
 			buildPhases = (
 				064641582FF6F38700280DEC /* Sources */,
 				064641592FF6F38700280DEC /* Frameworks */,
@@ -160,13 +169,13 @@
 				0646415E2FF6F38700280DEC /* PBXTargetDependency */,
 			);
 			fileSystemSynchronizedGroups = (
-				0646415F2FF6F38700280DEC /* DiemUITests */,
+				0646415F2FF6F38700280DEC /* LeftUITests */,
 			);
-			name = DiemUITests;
+			name = LeftUITests;
 			packageProductDependencies = (
 			);
-			productName = DiemUITests;
-			productReference = 0646415C2FF6F38700280DEC /* DiemUITests.xctest */;
+			productName = LeftUITests;
+			productReference = 0646415C2FF6F38700280DEC /* LeftUITests.xctest */;
 			productType = "com.apple.product-type.bundle.ui-testing";
 		};
 /* End PBXNativeTarget section */
@@ -192,7 +201,7 @@
 					};
 				};
 			};
-			buildConfigurationList = 0646413E2FF6F38500280DEC /* Build configuration list for PBXProject "Diem" */;
+			buildConfigurationList = 0646413E2FF6F38500280DEC /* Build configuration list for PBXProject "Left" */;
 			developmentRegion = en;
 			hasScannedForEncodings = 0;
 			knownRegions = (
@@ -206,9 +215,9 @@
 			projectDirPath = "";
 			projectRoot = "";
 			targets = (
-				064641422FF6F38500280DEC /* Diem */,
-				064641512FF6F38700280DEC /* DiemTests */,
-				0646415B2FF6F38700280DEC /* DiemUITests */,
+				064641422FF6F38500280DEC /* Left */,
+				064641512FF6F38700280DEC /* LeftTests */,
+				0646415B2FF6F38700280DEC /* LeftUITests */,
 			);
 		};
 /* End PBXProject section */
@@ -242,7 +251,6 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				064641702FF6F3F000280DEC /* CLAUDE.md in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -265,12 +273,12 @@
 /* Begin PBXTargetDependency section */
 		064641542FF6F38700280DEC /* PBXTargetDependency */ = {
 			isa = PBXTargetDependency;
-			target = 064641422FF6F38500280DEC /* Diem */;
+			target = 064641422FF6F38500280DEC /* Left */;
 			targetProxy = 064641532FF6F38700280DEC /* PBXContainerItemProxy */;
 		};
 		0646415E2FF6F38700280DEC /* PBXTargetDependency */ = {
 			isa = PBXTargetDependency;
-			target = 064641422FF6F38500280DEC /* Diem */;
+			target = 064641422FF6F38500280DEC /* Left */;
 			targetProxy = 0646415D2FF6F38700280DEC /* PBXContainerItemProxy */;
 		};
 /* End PBXTargetDependency section */
@@ -406,18 +414,14 @@
 				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_TEAM = 82686BFEMF;
 				ENABLE_PREVIEWS = YES;
-				GENERATE_INFOPLIST_FILE = YES;
-				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
-				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
-				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
-				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad = "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
-				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPhone = "UIInterfaceOrientationPortrait UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
+				GENERATE_INFOPLIST_FILE = NO;
+				INFOPLIST_FILE = Left/Info.plist;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
 				MARKETING_VERSION = 1.0;
-				PRODUCT_BUNDLE_IDENTIFIER = goodjobstudios.Diem;
+				PRODUCT_BUNDLE_IDENTIFIER = goodjobstudios.Left;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				STRING_CATALOG_GENERATE_SYMBOLS = YES;
 				SWIFT_APPROACHABLE_CONCURRENCY = YES;
@@ -438,18 +442,14 @@
 				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_TEAM = 82686BFEMF;
 				ENABLE_PREVIEWS = YES;
-				GENERATE_INFOPLIST_FILE = YES;
-				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
-				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
-				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
-				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad = "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
-				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPhone = "UIInterfaceOrientationPortrait UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
+				GENERATE_INFOPLIST_FILE = NO;
+				INFOPLIST_FILE = Left/Info.plist;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
 				MARKETING_VERSION = 1.0;
-				PRODUCT_BUNDLE_IDENTIFIER = goodjobstudios.Diem;
+				PRODUCT_BUNDLE_IDENTIFIER = goodjobstudios.Left;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				STRING_CATALOG_GENERATE_SYMBOLS = YES;
 				SWIFT_APPROACHABLE_CONCURRENCY = YES;
@@ -471,7 +471,7 @@
 				GENERATE_INFOPLIST_FILE = YES;
 				IPHONEOS_DEPLOYMENT_TARGET = 26.5;
 				MARKETING_VERSION = 1.0;
-				PRODUCT_BUNDLE_IDENTIFIER = goodjobstudio.DiemTests;
+				PRODUCT_BUNDLE_IDENTIFIER = goodjobstudio.LeftTests;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				STRING_CATALOG_GENERATE_SYMBOLS = NO;
 				SWIFT_APPROACHABLE_CONCURRENCY = YES;
@@ -479,7 +479,7 @@
 				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
 				SWIFT_VERSION = 5.0;
 				TARGETED_DEVICE_FAMILY = "1,2";
-				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/Diem.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/Diem";
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/Left.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/Left";
 			};
 			name = Debug;
 		};
@@ -493,7 +493,7 @@
 				GENERATE_INFOPLIST_FILE = YES;
 				IPHONEOS_DEPLOYMENT_TARGET = 26.5;
 				MARKETING_VERSION = 1.0;
-				PRODUCT_BUNDLE_IDENTIFIER = goodjobstudio.DiemTests;
+				PRODUCT_BUNDLE_IDENTIFIER = goodjobstudio.LeftTests;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				STRING_CATALOG_GENERATE_SYMBOLS = NO;
 				SWIFT_APPROACHABLE_CONCURRENCY = YES;
@@ -501,7 +501,7 @@
 				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
 				SWIFT_VERSION = 5.0;
 				TARGETED_DEVICE_FAMILY = "1,2";
-				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/Diem.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/Diem";
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/Left.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/Left";
 			};
 			name = Release;
 		};
@@ -513,7 +513,7 @@
 				DEVELOPMENT_TEAM = 82686BFEMF;
 				GENERATE_INFOPLIST_FILE = YES;
 				MARKETING_VERSION = 1.0;
-				PRODUCT_BUNDLE_IDENTIFIER = goodjobstudio.DiemUITests;
+				PRODUCT_BUNDLE_IDENTIFIER = goodjobstudio.LeftUITests;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				STRING_CATALOG_GENERATE_SYMBOLS = NO;
 				SWIFT_APPROACHABLE_CONCURRENCY = YES;
@@ -521,7 +521,7 @@
 				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
 				SWIFT_VERSION = 5.0;
 				TARGETED_DEVICE_FAMILY = "1,2";
-				TEST_TARGET_NAME = Diem;
+				TEST_TARGET_NAME = Left;
 			};
 			name = Debug;
 		};
@@ -533,7 +533,7 @@
 				DEVELOPMENT_TEAM = 82686BFEMF;
 				GENERATE_INFOPLIST_FILE = YES;
 				MARKETING_VERSION = 1.0;
-				PRODUCT_BUNDLE_IDENTIFIER = goodjobstudio.DiemUITests;
+				PRODUCT_BUNDLE_IDENTIFIER = goodjobstudio.LeftUITests;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				STRING_CATALOG_GENERATE_SYMBOLS = NO;
 				SWIFT_APPROACHABLE_CONCURRENCY = YES;
@@ -541,14 +541,14 @@
 				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
 				SWIFT_VERSION = 5.0;
 				TARGETED_DEVICE_FAMILY = "1,2";
-				TEST_TARGET_NAME = Diem;
+				TEST_TARGET_NAME = Left;
 			};
 			name = Release;
 		};
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
-		0646413E2FF6F38500280DEC /* Build configuration list for PBXProject "Diem" */ = {
+		0646413E2FF6F38500280DEC /* Build configuration list for PBXProject "Left" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (
 				064641642FF6F38700280DEC /* Debug */,
@@ -557,7 +557,7 @@
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;
 		};
-		064641662FF6F38700280DEC /* Build configuration list for PBXNativeTarget "Diem" */ = {
+		064641662FF6F38700280DEC /* Build configuration list for PBXNativeTarget "Left" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (
 				064641672FF6F38700280DEC /* Debug */,
@@ -566,7 +566,7 @@
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;
 		};
-		064641692FF6F38700280DEC /* Build configuration list for PBXNativeTarget "DiemTests" */ = {
+		064641692FF6F38700280DEC /* Build configuration list for PBXNativeTarget "LeftTests" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (
 				0646416A2FF6F38700280DEC /* Debug */,
@@ -575,7 +575,7 @@
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;
 		};
-		0646416C2FF6F38700280DEC /* Build configuration list for PBXNativeTarget "DiemUITests" */ = {
+		0646416C2FF6F38700280DEC /* Build configuration list for PBXNativeTarget "LeftUITests" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (
 				0646416D2FF6F38700280DEC /* Debug */,

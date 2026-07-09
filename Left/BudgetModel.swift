@@ -20,7 +20,7 @@ final class MonthPlan {
     var transactions: [Transaction] = []
 
     init(monthStart: Date, monthlyIncome: Decimal, savingsGoal: Decimal) {
-        self.monthStart = monthStart
+        self.monthStart = Calendar.current.leftMonthStart(for: monthStart)
         self.monthlyIncome = monthlyIncome
         self.savingsGoal = savingsGoal
     }
@@ -151,5 +151,12 @@ extension MonthPlan {
         let pace = day > 0 ? spent(asOf: date) / Decimal(day) : 0
         let projectedSpend = spent(asOf: date) + pace * Decimal(remaining)
         return savingsGoal + (monthlySpendable - projectedSpend)
+    }
+}
+
+extension Calendar {
+    func leftMonthStart(for date: Date) -> Date {
+        let components = dateComponents([.year, .month], from: date)
+        return startOfDay(for: self.date(from: components)!)
     }
 }
