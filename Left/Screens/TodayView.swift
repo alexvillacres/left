@@ -1,10 +1,19 @@
 import SwiftUI
 import SwiftData
+import UIKit
 
 struct TodayView: View {
     @Query(sort: \MonthPlan.monthStart, order: .reverse) private var plans: [MonthPlan]
-    @State private var showingAddExpense = false
+    @State private var activeExpenseSheet: ActiveExpenseSheet?
+    @State private var pastDate: Date? = nil
+    @Environment(\.modelContext) private var modelContext
+    @Environment(\.scenePhase) private var scenePhase
     @ScaledMetric private var heroSize = 56
+
+    private struct ActiveExpenseSheet: Identifiable {
+        let id = UUID()
+        var transaction: Transaction?
+    }
 
     private var plan: MonthPlan? {
         let currentMonthStart = Calendar.current.leftMonthStart(for: .now)
@@ -13,64 +22,136 @@ struct TodayView: View {
         }
     }
 
+    private var displayedDate: Date { pastDate ?? .now }
+    private var isToday: Bool { pastDate == nil }
+
+    private var balanceDate: Date {
+        guard let pastDate else { return .now }
+        let startOfNextDay = Calendar.current.date(byAdding: .day, value: 1, to: pastDate)!
+        return startOfNextDay.addingTimeInterval(-1)
+    }
+
+    private var transactionDate: Date {
+        guard let pastDate else { return .now }
+        let calendar = Calendar.current
+        let currentTime = calendar.dateComponents([.hour, .minute, .second], from: .now)
+        return calendar.date(bySettingHour: currentTime.hour ?? 0,
+                             minute: currentTime.minute ?? 0,
+                             second: currentTime.second ?? 0,
+                             of: pastDate) ?? pastDate
+    }
+
     var body: some View {
         NavigationStack {
             VStack(spacing: 0) {
-                // Date
-                Text(Date.now, format: .dateTime.weekday(.abbreviated).month(.abbreviated).day())
-                    .font(.figtree(.subheadline))
-                    .foregroundStyle(.secondary)
-                    .frame(maxWidth: .infinity)
-                    .padding(.horizontal, AppSpacing.xl)
-                    .padding(.top, AppSpacing.lg)
+                dateHeader
+                heroSection
+                transactionsSection
 
-                // Hero number — dominates the screen
-                VStack(spacing: AppSpacing.lg) {
-                    Text("Left to spend today")
-                        .font(.figtree(.subheadline))
-                        .foregroundStyle(.secondary)
-
-                    heroAmount
-
-                    if let plan {
-                        dailyBudgetChip(plan.dailyRate)
-                    }
+                if let plan {
+                    bottomControls(plan: plan)
                 }
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
-
-                // Today's transactions
-                VStack(spacing: 0) {
-                    ForEach(todayTransactions) { tx in
-                        transactionRow(tx)
-                        Divider()
-                            .overlay(Color.budgetDivider)
-                            .padding(.leading, 52)
-                    }
-                }
+            }
+            .contentShape(Rectangle())
+            .simultaneousGesture(daySwipeGesture)
+            .accessibilityAction(named: "Previous day") {
+                shiftDay(-1)
+            }
+            .accessibilityAction(named: "Next day") {
+                shiftDay(1)
             }
             .background(Color.budgetBackground.ignoresSafeArea())
-            .safeAreaInset(edge: .bottom, spacing: 0) {
-                if let plan { footerBar(plan: plan) }
-            }
-            .overlay(alignment: .bottom) {
-                addFAB
-                    .padding(.horizontal, AppSpacing.xl)
-                    .padding(.bottom, AppSpacing.xxl + AppSpacing.xl + AppSpacing.lg) // clears footer
-            }
         }
-        .sheet(isPresented: $showingAddExpense) {
+        .sheet(item: $activeExpenseSheet) { sheet in
             if let plan {
-                AddExpenseSheet(plan: plan)
+                AddExpenseSheet(plan: plan, date: transactionDate, transaction: sheet.transaction)
             }
         }
+        .onChange(of: scenePhase) { _, newPhase in
+            guard newPhase == .active,
+                  let pastDate,
+                  pastDate < Calendar.current.leftMonthStart(for: .now) else { return }
+            self.pastDate = nil
+        }
+    }
+
+    private var daySwipeGesture: some Gesture {
+        DragGesture(minimumDistance: 24).onEnded { value in
+            guard abs(value.translation.width) > abs(value.translation.height),
+                  abs(value.translation.width) > 50 else { return }
+            shiftDay(value.translation.width > 0 ? -1 : 1)
+        }
+    }
+
+    // MARK: - Date
+
+    private var dateHeader: some View {
+        Button {
+            withAnimation(.spring(duration: 0.4)) {
+                pastDate = nil
+            }
+        } label: {
+            HStack(spacing: AppSpacing.xs) {
+                Text(displayedDate, format: .dateTime.weekday(.abbreviated).month(.abbreviated).day())
+                if !isToday {
+                    Image(systemName: "arrow.uturn.forward")
+                        .font(.figtree(.caption2))
+                }
+            }
+            .font(.figtree(.subheadline))
+            .foregroundStyle(.secondary)
+            .frame(maxWidth: .infinity)
+        }
+        .buttonStyle(.plain)
+        .disabled(isToday)
+        .padding(.horizontal, AppSpacing.xl)
+        .padding(.top, AppSpacing.lg)
+    }
+
+    private func shiftDay(_ delta: Int) {
+        guard let plan else { return }
+        let calendar = Calendar.current
+        let target = calendar.date(byAdding: .day,
+                                   value: delta,
+                                   to: calendar.startOfDay(for: displayedDate))!
+        guard target >= plan.monthStart else { return }
+
+        let todayStart = calendar.startOfDay(for: .now)
+        let newPastDate: Date? = target >= todayStart ? nil : target
+        if let oldDate = pastDate, let newPastDate, calendar.isDate(oldDate, inSameDayAs: newPastDate) {
+            return
+        }
+        guard pastDate != nil || newPastDate != nil else { return }
+
+        withAnimation(.spring(duration: 0.4)) {
+            pastDate = newPastDate
+        }
+        UIImpactFeedbackGenerator(style: .light).impactOccurred()
     }
 
     // MARK: - Hero
 
+    private var heroSection: some View {
+        VStack(spacing: AppSpacing.lg) {
+            Text(isToday ? "Left today" : "Left that day")
+                .font(.figtree(.subheadline))
+                .foregroundStyle(.secondary)
+
+            heroAmount
+
+            if let plan {
+                dailyBudgetChip(plan.dailyRate)
+            }
+        }
+        .frame(maxWidth: .infinity)
+        .frame(height: 222)
+        .padding(.horizontal, AppSpacing.xl)
+    }
+
     @ViewBuilder
     private var heroAmount: some View {
         if let plan {
-            let remaining = plan.remainingForToday()
+            let remaining = plan.remainingToday(on: balanceDate)
             HeroMoneyText(amount: remaining, size: heroSize)
                 .padding(.horizontal, AppSpacing.xl)
                 .contentTransition(.numericText())
@@ -91,7 +172,7 @@ struct TodayView: View {
     // MARK: - Daily budget chip
 
     private func dailyBudgetChip(_ dailyRate: Decimal) -> some View {
-        Text("\(dailyRate.formatted(.currency(code: "USD"))) budget today")
+        Text("\(dailyRate.formatted(.currency(code: "USD"))) \(isToday ? "budget today" : "daily budget")")
             .font(.figtree(.subheadline, weight: .medium))
             .foregroundStyle(Color.budgetInfo)
             .padding(.horizontal, AppSpacing.md)
@@ -102,10 +183,40 @@ struct TodayView: View {
 
     // MARK: - Transactions
 
+    private var transactionsSection: some View {
+        List {
+            ForEach(todayTransactions) { tx in
+                Button {
+                    activeExpenseSheet = ActiveExpenseSheet(transaction: tx)
+                } label: {
+                    transactionRow(tx)
+                }
+                .buttonStyle(.plain)
+                .listRowInsets(EdgeInsets())
+                .listRowBackground(Color.budgetBackground)
+                .alignmentGuide(.listRowSeparatorLeading) { dimensions in
+                    dimensions[.leading]
+                }
+                .swipeActions(edge: .trailing) {
+                    Button(role: .destructive) {
+                        delete(tx)
+                    } label: {
+                        Label("Delete", systemImage: "trash")
+                    }
+                }
+            }
+        }
+        .listStyle(.plain)
+        .scrollIndicators(.hidden)
+        .scrollContentBackground(.hidden)
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+        .background(Color.budgetBackground)
+    }
+
     private var todayTransactions: [Transaction] {
         guard let plan else { return [] }
         return plan.transactions
-            .filter { Calendar.current.isDateInToday($0.date) }
+            .filter { Calendar.current.isDate($0.date, inSameDayAs: displayedDate) }
             .sorted { $0.date > $1.date }
     }
 
@@ -119,7 +230,7 @@ struct TodayView: View {
                 Text(note)
                     .lineLimit(2)
             } else {
-                Text(tx.category.rawValue.capitalized)
+                    Text(tx.category.label)
                     .foregroundStyle(.secondary)
                     .lineLimit(1)
             }
@@ -129,23 +240,35 @@ struct TodayView: View {
         }
         .padding(.horizontal, AppSpacing.xl)
         .padding(.vertical, AppSpacing.md)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .contentShape(Rectangle())
     }
 
-    // MARK: - Footer
+    // MARK: - Bottom controls
 
-    private func footerBar(plan: MonthPlan) -> some View {
-        let spentToday = plan.spentToday()
-        let remaining = plan.remainingForToday()
+    private func bottomControls(plan: MonthPlan) -> some View {
+        VStack(spacing: AppSpacing.xl) {
+            addButton
+            progressFooter(plan: plan)
+        }
+        .padding(.horizontal, AppSpacing.xl)
+        .padding(.top, AppSpacing.md)
+        .padding(.bottom, AppSpacing.sm)
+        .background(Color.budgetBackground)
+    }
+
+    private func progressFooter(plan: MonthPlan) -> some View {
+        let spentToday = plan.spentToday(on: displayedDate)
+        let remaining = plan.remainingToday(on: balanceDate)
         let spentValue = max(0, NSDecimalNumber(decimal: spentToday).doubleValue)
         let budgetValue = max(0.01, NSDecimalNumber(decimal: plan.dailyRate).doubleValue)
 
         return VStack(spacing: AppSpacing.sm) {
             ProgressView(value: min(spentValue, budgetValue), total: budgetValue)
                 .tint(heroColor(remaining: remaining, dailyRate: plan.dailyRate))
-                .padding(.horizontal, AppSpacing.xl)
 
             HStack {
-                Text("Today")
+                Text(isToday ? "Today" : displayedDate.formatted(.dateTime.weekday(.abbreviated).month(.abbreviated).day()))
                     .font(.figtree(.caption))
                     .foregroundStyle(.secondary)
                 Spacer()
@@ -155,18 +278,14 @@ struct TodayView: View {
                     .lineLimit(1)
                     .minimumScaleFactor(0.75)
             }
-            .padding(.horizontal, AppSpacing.xl)
         }
-        .padding(.top, AppSpacing.md)
-        .padding(.bottom, AppSpacing.sm)
-        .background(Color.budgetSurface)
     }
 
-    // MARK: - FAB
+    // MARK: - Add button
 
-    private var addFAB: some View {
+    private var addButton: some View {
         Button {
-            showingAddExpense = true
+            activeExpenseSheet = ActiveExpenseSheet()
         } label: {
             Text("Add Expense")
                 .font(.figtree(size: 17, weight: .semibold))
@@ -179,6 +298,11 @@ struct TodayView: View {
         }
         .accessibilityLabel("Add Expense")
     }
+
+    private func delete(_ transaction: Transaction) {
+        modelContext.delete(transaction)
+        UIImpactFeedbackGenerator(style: .light).impactOccurred()
+    }
 }
 
 private extension MonthPlan {
@@ -188,9 +312,6 @@ private extension MonthPlan {
             .reduce(0) { $0 + $1.amount }
     }
 
-    func remainingForToday(on date: Date = .now, calendar: Calendar = .current) -> Decimal {
-        dailyRate - spentToday(on: date, calendar: calendar)
-    }
 }
 
 #Preview {

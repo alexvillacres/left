@@ -105,7 +105,7 @@ struct AppRoot: View {
                              monthlyIncome: previous.monthlyIncome,
                              savingsGoal: previous.savingsGoal)
         plan.fixedExpenses = previous.fixedExpenses.map {
-            FixedExpense(name: $0.name, amount: $0.amount)
+            FixedExpense(name: $0.name, amount: $0.amount, cadence: $0.effectiveCadence)
         }
         return plan
     }

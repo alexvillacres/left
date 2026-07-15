@@ -21,13 +21,14 @@ struct NumpadView: View {
     }
 
     var body: some View {
-        Grid(horizontalSpacing: AppSpacing.sm, verticalSpacing: AppSpacing.sm) {
+        VStack(spacing: AppSpacing.sm) {
             ForEach(rows, id: \.self) { row in
-                GridRow {
+                HStack(spacing: AppSpacing.sm) {
                     ForEach(row, id: \.self) { key in
                         keyView(key)
                     }
                 }
+                .frame(height: keyHeight)
             }
         }
     }
@@ -46,7 +47,7 @@ struct NumpadView: View {
         case .blank:
             Color.clear
                 .frame(maxWidth: .infinity)
-                .frame(minHeight: keyHeight)
+                .frame(height: keyHeight)
         }
     }
 
@@ -56,7 +57,7 @@ struct NumpadView: View {
                 .font(.figtree(.title2, weight: .medium))
                 .foregroundStyle(.primary)
                 .frame(maxWidth: .infinity)
-                .frame(minHeight: keyHeight)
+                .frame(height: keyHeight)
                 .background(Color.budgetSecondaryActionBackground)
                 .clipShape(RoundedRectangle(cornerRadius: 12))
                 .contentShape(Rectangle())

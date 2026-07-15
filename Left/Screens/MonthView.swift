@@ -1,5 +1,6 @@
 import SwiftUI
 import SwiftData
+import UIKit
 
 struct MonthView: View {
     @Query(sort: \MonthPlan.monthStart, order: .reverse) private var plans: [MonthPlan]
@@ -23,19 +24,22 @@ struct MonthView: View {
                 if let plan {
                     ScrollView {
                         VStack(spacing: AppSpacing.xl) {
+                            screenTitle(Date.now.formatted(.dateTime.month(.wide)))
                             header(plan)
                             grid(plan)
                         }
                         .padding(.horizontal, AppSpacing.xl)
                         .padding(.top, AppSpacing.sm)
                     }
+                    .contentMargins(.horizontal, 0, for: .scrollContent)
                     .background(Color.budgetBackground.ignoresSafeArea())
                 } else {
                     Text("No plan yet")
                         .foregroundStyle(.secondary)
                 }
             }
-            .navigationTitle(Date.now.formatted(.dateTime.month(.wide)))
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbarBackground(.hidden, for: .navigationBar)
         }
         .sheet(item: $selectedDay) { selection in
             if let plan {
@@ -45,6 +49,14 @@ struct MonthView: View {
     }
 
     // MARK: - Header
+
+    private func screenTitle(_ title: String) -> some View {
+        Text(title)
+            .font(.figtree(size: 44, weight: .semibold, relativeTo: .largeTitle))
+            .foregroundStyle(.primary)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(.top, AppSpacing.xxl)
+    }
 
     private func header(_ plan: MonthPlan) -> some View {
         VStack(alignment: .leading, spacing: AppSpacing.xxs) {
@@ -150,6 +162,9 @@ private struct DayTransactionsSheet: View {
     let plan: MonthPlan
     let day: Int
 
+    @Environment(\.modelContext) private var modelContext
+    @State private var editingTransaction: Transaction?
+
     private var date: Date {
         Calendar.current.date(byAdding: .day, value: day - 1, to: plan.monthStart)!
     }
@@ -169,22 +184,39 @@ private struct DayTransactionsSheet: View {
                         .foregroundStyle(.secondary)
                 } else {
                     List(transactions) { tx in
-                        HStack(spacing: AppSpacing.md) {
-                            Image(systemName: tx.category.symbol)
-                                .font(.figtree(.body))
-                                .foregroundStyle(Color.budgetInfo)
-                                .frame(width: 28)
-                            if let note = tx.note, !note.isEmpty {
-                                Text(note)
-                                    .lineLimit(2)
-                            } else {
-                                Text(tx.category.rawValue.capitalized)
-                                    .foregroundStyle(.secondary)
-                                    .lineLimit(1)
+                        Button {
+                            editingTransaction = tx
+                        } label: {
+                            HStack(spacing: AppSpacing.md) {
+                                Image(systemName: tx.category.symbol)
+                                    .font(.figtree(.body))
+                                    .foregroundStyle(Color.budgetInfo)
+                                    .frame(width: 28)
+                                if let note = tx.note, !note.isEmpty {
+                                    Text(note)
+                                        .lineLimit(2)
+                                } else {
+                                    Text(tx.category.label)
+                                        .foregroundStyle(.secondary)
+                                        .lineLimit(1)
+                                }
+                                Spacer()
+                                MoneyText(amount: tx.amount)
+                                    .layoutPriority(1)
                             }
-                            Spacer()
-                            MoneyText(amount: tx.amount)
-                                .layoutPriority(1)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .contentShape(Rectangle())
+                        }
+                        .buttonStyle(.plain)
+                        .alignmentGuide(.listRowSeparatorLeading) { dimensions in
+                            dimensions[.leading]
+                        }
+                        .swipeActions(edge: .trailing) {
+                            Button(role: .destructive) {
+                                delete(tx)
+                            } label: {
+                                Label("Delete", systemImage: "trash")
+                            }
                         }
                     }
                     .listStyle(.plain)
@@ -194,6 +226,14 @@ private struct DayTransactionsSheet: View {
             .navigationBarTitleDisplayMode(.inline)
         }
         .presentationDetents([.medium, .large])
+        .sheet(item: $editingTransaction) { transaction in
+            AddExpenseSheet(plan: plan, transaction: transaction)
+        }
+    }
+
+    private func delete(_ transaction: Transaction) {
+        modelContext.delete(transaction)
+        UIImpactFeedbackGenerator(style: .light).impactOccurred()
     }
 }
 
@@ -210,7 +250,7 @@ private struct DayTransactionsSheet: View {
     plan.fixedExpenses.append(FixedExpense(name: "Rent", amount: 1800))
     plan.transactions.append(Transaction(amount: 14.50, category: .food, note: "Lunch"))
     plan.transactions.append(Transaction(amount: 62, date: cal.date(byAdding: .day, value: 2, to: start)!, category: .shopping))
-    plan.transactions.append(Transaction(amount: 41, date: cal.date(byAdding: .day, value: 3, to: start)!, category: .fun))
+    plan.transactions.append(Transaction(amount: 41, date: cal.date(byAdding: .day, value: 3, to: start)!, category: .bar))
     return MonthView()
         .modelContainer(container)
 }

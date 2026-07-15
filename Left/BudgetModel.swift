@@ -32,7 +32,7 @@ final class MonthPlan {
                              monthlyIncome: monthlyIncome,
                              savingsGoal: savingsGoal)
         plan.fixedExpenses = fixedExpenses.map {
-            FixedExpense(name: $0.name, amount: $0.amount)
+            FixedExpense(name: $0.name, amount: $0.amount, cadence: $0.effectiveCadence)
         }
         return plan
     }
@@ -44,11 +44,45 @@ final class MonthPlan {
 final class FixedExpense {
     var name: String
     var amount: Decimal
+    var cadence: ExpenseCadence?
     var plan: MonthPlan?
 
-    init(name: String, amount: Decimal) {
+    init(name: String, amount: Decimal, cadence: ExpenseCadence = .monthly) {
         self.name = name
         self.amount = amount
+        self.cadence = cadence
+    }
+}
+
+enum ExpenseCadence: String, Codable, CaseIterable, Identifiable {
+    case monthly, quarterly, annually
+
+    var id: String { rawValue }
+
+    var label: String {
+        switch self {
+        case .monthly: "Monthly"
+        case .quarterly: "Quarterly"
+        case .annually: "Annually"
+        }
+    }
+
+    var divisorToMonthly: Decimal {
+        switch self {
+        case .monthly: 1
+        case .quarterly: 3
+        case .annually: 12
+        }
+    }
+}
+
+extension FixedExpense {
+    var effectiveCadence: ExpenseCadence {
+        cadence ?? .monthly
+    }
+
+    var monthlyAmount: Decimal {
+        amount / effectiveCadence.divisorToMonthly
     }
 }
 
@@ -73,17 +107,38 @@ final class Transaction {
 // Fixed set keeps the add-sheet to one row of chips. Codable enums
 // store cleanly in SwiftData.
 enum Category: String, Codable, CaseIterable, Identifiable {
-    case coffee, food, transit, shopping, fun, other
+    case coffee, food, grocery, bar, transit, shopping, household, fun, other
     var id: String { rawValue }
+
+    static var allCases: [Category] {
+        [.grocery, .bar, .food, .transit, .coffee, .household, .shopping, .other]
+    }
+
+    var label: String {
+        switch self {
+        case .coffee: "Coffee"
+        case .food: "Food"
+        case .grocery: "Grocery"
+        case .bar: "Bar"
+        case .transit: "Transit"
+        case .shopping: "Shopping"
+        case .household: "Household"
+        case .fun: "Other"
+        case .other: "Other"
+        }
+    }
 
     var symbol: String {
         switch self {
-        case .coffee:   "cup.and.saucer.fill"
-        case .food:     "fork.knife"
-        case .transit:  "tram.fill"
-        case .shopping: "bag.fill"
-        case .fun:      "sparkles"
-        case .other:    "circle.dashed"
+        case .coffee:    "cup.and.saucer.fill"
+        case .food:      "fork.knife"
+        case .grocery:   "basket.fill"
+        case .bar:       "wineglass.fill"
+        case .transit:   "tram.fill"
+        case .shopping:  "bag.fill"
+        case .household: "house.fill"
+        case .fun:       "circle.dashed"
+        case .other:     "circle.dashed"
         }
     }
 }
@@ -94,7 +149,7 @@ enum Category: String, Codable, CaseIterable, Identifiable {
 
 extension MonthPlan {
     var fixedTotal: Decimal {
-        fixedExpenses.reduce(0) { $0 + $1.amount }
+        fixedExpenses.reduce(0) { $0 + $1.monthlyAmount }
     }
 
     // What's available for daily spending across the whole month.

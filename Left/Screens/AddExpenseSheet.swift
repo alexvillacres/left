@@ -4,6 +4,8 @@ import UIKit
 
 struct AddExpenseSheet: View {
     let plan: MonthPlan
+    private let date: Date
+    private let transaction: Transaction?
 
     @Environment(\.modelContext) private var modelContext
     @Environment(\.dismiss) private var dismiss
@@ -14,8 +16,24 @@ struct AddExpenseSheet: View {
     @State private var note = ""
     @ScaledMetric private var amountSize = 44
 
+    init(plan: MonthPlan, date: Date = .now, transaction: Transaction? = nil) {
+        self.plan = plan
+        self.transaction = transaction
+        self.date = transaction?.date ?? date
+
+        if let transaction {
+            _digits = State(initialValue: Self.digits(for: transaction.amount))
+            _category = State(initialValue: transaction.category)
+            _note = State(initialValue: transaction.note ?? "")
+        }
+    }
+
     private var amount: Decimal {
         Decimal(UInt64(digits) ?? 0) / 100
+    }
+
+    private var isEditing: Bool {
+        transaction != nil
     }
 
     var body: some View {
@@ -26,6 +44,14 @@ struct AddExpenseSheet: View {
                 .contentTransition(.numericText())
                 .animation(.spring(duration: 0.2), value: amount)
                 .padding(.top, AppSpacing.xxl)
+
+            if !Calendar.current.isDateInToday(date) {
+                Text("Logging to \(date.formatted(.dateTime.weekday(.abbreviated).month(.abbreviated).day()))")
+                    .font(.figtree(.caption))
+                    .foregroundStyle(.secondary)
+                    .lineLimit(1)
+                    .padding(.top, AppSpacing.xs)
+            }
 
             Spacer(minLength: AppSpacing.lg)
 
@@ -41,12 +67,17 @@ struct AddExpenseSheet: View {
             NumpadView(onDigit: appendDigit, onBackspace: backspace)
                 .padding(.horizontal, AppSpacing.xl)
 
-            logButton
+            primaryButton
                 .padding(.horizontal, AppSpacing.xl)
                 .padding(.top, AppSpacing.md)
-                .padding(.bottom, AppSpacing.sm)
+
+            if isEditing {
+                deleteButton
+                    .padding(.horizontal, AppSpacing.xl)
+                    .padding(.top, AppSpacing.sm)
+            }
         }
-        .presentationDetents([.height(560), .large])
+        .presentationDetents([.height(560)])
         .background(Color.budgetBackground)
     }
 
@@ -68,7 +99,7 @@ struct AddExpenseSheet: View {
         return Button {
             category = cat
         } label: {
-            Label(cat.rawValue.capitalized, systemImage: cat.symbol)
+            Label(cat.label, systemImage: cat.symbol)
                 .font(.figtree(.subheadline, weight: .medium))
                 .foregroundStyle(selected ? Color.budgetPrimaryActionForeground : Color.budgetSecondaryActionForeground)
                 .lineLimit(1)
@@ -80,11 +111,11 @@ struct AddExpenseSheet: View {
         .buttonStyle(.plain)
     }
 
-    // MARK: - Log it
+    // MARK: - Actions
 
-    private var logButton: some View {
+    private var primaryButton: some View {
         Button(action: save) {
-            Text("Log it")
+            Text(isEditing ? "Save" : "Log it")
                 .font(.figtree(.headline, weight: .medium))
                 .foregroundStyle(Color.budgetPrimaryActionForeground)
                 .frame(maxWidth: .infinity)
@@ -95,6 +126,17 @@ struct AddExpenseSheet: View {
         .buttonStyle(.plain)
         .disabled(amount == 0)
         .opacity(amount > 0 ? 1 : 0.35)
+    }
+
+    private var deleteButton: some View {
+        Button(role: .destructive, action: deleteTransaction) {
+            Text("Delete expense")
+                .font(.figtree(.subheadline, weight: .medium))
+                .frame(maxWidth: .infinity)
+                .frame(minHeight: 44)
+        }
+        .buttonStyle(.plain)
+        .foregroundStyle(Color.budgetNegative)
     }
 
     // MARK: - Entry
@@ -112,13 +154,41 @@ struct AddExpenseSheet: View {
 
     private func save() {
         let trimmed = note.trimmingCharacters(in: .whitespacesAndNewlines)
-        let tx = Transaction(amount: amount,
-                             category: category,
-                             note: trimmed.isEmpty ? nil : trimmed)
-        modelContext.insert(tx)
-        tx.plan = plan
+        if let transaction {
+            transaction.amount = amount
+            transaction.category = category
+            transaction.note = trimmed.isEmpty ? nil : trimmed
+        } else {
+            let tx = Transaction(amount: amount,
+                                 date: date,
+                                 category: category,
+                                 note: trimmed.isEmpty ? nil : trimmed)
+            modelContext.insert(tx)
+            tx.plan = plan
+        }
         UIImpactFeedbackGenerator(style: .light).impactOccurred()
         dismiss()
+    }
+
+    private func deleteTransaction() {
+        guard let transaction else { return }
+        modelContext.delete(transaction)
+        UIImpactFeedbackGenerator(style: .light).impactOccurred()
+        dismiss()
+    }
+
+    private static func digits(for amount: Decimal) -> String {
+        let cents = NSDecimalNumber(decimal: amount * 100).rounding(
+            accordingToBehavior: NSDecimalNumberHandler(
+                roundingMode: .plain,
+                scale: 0,
+                raiseOnExactness: false,
+                raiseOnOverflow: false,
+                raiseOnUnderflow: false,
+                raiseOnDivideByZero: false
+            )
+        ).uint64Value
+        return cents == 0 ? "" : String(cents)
     }
 }
 
