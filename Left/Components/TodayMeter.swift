@@ -4,25 +4,43 @@ struct TodayMeter: View {
     let spent: Decimal
     let dailyRate: Decimal
 
-    private let meterHeight: CGFloat = 14
+    private let meterHeight: CGFloat = 56
+    private let fillInset: CGFloat = 4
     private let minimumFillWidth: CGFloat = 8
 
     private var isOverspent: Bool {
         dailyRate > 0 && spent > dailyRate
     }
 
+    private var spentFraction: CGFloat {
+        guard dailyRate > 0 else { return spent > 0 ? 1 : 0 }
+
+        let fraction = NSDecimalNumber(decimal: spent / dailyRate).doubleValue
+        guard fraction.isFinite else { return 1 }
+        return min(max(CGFloat(fraction), 0), 1)
+    }
+
     private var remainingFraction: CGFloat {
         guard dailyRate > 0 else { return spent > 0 ? 0 : 1 }
+        return 1 - spentFraction
+    }
 
-        let spentFraction = NSDecimalNumber(decimal: spent / dailyRate).doubleValue
-        guard spentFraction.isFinite else { return 0 }
-        return 1 - min(max(CGFloat(spentFraction), 0), 1)
+    // Move through the existing semantic palette as today's budget is used.
+    // The final red overlay remains partially transparent over warning amber,
+    // producing an orange-red nub just before the fill is fully depleted.
+    private var warningOpacity: Double {
+        min(Double(spentFraction) / 0.65, 1)
+    }
+
+    private var negativeOpacity: Double {
+        max((Double(spentFraction) - 0.65) / 0.35, 0) * 0.65
     }
 
     var body: some View {
         GeometryReader { geometry in
+            let availableWidth = max(geometry.size.width - fillInset * 2, 0)
             let fillWidth = remainingFraction > 0
-                ? min(geometry.size.width, max(minimumFillWidth, geometry.size.width * remainingFraction))
+                ? min(availableWidth, max(minimumFillWidth, availableWidth * remainingFraction))
                 : 0
 
             ZStack(alignment: .leading) {
@@ -34,9 +52,18 @@ struct TodayMeter: View {
                     )
 
                 if !isOverspent, fillWidth > 0 {
-                    Capsule()
-                        .fill(Color.fern300)
-                        .frame(width: fillWidth)
+                    ZStack {
+                        Capsule()
+                            .fill(Color.fern300)
+                        Capsule()
+                            .fill(Color.leftWarning)
+                            .opacity(warningOpacity)
+                        Capsule()
+                            .fill(Color.leftNegative)
+                            .opacity(negativeOpacity)
+                    }
+                    .frame(width: fillWidth)
+                    .padding(fillInset)
                 }
             }
         }
