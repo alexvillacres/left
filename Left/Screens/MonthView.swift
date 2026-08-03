@@ -5,13 +5,14 @@ import UIKit
 struct MonthView: View {
     @Query(sort: \MonthPlan.monthStart, order: .reverse) private var plans: [MonthPlan]
     @State private var selectedDay: DaySelection?
+    @State private var selectedMonthStart: Date?
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @ScaledMetric private var heroSize = 42
 
     private var plan: MonthPlan? {
-        let currentMonthStart = Calendar.current.leftMonthStart(for: .now)
-        return plans.first {
-            Calendar.current.isDate($0.monthStart, equalTo: currentMonthStart, toGranularity: .month)
-        }
+        let target = selectedMonthStart ?? Calendar.current.leftMonthStart(for: .now)
+        return plans.first { Calendar.current.isDate($0.monthStart, equalTo: target, toGranularity: .month) }
+            ?? plans.first
     }
 
     private struct DaySelection: Identifiable {
@@ -25,7 +26,7 @@ struct MonthView: View {
                 if let plan {
                     ScrollView {
                         VStack(spacing: AppSpacing.xl) {
-                            screenTitle(Date.now.formatted(.dateTime.month(.wide)))
+                            monthTitle(plan)
                             header(plan)
                             grid(plan)
                         }
@@ -33,6 +34,8 @@ struct MonthView: View {
                         .padding(.top, AppSpacing.sm)
                     }
                     .contentMargins(.horizontal, 0, for: .scrollContent)
+                    .contentShape(Rectangle())
+                    .simultaneousGesture(monthSwipeGesture)
                     .background(Color(uiColor: .systemBackground).ignoresSafeArea())
                 } else {
                     Text("No plan yet")
@@ -51,18 +54,30 @@ struct MonthView: View {
 
     // MARK: - Header
 
-    private func screenTitle(_ title: String) -> some View {
-        Text(title)
-            .font(.dmSans(size: heroSize, weight: .semibold, relativeTo: .largeTitle))
-            .foregroundStyle(.primary)
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .padding(.top, AppSpacing.xxl)
+    private func monthTitle(_ plan: MonthPlan) -> some View {
+        HStack(alignment: .center, spacing: AppSpacing.xs) {
+            Text(plan.monthStart.formatted(.dateTime.month(.wide).year()))
+                .font(.dmSans(size: heroSize, weight: .semibold, relativeTo: .largeTitle))
+                .foregroundStyle(.primary)
+                .lineLimit(1)
+                .minimumScaleFactor(0.75)
+
+            Spacer(minLength: AppSpacing.sm)
+
+            monthNavigationButton(systemName: "chevron.left", delta: -1, label: "Previous month")
+            monthNavigationButton(systemName: "chevron.right", delta: 1, label: "Next month")
+        }
+        .padding(.top, AppSpacing.xxl)
     }
 
     private func header(_ plan: MonthPlan) -> some View {
-        VStack(alignment: .leading, spacing: AppSpacing.xxs) {
+        let isCurrentMonth = Calendar.current.isDate(plan.monthStart, equalTo: .now, toGranularity: .month)
+        let evaluationDate = isCurrentMonth ? Date.now : endOfMonth(for: plan)
+        let savings = plan.projectedSavings(on: evaluationDate)
+
+        return VStack(alignment: .leading, spacing: AppSpacing.xxs) {
             HStack(alignment: .firstTextBaseline, spacing: AppSpacing.xs) {
-                MoneyText(amount: plan.spent())
+                MoneyText(amount: plan.spent(asOf: evaluationDate))
                     .font(.dmSans(.title2, weight: .semibold))
                 Text("of \(plan.monthlySpendable.formatted(.currency(code: "USD"))) spent")
                     .font(.dmSans(.subheadline))
@@ -70,12 +85,66 @@ struct MonthView: View {
                     .lineLimit(1)
                     .minimumScaleFactor(0.75)
             }
-            Text("On pace to save \(plan.projectedSavings().formatted(.currency(code: "USD")))")
+            Text(isCurrentMonth
+                 ? "On pace to save \(savings.formatted(.currency(code: "USD")))"
+                 : "Saved \(savings.formatted(.currency(code: "USD")))")
                 .font(.dmSans(.subheadline))
                 .foregroundStyle(.secondary)
                 .lineLimit(2)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    private var monthSwipeGesture: some Gesture {
+        DragGesture(minimumDistance: 24).onEnded { value in
+            guard abs(value.translation.width) > abs(value.translation.height),
+                  abs(value.translation.width) > 50 else { return }
+            shiftMonth(value.translation.width > 0 ? -1 : 1)
+        }
+    }
+
+    private func monthNavigationButton(systemName: String, delta: Int, label: String) -> some View {
+        Button {
+            shiftMonth(delta)
+        } label: {
+            Image(systemName: systemName)
+                .font(.dmSans(.subheadline, weight: .medium))
+                .frame(width: 44, height: 44)
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .foregroundStyle(.secondary)
+        .disabled(month(atOffset: delta) == nil)
+        .accessibilityLabel(label)
+    }
+
+    private func shiftMonth(_ delta: Int) {
+        guard let target = month(atOffset: delta) else { return }
+        withAnimation(reduceMotion ? nil : .spring(duration: 0.4)) {
+            let currentMonthStart = Calendar.current.leftMonthStart(for: .now)
+            selectedMonthStart = Calendar.current.isDate(target.monthStart,
+                                                         equalTo: currentMonthStart,
+                                                         toGranularity: .month)
+                ? nil
+                : target.monthStart
+        }
+        UIImpactFeedbackGenerator(style: .light).impactOccurred()
+    }
+
+    private func month(atOffset delta: Int) -> MonthPlan? {
+        guard let plan,
+              let index = plans.firstIndex(where: { $0.persistentModelID == plan.persistentModelID }) else {
+            return nil
+        }
+        let targetIndex = index - delta
+        guard plans.indices.contains(targetIndex) else { return nil }
+        return plans[targetIndex]
+    }
+
+    private func endOfMonth(for plan: MonthPlan) -> Date {
+        let calendar = Calendar.current
+        let nextMonth = calendar.date(byAdding: .month, value: 1, to: plan.monthStart)!
+        return nextMonth.addingTimeInterval(-1)
     }
 
     // MARK: - Grid

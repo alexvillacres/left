@@ -21,10 +21,7 @@ struct TodayView: View {
     }
 
     private var plan: MonthPlan? {
-        let currentMonthStart = Calendar.current.leftMonthStart(for: .now)
-        return plans.first {
-            Calendar.current.isDate($0.monthStart, equalTo: currentMonthStart, toGranularity: .month)
-        }
+        planContaining(displayedDate)
     }
 
     private var displayedDate: Date { pastDate ?? .now }
@@ -82,9 +79,6 @@ struct TodayView: View {
             guard newPhase == .active else { return }
             // Session-scoped: the explanation is for the jump you just watched.
             recalcNote = nil
-            if let pastDate, pastDate < Calendar.current.leftMonthStart(for: .now) {
-                self.pastDate = nil
-            }
         }
     }
 
@@ -100,12 +94,19 @@ struct TodayView: View {
 
     @ViewBuilder
     private var dateContext: some View {
-        if isToday {
-            Text("Today")
-                .font(.dmSans(.subheadline))
-                .foregroundStyle(.secondary)
-        } else {
-            pastDateButton
+        HStack(spacing: AppSpacing.xs) {
+            if isToday {
+                Text("Today")
+                    .font(.dmSans(.subheadline))
+                    .foregroundStyle(.secondary)
+            } else {
+                pastDateButton
+            }
+
+            Spacer()
+
+            dayNavigationButton(systemName: "chevron.left", delta: -1, label: "Previous day")
+            dayNavigationButton(systemName: "chevron.right", delta: 1, label: "Next day")
         }
     }
 
@@ -127,14 +128,25 @@ struct TodayView: View {
         .accessibilityLabel("Return to today")
     }
 
-    private func shiftDay(_ delta: Int) {
-        guard let plan else { return }
-        let calendar = Calendar.current
-        let target = calendar.date(byAdding: .day,
-                                   value: delta,
-                                   to: calendar.startOfDay(for: displayedDate))!
-        guard target >= plan.monthStart else { return }
+    private func dayNavigationButton(systemName: String, delta: Int, label: String) -> some View {
+        Button {
+            shiftDay(delta)
+        } label: {
+            Image(systemName: systemName)
+                .font(.dmSans(.subheadline, weight: .medium))
+                .frame(width: 44, height: 44)
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .foregroundStyle(.secondary)
+        .disabled(navigationTarget(for: delta) == nil)
+        .accessibilityLabel(label)
+    }
 
+    private func shiftDay(_ delta: Int) {
+        guard let target = navigationTarget(for: delta) else { return }
+
+        let calendar = Calendar.current
         let todayStart = calendar.startOfDay(for: .now)
         let newPastDate: Date? = target >= todayStart ? nil : target
         if let oldDate = pastDate, let newPastDate, calendar.isDate(oldDate, inSameDayAs: newPastDate) {
@@ -148,12 +160,55 @@ struct TodayView: View {
         UIImpactFeedbackGenerator(style: .light).impactOccurred()
     }
 
+    private func navigationTarget(for delta: Int) -> Date? {
+        guard delta != 0, !plans.isEmpty else { return nil }
+
+        let calendar = Calendar.current
+        let todayStart = calendar.startOfDay(for: .now)
+        guard let adjacentDay = calendar.date(byAdding: .day,
+                                              value: delta,
+                                              to: calendar.startOfDay(for: displayedDate)),
+              adjacentDay <= todayStart else { return nil }
+
+        if planContaining(adjacentDay) != nil {
+            return adjacentDay
+        }
+
+        // A plan is only created when the app runs in a given month. If the app
+        // skipped a month, one swipe crosses the gap instead of trapping the
+        // user on the edge of the nearest stored plan.
+        let adjacentMonthStart = calendar.leftMonthStart(for: adjacentDay)
+        if delta < 0 {
+            guard let previousPlan = plans
+                .filter({ $0.monthStart < adjacentMonthStart })
+                .max(by: { $0.monthStart < $1.monthStart }),
+                  let nextMonth = calendar.date(byAdding: .month,
+                                                value: 1,
+                                                to: previousPlan.monthStart),
+                  let lastDay = calendar.date(byAdding: .day, value: -1, to: nextMonth) else {
+                return nil
+            }
+            return lastDay
+        }
+
+        return plans
+            .filter({ $0.monthStart > adjacentMonthStart && $0.monthStart <= todayStart })
+            .min(by: { $0.monthStart < $1.monthStart })?
+            .monthStart
+    }
+
+    private func planContaining(_ date: Date) -> MonthPlan? {
+        plans.first {
+            Calendar.current.isDate($0.monthStart, equalTo: date, toGranularity: .month)
+        }
+    }
+
     // MARK: - Hero
 
     private var heroSection: some View {
         VStack(alignment: .leading, spacing: 0) {
             dateContext
-                .frame(height: 22, alignment: .leading)
+                .frame(minHeight: 44, alignment: .leading)
                 .padding(.bottom, AppSpacing.sm)
 
             heroAmount

@@ -6,6 +6,8 @@ extension Color {
     static let fern300 = Color(hex: 0x8DDC70)
     static let fern500 = Color(hex: 0x509341)
     static let fern700 = Color(hex: 0x1C4F14)
+    static let neutral50 = Color(hex: 0xF5F5F5)
+    static let neutral100 = Color(hex: 0xEBEBEB)
 
     static let leftPositive = Color.dynamic(light: 0x336D29, dark: 0x8DDC70)
     static let leftWarning = Color.dynamic(light: 0xA8730F, dark: 0xEDB345)
