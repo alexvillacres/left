@@ -354,6 +354,12 @@ extension MonthPlan {
             .reduce(0) { $0 + $1.amount }
     }
 
+    func spent(on date: Date, calendar: Calendar = .current) -> Decimal {
+        transactions
+            .filter { calendar.isDate($0.date, inSameDayAs: date) }
+            .reduce(0) { $0 + $1.amount }
+    }
+
     // The hero number. Rollover and overspend-borrowing fall out
     // of this formula automatically:
     //   allowance earned so far − everything spent so far

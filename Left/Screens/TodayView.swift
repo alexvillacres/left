@@ -13,7 +13,7 @@ struct TodayView: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @ScaledMetric private var heroSize = 42
     // Scales so the block grows with the type inside it instead of clipping.
-    @ScaledMetric private var heroBlockHeight: CGFloat = 284
+    @ScaledMetric private var heroBlockHeight: CGFloat = 220
 
     private struct ActiveSpendingSheet: Identifiable {
         let id = UUID()
@@ -163,7 +163,7 @@ struct TodayView: View {
                     .padding(.top, AppSpacing.sm)
 
                 momentumStrip(plan: plan)
-                    .padding(.top, AppSpacing.lg)
+                    .padding(.top, AppSpacing.md)
             }
         }
         .frame(maxWidth: .infinity)
@@ -289,17 +289,13 @@ struct TodayView: View {
             .clipShape(Capsule())
     }
 
-    // The hero owns the exact current value. This strip shows each of the
-    // past seven days as a meter: budget as the track, spend as the fill.
+    // The hero includes rollover. This meter isolates the displayed day's
+    // spending pace against that day's daily budget.
     private func momentumStrip(plan: MonthPlan) -> some View {
-        let days = MonthPlan.spendingWeek(
-            from: plans,
-            around: displayedDate,
-            fallbackPlan: plan
-        )
+        let spent = plan.spent(on: displayedDate)
 
-        return SpendingWeekStrip(days: days)
-            .animation(reduceMotion ? nil : .spring(duration: 0.4), value: days.map(\.spent))
+        return TodayMeter(spent: spent, dailyRate: plan.dailyRate)
+            .animation(reduceMotion ? nil : .spring(duration: 0.4), value: spent)
     }
 
     // MARK: - Transactions
