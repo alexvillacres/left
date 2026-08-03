@@ -7,6 +7,8 @@ struct TodayMeter: View {
     private let meterHeight: CGFloat = 56
     private let fillInset: CGFloat = 4
     private let minimumFillWidth: CGFloat = 8
+    private let trackCornerRadius: CGFloat = 12
+    private let fillCornerRadius: CGFloat = 8
 
     private var isOverspent: Bool {
         dailyRate > 0 && spent > dailyRate
@@ -44,7 +46,7 @@ struct TodayMeter: View {
                 : 0
 
             ZStack(alignment: .leading) {
-                Capsule()
+                RoundedRectangle(cornerRadius: trackCornerRadius, style: .continuous)
                     .fill(
                         isOverspent
                             ? Color.leftNegative.opacity(0.35)
@@ -53,12 +55,12 @@ struct TodayMeter: View {
 
                 if !isOverspent, fillWidth > 0 {
                     ZStack {
-                        Capsule()
+                        RoundedRectangle(cornerRadius: fillCornerRadius, style: .continuous)
                             .fill(Color.fern300)
-                        Capsule()
+                        RoundedRectangle(cornerRadius: fillCornerRadius, style: .continuous)
                             .fill(Color.leftWarning)
                             .opacity(warningOpacity)
-                        Capsule()
+                        RoundedRectangle(cornerRadius: fillCornerRadius, style: .continuous)
                             .fill(Color.leftNegative)
                             .opacity(negativeOpacity)
                     }
