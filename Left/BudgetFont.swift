@@ -1,22 +1,22 @@
 import SwiftUI
 
 extension Font {
-    static func figtree(_ textStyle: TextStyle, weight: Weight = .regular) -> Font {
-        .custom(figtreeName(for: weight), size: defaultSize(for: textStyle), relativeTo: textStyle)
+    static func dmSans(_ textStyle: TextStyle, weight: Weight = .regular) -> Font {
+        .custom(dmSansName(for: weight), size: defaultSize(for: textStyle), relativeTo: textStyle)
     }
 
-    static func figtree(size: CGFloat, weight: Weight = .regular, relativeTo textStyle: TextStyle = .body) -> Font {
-        .custom(figtreeName(for: weight), size: size, relativeTo: textStyle)
+    static func dmSans(size: CGFloat, weight: Weight = .regular, relativeTo textStyle: TextStyle = .body) -> Font {
+        .custom(dmSansName(for: weight), size: size, relativeTo: textStyle)
     }
 
-    private static func figtreeName(for weight: Weight) -> String {
+    private static func dmSansName(for weight: Weight) -> String {
         switch weight {
         case .medium:
-            return "Figtree-Medium"
+            return "DMSans-Medium"
         case .semibold, .bold, .heavy, .black:
-            return "Figtree-SemiBold"
+            return "DMSans-Bold"
         default:
-            return "Figtree-Regular"
+            return "DMSans-Regular"
         }
     }
 

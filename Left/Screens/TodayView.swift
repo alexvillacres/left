@@ -4,13 +4,18 @@ import UIKit
 
 struct TodayView: View {
     @Query(sort: \MonthPlan.monthStart, order: .reverse) private var plans: [MonthPlan]
-    @State private var activeExpenseSheet: ActiveExpenseSheet?
+    @State private var activeSpendingSheet: ActiveSpendingSheet?
     @State private var pastDate: Date? = nil
+    @State private var isEditingIncome = false
+    @State private var recalcNote: String?
     @Environment(\.modelContext) private var modelContext
     @Environment(\.scenePhase) private var scenePhase
-    @ScaledMetric private var heroSize = 56
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @ScaledMetric private var heroSize = 42
+    // Scales so the block grows with the type inside it instead of clipping.
+    @ScaledMetric private var heroBlockHeight: CGFloat = 284
 
-    private struct ActiveExpenseSheet: Identifiable {
+    private struct ActiveSpendingSheet: Identifiable {
         let id = UUID()
         var transaction: Transaction?
     }
@@ -44,7 +49,6 @@ struct TodayView: View {
     var body: some View {
         NavigationStack {
             VStack(spacing: 0) {
-                dateHeader
                 heroSection
                 transactionsSection
 
@@ -60,18 +64,27 @@ struct TodayView: View {
             .accessibilityAction(named: "Next day") {
                 shiftDay(1)
             }
-            .background(Color.budgetBackground.ignoresSafeArea())
+            .background(Color(uiColor: .systemBackground).ignoresSafeArea())
         }
-        .sheet(item: $activeExpenseSheet) { sheet in
+        .sheet(item: $activeSpendingSheet) { sheet in
             if let plan {
-                AddExpenseSheet(plan: plan, date: transactionDate, transaction: sheet.transaction)
+                AddSpendingSheet(plan: plan, date: transactionDate, transaction: sheet.transaction)
+            }
+        }
+        .sheet(isPresented: $isEditingIncome) {
+            if let plan {
+                IncomeSheet(plan: plan) { changed in
+                    if changed { noteRecalculation(plan) }
+                }
             }
         }
         .onChange(of: scenePhase) { _, newPhase in
-            guard newPhase == .active,
-                  let pastDate,
-                  pastDate < Calendar.current.leftMonthStart(for: .now) else { return }
-            self.pastDate = nil
+            guard newPhase == .active else { return }
+            // Session-scoped: the explanation is for the jump you just watched.
+            recalcNote = nil
+            if let pastDate, pastDate < Calendar.current.leftMonthStart(for: .now) {
+                self.pastDate = nil
+            }
         }
     }
 
@@ -85,27 +98,33 @@ struct TodayView: View {
 
     // MARK: - Date
 
-    private var dateHeader: some View {
+    @ViewBuilder
+    private var dateContext: some View {
+        if isToday {
+            Text("Today")
+                .font(.dmSans(.subheadline))
+                .foregroundStyle(.secondary)
+        } else {
+            pastDateButton
+        }
+    }
+
+    private var pastDateButton: some View {
         Button {
-            withAnimation(.spring(duration: 0.4)) {
+            withAnimation(reduceMotion ? nil : .spring(duration: 0.4)) {
                 pastDate = nil
             }
         } label: {
             HStack(spacing: AppSpacing.xs) {
                 Text(displayedDate, format: .dateTime.weekday(.abbreviated).month(.abbreviated).day())
-                if !isToday {
-                    Image(systemName: "arrow.uturn.forward")
-                        .font(.figtree(.caption2))
-                }
+                Image(systemName: "arrow.uturn.forward")
+                    .font(.dmSans(.caption2))
             }
-            .font(.figtree(.subheadline))
+            .font(.dmSans(.subheadline))
             .foregroundStyle(.secondary)
-            .frame(maxWidth: .infinity)
         }
         .buttonStyle(.plain)
-        .disabled(isToday)
-        .padding(.horizontal, AppSpacing.xl)
-        .padding(.top, AppSpacing.lg)
+        .accessibilityLabel("Return to today")
     }
 
     private func shiftDay(_ delta: Int) {
@@ -123,7 +142,7 @@ struct TodayView: View {
         }
         guard pastDate != nil || newPastDate != nil else { return }
 
-        withAnimation(.spring(duration: 0.4)) {
+        withAnimation(reduceMotion ? nil : .spring(duration: 0.4)) {
             pastDate = newPastDate
         }
         UIImpactFeedbackGenerator(style: .light).impactOccurred()
@@ -132,53 +151,155 @@ struct TodayView: View {
     // MARK: - Hero
 
     private var heroSection: some View {
-        VStack(spacing: AppSpacing.lg) {
-            Text(isToday ? "Left today" : "Left that day")
-                .font(.figtree(.subheadline))
-                .foregroundStyle(.secondary)
+        VStack(alignment: .leading, spacing: 0) {
+            dateContext
+                .frame(height: 22, alignment: .leading)
+                .padding(.bottom, AppSpacing.sm)
 
             heroAmount
 
             if let plan {
-                dailyBudgetChip(plan.dailyRate)
+                statusChip(plan)
+                    .padding(.top, AppSpacing.sm)
+
+                momentumStrip(plan: plan)
+                    .padding(.top, AppSpacing.lg)
             }
         }
         .frame(maxWidth: .infinity)
-        .frame(height: 222)
+        .frame(minHeight: heroBlockHeight, alignment: .topLeading)
         .padding(.horizontal, AppSpacing.xl)
+        .padding(.top, AppSpacing.lg)
     }
 
     @ViewBuilder
     private var heroAmount: some View {
         if let plan {
             let remaining = plan.remainingToday(on: balanceDate)
-            HeroMoneyText(amount: remaining, size: heroSize)
-                .padding(.horizontal, AppSpacing.xl)
+            HeroMoneyText(amount: remaining, size: heroSize, suffix: "left")
+                .foregroundStyle(.primary)
                 .contentTransition(.numericText())
-                .animation(.spring(duration: 0.4), value: remaining)
+                .animation(reduceMotion ? nil : .spring(duration: 0.4), value: remaining)
         } else {
-            Text("$–")
-                .font(.figtree(size: heroSize, weight: .semibold, relativeTo: .largeTitle))
+            Text("$– left")
+                .font(.dmSans(size: heroSize, weight: .semibold, relativeTo: .largeTitle))
                 .foregroundStyle(.secondary)
         }
     }
 
-    private func heroColor(remaining: Decimal, dailyRate: Decimal) -> Color {
-        if remaining > dailyRate / 4 { return .budgetPositive }
-        if remaining > 0 { return .budgetWarning }
-        return .budgetNegative
+    // MARK: - Status chip
+
+    // The chip reports yesterday's outcome — a fresh, daily-scale number
+    // rather than the cumulative carryover (the hero already bakes that in).
+    // Day 1 (and a perfectly on-budget yesterday) falls back to the daily rate.
+    @ViewBuilder
+    private func statusChip(_ plan: MonthPlan) -> some View {
+        let delta = plan.yesterdayDelta(for: displayedDate)
+        if isToday, let recalcNote {
+            chip(recalcNote, textColor: .secondary, backgroundColor: Color.secondary.opacity(0.12))
+        } else if isToday, plan.needsIncomeConfirmation(on: displayedDate) {
+            incomeConfirmRow(plan)
+        } else if let delta, delta > 0 {
+            chip(
+                "+\(delta.formatted(.currency(code: "USD"))) saved yesterday",
+                textColor: .fern500,
+                backgroundColor: .fern100
+            )
+        } else if let delta, delta < 0 {
+            chip(
+                "\(delta.formatted(.currency(code: "USD"))) over yesterday",
+                textColor: .leftNegative,
+                backgroundColor: .leftNegative.opacity(0.12)
+            )
+        } else {
+            chip(
+                "\(plan.dailyRate.formatted(.currency(code: "USD"))) \(isToday ? "budget today" : "daily budget")",
+                textColor: .secondary,
+                backgroundColor: Color.secondary.opacity(0.12)
+            )
+        }
     }
 
-    // MARK: - Daily budget chip
+    // MARK: - Income confirmation
 
-    private func dailyBudgetChip(_ dailyRate: Decimal) -> some View {
-        Text("\(dailyRate.formatted(.currency(code: "USD"))) \(isToday ? "budget today" : "daily budget")")
-            .font(.figtree(.subheadline, weight: .medium))
-            .foregroundStyle(Color.budgetInfo)
+    // Rides in the status chip's slot, so it costs no new vertical space. Both
+    // halves are capsules because the chip is this screen's established
+    // "tappable pill" idiom — the question opens the editor, "Yes" accepts the
+    // number the month inherited. Only ever shown to a variable earner; a fixed
+    // earner said so during onboarding and is never asked.
+    private func incomeConfirmRow(_ plan: MonthPlan) -> some View {
+        let money = Decimal.FormatStyle.Currency(code: "USD").precision(.fractionLength(0))
+        let amount = plan.monthlyIncome.formatted(money)
+
+        let question = Button {
+            isEditingIncome = true
+        } label: {
+            chip("Still expecting \(amount)?",
+                 textColor: .secondary,
+                 backgroundColor: Color.secondary.opacity(0.12))
+                .frame(minHeight: 44)
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel("Change money expected this month, currently \(amount)")
+
+        let confirm = Button {
+            withAnimation(reduceMotion ? nil : .spring(duration: 0.4)) {
+                plan.confirmIncome()
+            }
+            UIImpactFeedbackGenerator(style: .light).impactOccurred()
+        } label: {
+            chip("Yes", textColor: .fern500, backgroundColor: .fern100)
+                .frame(minHeight: 44)
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel("Keep \(amount) as the money expected this month")
+
+        return ViewThatFits(in: .horizontal) {
+            HStack(spacing: AppSpacing.sm) {
+                question
+                confirm
+            }
+            VStack(alignment: .leading, spacing: AppSpacing.xs) {
+                question
+                confirm
+            }
+        }
+    }
+
+    // A mid-month correction rewrites the whole month's daily rate, so the hero
+    // can drop hundreds in one animation. Unexplained, that reads as a bug —
+    // this says what moved and what the rate is now.
+    private func noteRecalculation(_ plan: MonthPlan) {
+        guard Calendar.current.component(.day, from: .now) > 1 else { return }
+        let money = Decimal.FormatStyle.Currency(code: "USD").precision(.fractionLength(0))
+        let from = plan.monthStart.formatted(.dateTime.month(.abbreviated).day())
+        recalcNote = "Recalculated from \(from) — \(plan.dailyRate.formatted(money))/day"
+    }
+
+    private func chip(_ text: String, textColor: Color, backgroundColor: Color) -> some View {
+        Text(text)
+            .font(.dmSans(.subheadline, weight: .medium))
+            .monospacedDigit()
+            .foregroundStyle(textColor)
             .padding(.horizontal, AppSpacing.md)
             .padding(.vertical, AppSpacing.xs)
-            .background(Color.budgetInfo.opacity(0.12))
+            .background(backgroundColor)
             .clipShape(Capsule())
+    }
+
+    // The hero owns the exact current value. This strip shows each of the
+    // past seven days as a meter: budget as the track, spend as the fill.
+    private func momentumStrip(plan: MonthPlan) -> some View {
+        let days = MonthPlan.spendingWeek(
+            from: plans,
+            around: displayedDate,
+            fallbackPlan: plan
+        )
+
+        return SpendingWeekStrip(days: days)
+            .animation(reduceMotion ? nil : .spring(duration: 0.4), value: days.map(\.spent))
     }
 
     // MARK: - Transactions
@@ -187,13 +308,13 @@ struct TodayView: View {
         List {
             ForEach(todayTransactions) { tx in
                 Button {
-                    activeExpenseSheet = ActiveExpenseSheet(transaction: tx)
+                    activeSpendingSheet = ActiveSpendingSheet(transaction: tx)
                 } label: {
                     transactionRow(tx)
                 }
                 .buttonStyle(.plain)
                 .listRowInsets(EdgeInsets())
-                .listRowBackground(Color.budgetBackground)
+                .listRowBackground(Color(uiColor: .systemBackground))
                 .alignmentGuide(.listRowSeparatorLeading) { dimensions in
                     dimensions[.leading]
                 }
@@ -210,7 +331,7 @@ struct TodayView: View {
         .scrollIndicators(.hidden)
         .scrollContentBackground(.hidden)
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
-        .background(Color.budgetBackground)
+        .background(Color(uiColor: .systemBackground))
     }
 
     private var todayTransactions: [Transaction] {
@@ -223,8 +344,8 @@ struct TodayView: View {
     private func transactionRow(_ tx: Transaction) -> some View {
         HStack(spacing: AppSpacing.md) {
             Image(systemName: tx.category.symbol)
-                .font(.figtree(.body))
-                .foregroundStyle(Color.budgetInfo)
+                .font(.dmSans(.body))
+                .foregroundStyle(.secondary)
                 .frame(width: 28)
             if let note = tx.note, !note.isEmpty {
                 Text(note)
@@ -247,71 +368,39 @@ struct TodayView: View {
     // MARK: - Bottom controls
 
     private func bottomControls(plan: MonthPlan) -> some View {
-        VStack(spacing: AppSpacing.xl) {
-            addButton
-            progressFooter(plan: plan)
-        }
+        addButton
+        .frame(maxWidth: .infinity, alignment: .trailing)
         .padding(.horizontal, AppSpacing.xl)
         .padding(.top, AppSpacing.md)
         .padding(.bottom, AppSpacing.sm)
-        .background(Color.budgetBackground)
-    }
-
-    private func progressFooter(plan: MonthPlan) -> some View {
-        let spentToday = plan.spentToday(on: displayedDate)
-        let remaining = plan.remainingToday(on: balanceDate)
-        let spentValue = max(0, NSDecimalNumber(decimal: spentToday).doubleValue)
-        let budgetValue = max(0.01, NSDecimalNumber(decimal: plan.dailyRate).doubleValue)
-
-        return VStack(spacing: AppSpacing.sm) {
-            ProgressView(value: min(spentValue, budgetValue), total: budgetValue)
-                .tint(heroColor(remaining: remaining, dailyRate: plan.dailyRate))
-
-            HStack {
-                Text(isToday ? "Today" : displayedDate.formatted(.dateTime.weekday(.abbreviated).month(.abbreviated).day()))
-                    .font(.figtree(.caption))
-                    .foregroundStyle(.secondary)
-                Spacer()
-                Text("\(spentToday.formatted(.currency(code: "USD"))) of \(plan.dailyRate.formatted(.currency(code: "USD")))")
-                    .font(.figtree(.caption, weight: .medium))
-                    .foregroundStyle(.secondary)
-                    .lineLimit(1)
-                    .minimumScaleFactor(0.75)
-            }
-        }
+        .background(Color(uiColor: .systemBackground))
     }
 
     // MARK: - Add button
 
+    // Logging spending is the only action this screen offers, so the button
+    // carries no label — a 56pt circle in the bottom-right corner, where a
+    // thumb already rests. The glyph is a fixed size rather than a scaled one:
+    // it is an icon inside a fixed circle, and scaling it would clip.
     private var addButton: some View {
         Button {
-            activeExpenseSheet = ActiveExpenseSheet()
+            activeSpendingSheet = ActiveSpendingSheet()
         } label: {
-            Text("Add Expense")
-                .font(.figtree(size: 17, weight: .semibold))
-                .foregroundStyle(Color.budgetPrimaryActionForeground)
-                .padding(.horizontal, AppSpacing.xl)
-                .frame(height: 48)
-                .frame(maxWidth: .infinity)
-                .background(Color.budgetPrimaryAction)
-                .clipShape(Capsule())
+            Image(systemName: "plus")
+                .font(.system(size: 24, weight: .semibold))
+                .foregroundStyle(Color(uiColor: .systemBackground))
+                .frame(width: 56, height: 56)
+                .background(Color.primary)
+                .clipShape(Circle())
         }
-        .accessibilityLabel("Add Expense")
+        .buttonStyle(.plain)
+        .accessibilityLabel("Add spending")
     }
 
     private func delete(_ transaction: Transaction) {
         modelContext.delete(transaction)
         UIImpactFeedbackGenerator(style: .light).impactOccurred()
     }
-}
-
-private extension MonthPlan {
-    func spentToday(on date: Date = .now, calendar: Calendar = .current) -> Decimal {
-        transactions
-            .filter { calendar.isDate($0.date, inSameDayAs: date) }
-            .reduce(0) { $0 + $1.amount }
-    }
-
 }
 
 #Preview {

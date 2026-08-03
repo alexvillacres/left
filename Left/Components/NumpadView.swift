@@ -44,6 +44,7 @@ struct NumpadView: View {
             keyButton { onBackspace() } label: {
                 Image(systemName: "delete.backward")
             }
+            .accessibilityLabel("Delete")
         case .blank:
             Color.clear
                 .frame(maxWidth: .infinity)
@@ -54,11 +55,11 @@ struct NumpadView: View {
     private func keyButton(action: @escaping () -> Void, @ViewBuilder label: () -> some View) -> some View {
         Button(action: action) {
             label()
-                .font(.figtree(.title2, weight: .medium))
+                .font(.dmSans(.title2, weight: .medium))
                 .foregroundStyle(.primary)
                 .frame(maxWidth: .infinity)
                 .frame(height: keyHeight)
-                .background(Color.budgetSecondaryActionBackground)
+                .background(Color(uiColor: .secondarySystemFill))
                 .clipShape(RoundedRectangle(cornerRadius: 12))
                 .contentShape(Rectangle())
         }

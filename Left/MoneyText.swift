@@ -4,10 +4,21 @@ import SwiftUI
 
 struct MoneyText: View {
     let amount: Decimal
+    var showsCents = true
 
     var body: some View {
-        Text(amount, format: .currency(code: "USD"))
-            .monospacedDigit()
+        Group {
+            if showsCents {
+                Text(amount, format: .currency(code: "USD"))
+            } else {
+                Text(
+                    amount,
+                    format: .currency(code: "USD")
+                        .precision(.fractionLength(0))
+                )
+            }
+        }
+        .monospacedDigit()
     }
 }
 
@@ -19,6 +30,7 @@ struct MoneyText: View {
 struct HeroMoneyText: View {
     let amount: Decimal
     var size: CGFloat = 56
+    var suffix: String? = nil
 
     private static let scales: [CGFloat] = [1, 0.85, 0.7, 0.55]
 
@@ -31,11 +43,18 @@ struct HeroMoneyText: View {
     }
 
     private func styledText(pointSize: CGFloat) -> some View {
-        Text(amount, format: .currency(code: "USD"))
-            .font(.figtree(size: pointSize, weight: .semibold, relativeTo: .largeTitle))
+        label
+            .font(.dmSans(size: pointSize, weight: .semibold, relativeTo: .largeTitle))
             .tracking(pointSize * -0.04)
             .monospacedDigit()
             .lineLimit(1)
             .fixedSize()
+    }
+
+    private var label: Text {
+        guard let suffix else {
+            return Text(amount, format: .currency(code: "USD"))
+        }
+        return Text("\(amount, format: .currency(code: "USD")) \(suffix)")
     }
 }

@@ -35,9 +35,9 @@
 	<dict/>
 	<key>UIAppFonts</key>
 	<array>
-		<string>Figtree-Regular.ttf</string>
-		<string>Figtree-Medium.ttf</string>
-		<string>Figtree-SemiBold.ttf</string>
+		<string>DMSans-Regular.ttf</string>
+		<string>DMSans-Medium.ttf</string>
+		<string>DMSans-Bold.ttf</string>
 	</array>
 	<key>UISupportedInterfaceOrientations</key>
 	<array>

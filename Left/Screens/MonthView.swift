@@ -5,6 +5,7 @@ import UIKit
 struct MonthView: View {
     @Query(sort: \MonthPlan.monthStart, order: .reverse) private var plans: [MonthPlan]
     @State private var selectedDay: DaySelection?
+    @ScaledMetric private var heroSize = 42
 
     private var plan: MonthPlan? {
         let currentMonthStart = Calendar.current.leftMonthStart(for: .now)
@@ -32,7 +33,7 @@ struct MonthView: View {
                         .padding(.top, AppSpacing.sm)
                     }
                     .contentMargins(.horizontal, 0, for: .scrollContent)
-                    .background(Color.budgetBackground.ignoresSafeArea())
+                    .background(Color(uiColor: .systemBackground).ignoresSafeArea())
                 } else {
                     Text("No plan yet")
                         .foregroundStyle(.secondary)
@@ -52,7 +53,7 @@ struct MonthView: View {
 
     private func screenTitle(_ title: String) -> some View {
         Text(title)
-            .font(.figtree(size: 44, weight: .semibold, relativeTo: .largeTitle))
+            .font(.dmSans(size: heroSize, weight: .semibold, relativeTo: .largeTitle))
             .foregroundStyle(.primary)
             .frame(maxWidth: .infinity, alignment: .leading)
             .padding(.top, AppSpacing.xxl)
@@ -62,15 +63,15 @@ struct MonthView: View {
         VStack(alignment: .leading, spacing: AppSpacing.xxs) {
             HStack(alignment: .firstTextBaseline, spacing: AppSpacing.xs) {
                 MoneyText(amount: plan.spent())
-                    .font(.figtree(.title2, weight: .semibold))
+                    .font(.dmSans(.title2, weight: .semibold))
                 Text("of \(plan.monthlySpendable.formatted(.currency(code: "USD"))) spent")
-                    .font(.figtree(.subheadline))
+                    .font(.dmSans(.subheadline))
                     .foregroundStyle(.secondary)
                     .lineLimit(1)
                     .minimumScaleFactor(0.75)
             }
             Text("On pace to save \(plan.projectedSavings().formatted(.currency(code: "USD")))")
-                .font(.figtree(.subheadline))
+                .font(.dmSans(.subheadline))
                 .foregroundStyle(.secondary)
                 .lineLimit(2)
         }
@@ -93,7 +94,7 @@ struct MonthView: View {
             HStack {
                 ForEach(orderedWeekdaySymbols(cal), id: \.self) { symbol in
                     Text(symbol)
-                        .font(.figtree(.caption2, weight: .medium))
+                        .font(.dmSans(.caption2, weight: .medium))
                         .foregroundStyle(.secondary)
                         .frame(maxWidth: .infinity)
                 }
@@ -118,7 +119,7 @@ struct MonthView: View {
             selectedDay = DaySelection(day: day)
         } label: {
             Text("\(day)")
-                .font(.figtree(.subheadline, weight: .medium))
+                .font(.dmSans(.subheadline, weight: .medium))
                 .monospacedDigit()
                 .foregroundStyle(isFuture ? .secondary : .primary)
                 .lineLimit(1)
@@ -130,13 +131,16 @@ struct MonthView: View {
         }
         .buttonStyle(.plain)
         .disabled(isFuture)
+        .accessibilityLabel(isFuture
+            ? "Day \(day)"
+            : "Day \(day), spent \(spent.formatted(.currency(code: "USD")))")
     }
 
     private func tint(spent: Decimal, dailyRate: Decimal, isFuture: Bool) -> Color {
         if isFuture { return .clear }
-        if spent < dailyRate { return .budgetPositiveFill }
-        if spent <= dailyRate * Decimal(1.1) { return .budgetWarningFill }
-        return .budgetNegativeFill
+        if spent < dailyRate { return .leftPositive.opacity(0.16) }
+        if spent <= dailyRate * Decimal(1.1) { return .leftWarning.opacity(0.18) }
+        return .leftNegative.opacity(0.16)
     }
 
     private func spentByDay(_ plan: MonthPlan) -> [Int: Decimal] {
@@ -189,8 +193,8 @@ private struct DayTransactionsSheet: View {
                         } label: {
                             HStack(spacing: AppSpacing.md) {
                                 Image(systemName: tx.category.symbol)
-                                    .font(.figtree(.body))
-                                    .foregroundStyle(Color.budgetInfo)
+                                    .font(.dmSans(.body))
+                                    .foregroundStyle(.secondary)
                                     .frame(width: 28)
                                 if let note = tx.note, !note.isEmpty {
                                     Text(note)
@@ -227,7 +231,7 @@ private struct DayTransactionsSheet: View {
         }
         .presentationDetents([.medium, .large])
         .sheet(item: $editingTransaction) { transaction in
-            AddExpenseSheet(plan: plan, transaction: transaction)
+            AddSpendingSheet(plan: plan, transaction: transaction)
         }
     }
 

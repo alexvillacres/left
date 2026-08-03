@@ -1,5 +1,8 @@
 # Left — a minimal daily budget tracker
 
+## Workflow
+Do not create any markdown files unless instructed to do so.
+
 ## What this is
 
 A native iOS app with one job: show how much you can spend today.
@@ -8,9 +11,15 @@ The app computes a daily allowance and tracks spending against it.
 No accounts, no bank connections, no backend. All data on-device via SwiftData.
 
 Core formula:
-  monthlySpendable = income − fixedExpenses − savingsGoal
+  savings          = flat amount OR percent × income (SavingsTarget)
+  monthlySpendable = income − fixedExpenses − savings
   dailyRate        = monthlySpendable / daysInMonth
   remainingToday   = dailyRate × dayOfMonth − totalSpentThisMonth
+
+The savings target is a percentage or a flat amount — percentage suits
+variable income, since it scales with the month instead of eating the whole
+daily budget in a lean one. Stored as savingsGoal + optional savingsPercent;
+read through plan.savingsAmount, never savingsGoal directly.
 
 Rollover is DERIVED, never stored. Underspending yesterday automatically
 increases today's number; overspending borrows from tomorrow. Transactions
@@ -100,9 +109,11 @@ architecture.
 
 - Three sections: Monthly income (currency field), Fixed expenses
   (editable list: name + amount, swipe to delete, "Add expense" row),
-  Savings goal (currency field).
-- Below, ALWAYS visible, updating live as values change — the derivation:
-    $6,200 − $2,840 − $1,000 = $1,360 ÷ 31 days = $43/day
+  Savings goal (Amount / % of income segmented control + matching field,
+  with the other half of the pair shown as a caption underneath).
+- Below, ALWAYS visible, updating live as values change — the derivation,
+  pinned as a footer so it never scrolls away:
+    $6,200 − $2,840 − 20% ($1,240) = $2,120 ÷ 31 days = $68/day
   Render as a single line, dailyRate emphasized. This line is what makes
   the daily number trustworthy. Values from the current MonthPlan.
 - Edits apply to the CURRENT month's plan only (snapshot semantics are

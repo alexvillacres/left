@@ -37,6 +37,7 @@ struct AppRoot: View {
     @Environment(\.modelContext) private var modelContext
     @Environment(\.scenePhase) private var scenePhase
     @Query(sort: \MonthPlan.monthStart) private var allPlans: [MonthPlan]
+    @AppStorage("hasCompletedOnboarding") private var hasCompletedOnboarding = false
     @State private var onboardingPlan: MonthPlan?
 
     var body: some View {
@@ -48,12 +49,19 @@ struct AppRoot: View {
             planTab
                 .tabItem { Label("Plan", systemImage: "slider.horizontal.3") }
         }
-        .environment(\.font, .figtree(.body))
-        .tint(.budgetPrimaryAction)
-        .background(Color.budgetBackground.ignoresSafeArea())
+        .environment(\.font, .dmSans(.body))
+        .tint(.leftPositive)
+        .background(Color(uiColor: .systemBackground).ignoresSafeArea())
         .fullScreenCover(item: $onboardingPlan) { plan in
             NavigationStack {
-                PlanView(plan: plan, isOnboarding: true)
+                PlanView(plan: plan, isOnboarding: true) {
+                    // They just typed it, so month one is never asked to
+                    // confirm the number they set up with.
+                    plan.confirmIncome()
+                    try? modelContext.save()
+                    hasCompletedOnboarding = true
+                    onboardingPlan = nil
+                }
             }
         }
         .task { ensurePlan() }
@@ -82,12 +90,21 @@ struct AppRoot: View {
 
     private func ensurePlan() {
         let start = currentMonthStart
-        guard currentPlan == nil else { return }
+        if let currentPlan {
+            if !hasCompletedOnboarding {
+                onboardingPlan = currentPlan
+            }
+            return
+        }
 
         if let last = allPlans.last {
             let plan = nextPlan(from: last, for: start)
             modelContext.insert(plan)
+            if !hasCompletedOnboarding {
+                onboardingPlan = plan
+            }
         } else {
+            hasCompletedOnboarding = false
             let plan = MonthPlan(monthStart: start, monthlyIncome: 0, savingsGoal: 0)
             modelContext.insert(plan)
             onboardingPlan = plan
@@ -103,7 +120,9 @@ struct AppRoot: View {
 
         let plan = MonthPlan(monthStart: monthStart,
                              monthlyIncome: previous.monthlyIncome,
-                             savingsGoal: previous.savingsGoal)
+                             savingsGoal: previous.savingsGoal,
+                             savingsPercent: previous.savingsPercent,
+                             incomeCadence: previous.incomeCadence)
         plan.fixedExpenses = previous.fixedExpenses.map {
             FixedExpense(name: $0.name, amount: $0.amount, cadence: $0.effectiveCadence)
         }

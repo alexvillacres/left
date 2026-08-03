@@ -2,7 +2,7 @@ import SwiftUI
 import SwiftData
 import UIKit
 
-struct AddExpenseSheet: View {
+struct AddSpendingSheet: View {
     let plan: MonthPlan
     private let date: Date
     private let transaction: Transaction?
@@ -14,7 +14,9 @@ struct AddExpenseSheet: View {
     @State private var digits = ""
     @State private var category: Category = .other
     @State private var note = ""
-    @ScaledMetric private var amountSize = 44
+    @State private var isEditingNote = false
+    @FocusState private var noteFocused: Bool
+    @ScaledMetric private var amountSize = 56
 
     init(plan: MonthPlan, date: Date = .now, transaction: Transaction? = nil) {
         self.plan = plan
@@ -36,18 +38,22 @@ struct AddExpenseSheet: View {
         transaction != nil
     }
 
+    private var sheetDetent: PresentationDetent {
+        .height(isEditingNote ? 224 : 532)
+    }
+
     var body: some View {
         VStack(spacing: 0) {
             HeroMoneyText(amount: amount, size: amountSize)
                 .padding(.horizontal, AppSpacing.xl)
-                .foregroundStyle(digits.isEmpty ? Color.secondary : Color.budgetPrimaryAction)
+                .foregroundStyle(digits.isEmpty ? Color.secondary : Color.primary)
                 .contentTransition(.numericText())
                 .animation(.spring(duration: 0.2), value: amount)
                 .padding(.top, AppSpacing.xxl)
 
             if !Calendar.current.isDateInToday(date) {
                 Text("Logging to \(date.formatted(.dateTime.weekday(.abbreviated).month(.abbreviated).day()))")
-                    .font(.figtree(.caption))
+                    .font(.dmSans(.caption))
                     .foregroundStyle(.secondary)
                     .lineLimit(1)
                     .padding(.top, AppSpacing.xs)
@@ -55,30 +61,63 @@ struct AddExpenseSheet: View {
 
             Spacer(minLength: AppSpacing.lg)
 
-            categoryChips
-                .padding(.bottom, AppSpacing.lg)
+            ZStack {
+                TextField("Add note", text: $note)
+                    .multilineTextAlignment(.center)
+                    .textFieldStyle(.plain)
+                    .focused($noteFocused)
+                    .submitLabel(.done)
+                    .onSubmit { endNoteEditing() }
+                    .opacity(isEditingNote ? 1 : 0)
+                    .allowsHitTesting(isEditingNote)
+                    .accessibilityHidden(!isEditingNote)
 
-            TextField("Add note", text: $note)
-                .font(.figtree(.subheadline))
-                .multilineTextAlignment(.center)
-                .textFieldStyle(.plain)
-                .padding(.bottom, AppSpacing.md)
+                if !isEditingNote {
+                    Button(action: beginNoteEditing) {
+                        Text(note.isEmpty ? "Add note" : note)
+                            .foregroundStyle(note.isEmpty ? Color.secondary : Color.primary)
+                            .frame(maxWidth: .infinity)
+                            .frame(minHeight: 44)
+                            .contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
+            .font(.dmSans(.title3))
+            .frame(maxWidth: .infinity)
+            .frame(minHeight: 44)
+            .contentShape(Rectangle())
+            .padding(.horizontal, AppSpacing.xl)
+            .padding(.bottom, AppSpacing.lg)
 
-            NumpadView(onDigit: appendDigit, onBackspace: backspace)
-                .padding(.horizontal, AppSpacing.xl)
+            // The bottom of the sheet is a single input slot: the system
+            // keyboard replaces the numpad while the note is being edited.
+            if !isEditingNote {
+                categoryChips
+                    .padding(.bottom, AppSpacing.lg)
 
-            primaryButton
-                .padding(.horizontal, AppSpacing.xl)
-                .padding(.top, AppSpacing.md)
-
-            if isEditing {
-                deleteButton
+                NumpadView(onDigit: appendDigit, onBackspace: backspace)
                     .padding(.horizontal, AppSpacing.xl)
-                    .padding(.top, AppSpacing.sm)
+
+                primaryButton
+                    .padding(.horizontal, AppSpacing.xl)
+                    .padding(.top, AppSpacing.md)
+
+                if isEditing {
+                    deleteButton
+                        .padding(.horizontal, AppSpacing.xl)
+                        .padding(.top, AppSpacing.sm)
+                }
             }
         }
-        .presentationDetents([.height(560)])
-        .background(Color.budgetBackground)
+        .presentationDetents([sheetDetent])
+        .presentationDragIndicator(.visible)
+        .presentationBackground(Color(uiColor: .systemBackground))
+        .onChange(of: noteFocused) { wasFocused, isFocused in
+            if wasFocused && !isFocused {
+                isEditingNote = false
+            }
+        }
     }
 
     // MARK: - Category chips
@@ -100,12 +139,12 @@ struct AddExpenseSheet: View {
             category = cat
         } label: {
             Label(cat.label, systemImage: cat.symbol)
-                .font(.figtree(.subheadline, weight: .medium))
-                .foregroundStyle(selected ? Color.budgetPrimaryActionForeground : Color.budgetSecondaryActionForeground)
+                .font(.dmSans(.subheadline, weight: .medium))
+                .foregroundStyle(selected ? Color(uiColor: .systemBackground) : Color.primary)
                 .lineLimit(1)
                 .padding(.horizontal, AppSpacing.md)
                 .padding(.vertical, AppSpacing.sm)
-                .background(selected ? Color.budgetPrimaryAction : Color.budgetSecondaryActionBackground)
+                .background(selected ? Color.black : Color(uiColor: .secondarySystemFill))
                 .clipShape(Capsule())
         }
         .buttonStyle(.plain)
@@ -113,33 +152,48 @@ struct AddExpenseSheet: View {
 
     // MARK: - Actions
 
+    // Disabled is its own treatment, not a faded copy of the enabled one: a muted
+    // fill with full-strength label text, so "Log it" stays readable while the
+    // amount is still $0.00.
     private var primaryButton: some View {
-        Button(action: save) {
+        let isActive = amount > 0
+        return Button(action: save) {
             Text(isEditing ? "Save" : "Log it")
-                .font(.figtree(.headline, weight: .medium))
-                .foregroundStyle(Color.budgetPrimaryActionForeground)
+                .font(.dmSans(.headline, weight: .medium))
+                .foregroundStyle(isActive ? Color(uiColor: .systemBackground) : Color.secondary)
                 .frame(maxWidth: .infinity)
                 .frame(minHeight: 52)
-                .background(Color.budgetPrimaryAction)
-                .clipShape(RoundedRectangle(cornerRadius: 14))
+                .background(isActive ? Color.primary : Color(uiColor: .secondarySystemFill))
+                .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
         }
         .buttonStyle(.plain)
-        .disabled(amount == 0)
-        .opacity(amount > 0 ? 1 : 0.35)
+        .disabled(!isActive)
+        .animation(.easeInOut(duration: 0.15), value: isActive)
+        .accessibilityHint(isActive ? "" : "Enter an amount first")
     }
 
     private var deleteButton: some View {
         Button(role: .destructive, action: deleteTransaction) {
-            Text("Delete expense")
-                .font(.figtree(.subheadline, weight: .medium))
+            Text("Delete")
+                .font(.dmSans(.subheadline, weight: .medium))
                 .frame(maxWidth: .infinity)
                 .frame(minHeight: 44)
         }
         .buttonStyle(.plain)
-        .foregroundStyle(Color.budgetNegative)
+        .foregroundStyle(Color.leftNegative)
     }
 
     // MARK: - Entry
+
+    private func beginNoteEditing() {
+        isEditingNote = true
+        noteFocused = true
+    }
+
+    private func endNoteEditing() {
+        noteFocused = false
+        isEditingNote = false
+    }
 
     private func appendDigit(_ n: Int) {
         guard !(digits.isEmpty && n == 0) else { return } // no leading zeros
@@ -202,7 +256,7 @@ struct AddExpenseSheet: View {
     container.mainContext.insert(plan)
     return Color.clear
         .sheet(isPresented: .constant(true)) {
-            AddExpenseSheet(plan: plan)
+            AddSpendingSheet(plan: plan)
         }
         .modelContainer(container)
 }
