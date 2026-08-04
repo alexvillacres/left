@@ -46,9 +46,12 @@ struct AddSpendingView: View {
     var body: some View {
         NavigationStack {
             VStack(spacing: 0) {
+                Spacer(minLength: AppSpacing.xl)
+
                 // Amount, note, and category are one group — the things being
                 // described. The keypad below is the instrument you describe
-                // them with, so it sits apart, anchored to the thumb.
+                // them with. Keeping the flexible space above this group anchors
+                // the whole entry flow to the bottom of the screen.
                 VStack(spacing: AppSpacing.lg) {
                     HeroMoneyText(amount: amount, size: amountSize)
                         .foregroundStyle(digits.isEmpty ? Color.secondary : Color.primary)
@@ -63,21 +66,22 @@ struct AddSpendingView: View {
                     // edge instead of clipping inside an inset container.
                     categoryChips
                 }
-                .padding(.top, AppSpacing.xl)
+                .padding(.bottom, AppSpacing.lg)
 
-                Spacer(minLength: AppSpacing.lg)
-
-                if !isNoteFocused {
-                    VStack(spacing: AppSpacing.md) {
-                        NumpadView(onDigit: appendDigit, onBackspace: backspace)
-                        primaryButton
-                        if isEditing {
-                            deleteButton
-                        }
+                // Preserve this space while typing so focus and keyboard-safe-area
+                // changes cannot trigger competing layout passes.
+                VStack(spacing: AppSpacing.md) {
+                    NumpadView(onDigit: appendDigit, onBackspace: backspace)
+                    primaryButton
+                    if isEditing {
+                        deleteButton
                     }
-                    .padding(.horizontal, AppSpacing.xl)
-                    .padding(.bottom, AppSpacing.sm)
                 }
+                .padding(.horizontal, AppSpacing.xl)
+                .padding(.bottom, AppSpacing.sm)
+                .opacity(isNoteFocused ? 0 : 1)
+                .allowsHitTesting(!isNoteFocused)
+                .accessibilityHidden(isNoteFocused)
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
             .background(Color(uiColor: .systemBackground))
