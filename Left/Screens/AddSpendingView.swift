@@ -2,11 +2,8 @@ import SwiftUI
 import SwiftData
 import UIKit
 
-// Presented full-screen rather than as a sheet. The numpad drives amount entry
-// without the system keyboard, so the only keyboard in this flow belongs to the
-// note — and the note now lives on its own pushed screen, where a keyboard is
-// unremarkable. Nothing here resizes, so there are no detent heights to compute
-// or keep in sync with focus.
+// Presented full-screen rather than as a sheet. Amount entry uses the custom
+// numpad; focusing the inline note temporarily trades it for the system keyboard.
 struct AddSpendingView: View {
     let plan: MonthPlan
     private let date: Date
@@ -19,7 +16,7 @@ struct AddSpendingView: View {
     @State private var digits = ""
     @State private var category: Category = .other
     @State private var note = ""
-    @State private var isEditingNote = false
+    @FocusState private var isNoteFocused: Bool
     @ScaledMetric private var amountSize = 56
 
     init(plan: MonthPlan, date: Date = .now, transaction: Transaction? = nil) {
@@ -70,18 +67,21 @@ struct AddSpendingView: View {
 
                 Spacer(minLength: AppSpacing.lg)
 
-                VStack(spacing: AppSpacing.md) {
-                    NumpadView(onDigit: appendDigit, onBackspace: backspace)
-                    primaryButton
-                    if isEditing {
-                        deleteButton
+                if !isNoteFocused {
+                    VStack(spacing: AppSpacing.md) {
+                        NumpadView(onDigit: appendDigit, onBackspace: backspace)
+                        primaryButton
+                        if isEditing {
+                            deleteButton
+                        }
                     }
+                    .padding(.horizontal, AppSpacing.xl)
+                    .padding(.bottom, AppSpacing.sm)
                 }
-                .padding(.horizontal, AppSpacing.xl)
-                .padding(.bottom, AppSpacing.sm)
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
             .background(Color(uiColor: .systemBackground))
+            .ignoresSafeArea(.keyboard, edges: .bottom)
             .toolbar {
                 // Full-screen presentation has no drag-to-dismiss, so an
                 // explicit close control is required, not decorative.
@@ -105,33 +105,22 @@ struct AddSpendingView: View {
                     }
                 }
             }
-            .navigationDestination(isPresented: $isEditingNote) {
-                NoteEditor(note: $note)
-            }
         }
     }
 
     // MARK: - Note
 
     private var noteRow: some View {
-        Button {
-            isEditingNote = true
-        } label: {
-            HStack(spacing: AppSpacing.sm) {
-                Text(note.isEmpty ? "Add note" : note)
-                    .font(.dmSans(.body))
-                    .foregroundStyle(note.isEmpty ? Color.secondary : Color.primary)
-                    .lineLimit(1)
-                Image(systemName: "chevron.right")
-                    .font(.dmSans(.caption2, weight: .medium))
-                    .foregroundStyle(.secondary)
-            }
+        TextField("Add note", text: $note)
+            .font(.dmSans(.body))
+            .textFieldStyle(.plain)
+            .multilineTextAlignment(.center)
+            .textInputAutocapitalization(.sentences)
+            .submitLabel(.done)
+            .focused($isNoteFocused)
+            .onSubmit { isNoteFocused = false }
             .frame(maxWidth: .infinity)
             .frame(minHeight: 44)
-            .contentShape(Rectangle())
-        }
-        .buttonStyle(.plain)
-        .accessibilityLabel(note.isEmpty ? "Add note" : "Note, \(note)")
     }
 
     // MARK: - Category chips
@@ -247,43 +236,6 @@ struct AddSpendingView: View {
             )
         ).uint64Value
         return cents == 0 ? "" : String(cents)
-    }
-}
-
-// MARK: - Note editor
-
-// A pushed screen rather than an inline field: at full height the keyboard has
-// somewhere to go, so nothing has to shrink to accommodate it.
-private struct NoteEditor: View {
-    @Binding var note: String
-    @Environment(\.dismiss) private var dismiss
-    @FocusState private var focused: Bool
-
-    var body: some View {
-        VStack(spacing: 0) {
-            TextField("Add note", text: $note, axis: .vertical)
-                .font(.dmSans(.title3))
-                .textFieldStyle(.plain)
-                .textInputAutocapitalization(.sentences)
-                .focused($focused)
-                .submitLabel(.done)
-                .onSubmit { dismiss() }
-                .padding(.horizontal, AppSpacing.xl)
-                .padding(.top, AppSpacing.xl)
-
-            Spacer(minLength: 0)
-        }
-        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
-        .background(Color(uiColor: .systemBackground))
-        .navigationTitle("Note")
-        .navigationBarTitleDisplayMode(.inline)
-        .toolbar {
-            ToolbarItem(placement: .topBarTrailing) {
-                Button("Done") { dismiss() }
-                    .font(.dmSans(.body, weight: .medium))
-            }
-        }
-        .onAppear { focused = true }
     }
 }
 
