@@ -47,18 +47,18 @@ struct TodayMeter: View {
 
             ZStack(alignment: .leading) {
                 RoundedRectangle(cornerRadius: trackCornerRadius, style: .continuous)
-                    .fill(Color.neutral50)
-                    .strokeBorder(Color.neutral100, lineWidth: 0.5)
+                    .fill(Color.meterTrack)
+                    .strokeBorder(Color.meterTrackBorder, lineWidth: 0.5)
 
                 if isOverspent {
                     RoundedRectangle(cornerRadius: fillCornerRadius, style: .continuous)
-                        .fill(Color.leftNegative.opacity(0.5))
+                        .fill(Color.meterOverspentFill)
                         .frame(width: availableWidth)
                         .padding(fillInset)
                 } else if fillWidth > 0 {
                     ZStack {
                         RoundedRectangle(cornerRadius: fillCornerRadius, style: .continuous)
-                            .fill(Color.fern300.opacity(0.5))
+                            .fill(Color.meterFill)
                         RoundedRectangle(cornerRadius: fillCornerRadius, style: .continuous)
                             .fill(Color.leftWarning)
                             .opacity(warningOpacity)

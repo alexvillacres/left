@@ -63,9 +63,9 @@ struct TodayView: View {
             }
             .background(Color(uiColor: .systemBackground).ignoresSafeArea())
         }
-        .sheet(item: $activeSpendingSheet) { sheet in
+        .fullScreenCover(item: $activeSpendingSheet) { sheet in
             if let plan {
-                AddSpendingSheet(plan: plan, date: transactionDate, transaction: sheet.transaction)
+                AddSpendingView(plan: plan, date: transactionDate, transaction: sheet.transaction)
             }
         }
         .sheet(isPresented: $isEditingIncome) {
@@ -218,7 +218,8 @@ struct TodayView: View {
                     .padding(.top, AppSpacing.sm)
 
                 momentumStrip(plan: plan)
-                    .padding(.top, AppSpacing.md)
+                    .padding(.top, AppSpacing.lg)
+                    .padding(.bottom, AppSpacing.lg)
             }
         }
         .frame(maxWidth: .infinity)
@@ -251,26 +252,26 @@ struct TodayView: View {
     private func statusChip(_ plan: MonthPlan) -> some View {
         let delta = plan.yesterdayDelta(for: displayedDate)
         if isToday, let recalcNote {
-            chip(recalcNote, textColor: .secondary, backgroundColor: Color.secondary.opacity(0.12))
+            chip(recalcNote, textColor: .secondary, backgroundColor: .leftNeutralFill)
         } else if isToday, plan.needsIncomeConfirmation(on: displayedDate) {
             incomeConfirmRow(plan)
         } else if let delta, delta > 0 {
             chip(
                 "+\(delta.formatted(.currency(code: "USD"))) saved yesterday",
-                textColor: .fern500,
-                backgroundColor: .fern100
+                textColor: .leftPositive,
+                backgroundColor: .leftPositiveFill
             )
         } else if let delta, delta < 0 {
             chip(
                 "\(delta.formatted(.currency(code: "USD"))) over yesterday",
                 textColor: .leftNegative,
-                backgroundColor: .leftNegative.opacity(0.12)
+                backgroundColor: .leftNegativeFill
             )
         } else {
             chip(
                 "\(plan.dailyRate.formatted(.currency(code: "USD"))) \(isToday ? "budget today" : "daily budget")",
                 textColor: .secondary,
-                backgroundColor: Color.secondary.opacity(0.12)
+                backgroundColor: .leftNeutralFill
             )
         }
     }
@@ -291,7 +292,7 @@ struct TodayView: View {
         } label: {
             chip("Still expecting \(amount)?",
                  textColor: .secondary,
-                 backgroundColor: Color.secondary.opacity(0.12))
+                 backgroundColor: .leftNeutralFill)
                 .frame(minHeight: 44)
                 .contentShape(Rectangle())
         }
@@ -304,7 +305,7 @@ struct TodayView: View {
             }
             UIImpactFeedbackGenerator(style: .light).impactOccurred()
         } label: {
-            chip("Yes", textColor: .fern500, backgroundColor: .fern100)
+            chip("Yes", textColor: .leftPositive, backgroundColor: .leftPositiveFill)
                 .frame(minHeight: 44)
                 .contentShape(Rectangle())
         }

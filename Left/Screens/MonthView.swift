@@ -299,8 +299,8 @@ private struct DayTransactionsSheet: View {
             .navigationBarTitleDisplayMode(.inline)
         }
         .presentationDetents([.medium, .large])
-        .sheet(item: $editingTransaction) { transaction in
-            AddSpendingSheet(plan: plan, transaction: transaction)
+        .fullScreenCover(item: $editingTransaction) { transaction in
+            AddSpendingView(plan: plan, transaction: transaction)
         }
     }
 

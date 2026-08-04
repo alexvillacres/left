@@ -5,7 +5,7 @@ import UIKit
 // Reached from the confirm row on Today, and from the Plan tab. Shows what the
 // month inherited, what it works out to per day, and lets you correct it.
 //
-// Deliberately a text field rather than AddSpendingSheet's numpad: that numpad is
+// Deliberately a text field rather than AddSpendingView's numpad: that numpad is
 // cents-first (650 → $6.50), which is right for a coffee and wrong for a
 // paycheck. Two identical-looking keypads meaning different things is a trap.
 struct IncomeSheet: View {
