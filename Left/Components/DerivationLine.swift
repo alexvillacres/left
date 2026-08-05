@@ -11,15 +11,9 @@ struct DerivationLine: View {
     let plan: MonthPlan
     var income: Decimal? = nil
 
-    private var effectiveIncome: Decimal { income ?? plan.monthlyIncome }
+    private var effectiveIncome: Decimal { income ?? plan.incomeTotal }
 
-    private var savings: Decimal {
-        if let percent = plan.savingsPercent {
-            (effectiveIncome * percent / 100).roundedToCents()
-        } else {
-            max(0, plan.savingsGoal)
-        }
-    }
+    private var savings: Decimal { plan.savingsAmount(for: effectiveIncome) }
 
     private var spendable: Decimal { effectiveIncome - plan.fixedTotal - savings }
 
@@ -30,7 +24,10 @@ struct DerivationLine: View {
     }
 
     private var savingsTerm: String {
-        if let percent = plan.savingsPercent {
+        if plan.savingsGoals.isEmpty, let percent = plan.savingsPercent {
+            "\(percent.formatted(.number))% (\(savings.formatted(money)))"
+        } else if plan.savingsGoals.count == 1,
+                  let percent = plan.savingsGoals.first?.percent {
             "\(percent.formatted(.number))% (\(savings.formatted(money)))"
         } else {
             savings.formatted(money)

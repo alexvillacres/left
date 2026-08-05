@@ -6,18 +6,31 @@ struct TodayView: View {
     @Query(sort: \MonthPlan.monthStart, order: .reverse) private var plans: [MonthPlan]
     @State private var activeSpendingSheet: ActiveSpendingSheet?
     @State private var pastDate: Date? = nil
-    @State private var isEditingIncome = false
+    @State private var activeIncomeSheet: ActiveIncomeSheet?
     @State private var recalcNote: String?
     @Environment(\.modelContext) private var modelContext
     @Environment(\.scenePhase) private var scenePhase
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
-    @ScaledMetric private var heroSize = 42
+    @ScaledMetric private var heroSize = 44
     // Scales so the block grows with the type inside it instead of clipping.
     @ScaledMetric private var heroBlockHeight: CGFloat = 220
 
     private struct ActiveSpendingSheet: Identifiable {
         let id = UUID()
         var transaction: Transaction?
+    }
+
+    private struct ActiveIncomeSheet: Identifiable {
+        let id = UUID()
+        let source: IncomeSource
+    }
+
+    private struct DaySnapshot {
+        let dailyRate: Decimal
+        let remaining: Decimal
+        let spent: Decimal
+        let yesterdayDelta: Decimal?
+        let transactions: [Transaction]
     }
 
     private var plan: MonthPlan? {
@@ -44,10 +57,12 @@ struct TodayView: View {
     }
 
     var body: some View {
+        let snapshot = plan.map(makeSnapshot)
+
         NavigationStack {
             VStack(spacing: 0) {
-                heroSection
-                transactionsSection
+                heroSection(plan: plan, snapshot: snapshot)
+                transactionsSection(snapshot?.transactions ?? [])
 
                 if let plan {
                     bottomControls(plan: plan)
@@ -68,10 +83,12 @@ struct TodayView: View {
                 AddSpendingView(plan: plan, date: transactionDate, transaction: sheet.transaction)
             }
         }
-        .sheet(isPresented: $isEditingIncome) {
+        .sheet(item: $activeIncomeSheet) { sheet in
             if let plan {
-                IncomeSheet(plan: plan) { changed in
-                    if changed { noteRecalculation(plan) }
+                IncomeSheet(plan: plan, source: sheet.source) { change in
+                    if change.delta != 0 {
+                        noteRecalculation(change)
+                    }
                 }
             }
         }
@@ -157,7 +174,7 @@ struct TodayView: View {
         withAnimation(reduceMotion ? nil : .spring(duration: 0.4)) {
             pastDate = newPastDate
         }
-        UIImpactFeedbackGenerator(style: .light).impactOccurred()
+        HapticFeedback.lightImpact()
     }
 
     private func navigationTarget(for delta: Int) -> Date? {
@@ -205,19 +222,19 @@ struct TodayView: View {
 
     // MARK: - Hero
 
-    private var heroSection: some View {
+    private func heroSection(plan: MonthPlan?, snapshot: DaySnapshot?) -> some View {
         VStack(alignment: .leading, spacing: 0) {
             dateContext
                 .frame(minHeight: 44, alignment: .leading)
                 .padding(.bottom, AppSpacing.sm)
 
-            heroAmount
+            heroAmount(snapshot: snapshot)
 
-            if let plan {
-                statusChip(plan)
+            if let plan, let snapshot {
+                statusChip(plan, snapshot: snapshot)
                     .padding(.top, AppSpacing.sm)
 
-                momentumStrip(plan: plan)
+                momentumStrip(snapshot: snapshot)
                     .padding(.top, AppSpacing.lg)
                     .padding(.bottom, AppSpacing.lg)
             }
@@ -229,13 +246,12 @@ struct TodayView: View {
     }
 
     @ViewBuilder
-    private var heroAmount: some View {
-        if let plan {
-            let remaining = plan.remainingToday(on: balanceDate)
-            HeroMoneyText(amount: remaining, size: heroSize, suffix: "left")
+    private func heroAmount(snapshot: DaySnapshot?) -> some View {
+        if let snapshot {
+            HeroMoneyText(amount: snapshot.remaining, size: heroSize, suffix: "left")
                 .foregroundStyle(.primary)
                 .contentTransition(.numericText())
-                .animation(reduceMotion ? nil : .spring(duration: 0.4), value: remaining)
+                .animation(reduceMotion ? nil : .spring(duration: 0.4), value: snapshot.remaining)
         } else {
             Text("$– left")
                 .font(.dmSans(size: heroSize, weight: .semibold, relativeTo: .largeTitle))
@@ -249,19 +265,19 @@ struct TodayView: View {
     // rather than the cumulative carryover (the hero already bakes that in).
     // Day 1 (and a perfectly on-budget yesterday) falls back to the daily rate.
     @ViewBuilder
-    private func statusChip(_ plan: MonthPlan) -> some View {
-        let delta = plan.yesterdayDelta(for: displayedDate)
+    private func statusChip(_ plan: MonthPlan, snapshot: DaySnapshot) -> some View {
         if isToday, let recalcNote {
             chip(recalcNote, textColor: .secondary, backgroundColor: .leftNeutralFill)
-        } else if isToday, plan.needsIncomeConfirmation(on: displayedDate) {
-            incomeConfirmRow(plan)
-        } else if let delta, delta > 0 {
+        } else if isToday,
+                  let source = plan.unconfirmedIncomeSources(on: displayedDate).first {
+            incomeConfirmRow(source)
+        } else if let delta = snapshot.yesterdayDelta, delta > 0 {
             chip(
                 "+\(delta.formatted(.currency(code: "USD"))) saved yesterday",
                 textColor: .leftPositive,
                 backgroundColor: .leftPositiveFill
             )
-        } else if let delta, delta < 0 {
+        } else if let delta = snapshot.yesterdayDelta, delta < 0 {
             chip(
                 "\(delta.formatted(.currency(code: "USD"))) over yesterday",
                 textColor: .leftNegative,
@@ -269,7 +285,7 @@ struct TodayView: View {
             )
         } else {
             chip(
-                "\(plan.dailyRate.formatted(.currency(code: "USD"))) \(isToday ? "budget today" : "daily budget")",
+                "\(snapshot.dailyRate.formatted(.currency(code: "USD"))) \(isToday ? "budget today" : "daily budget")",
                 textColor: .secondary,
                 backgroundColor: .leftNeutralFill
             )
@@ -281,36 +297,36 @@ struct TodayView: View {
     // Rides in the status chip's slot, so it costs no new vertical space. Both
     // halves are capsules because the chip is this screen's established
     // "tappable pill" idiom — the question opens the editor, "Yes" accepts the
-    // number the month inherited. Only ever shown to a variable earner; a fixed
-    // earner said so during onboarding and is never asked.
-    private func incomeConfirmRow(_ plan: MonthPlan) -> some View {
+    // number the source inherited. Sources are ordered largest first; affirming
+    // one naturally advances this same slot to the next variable source.
+    private func incomeConfirmRow(_ source: IncomeSource) -> some View {
         let money = Decimal.FormatStyle.Currency(code: "USD").precision(.fractionLength(0))
-        let amount = plan.monthlyIncome.formatted(money)
+        let amount = source.amount.formatted(money)
 
         let question = Button {
-            isEditingIncome = true
+            activeIncomeSheet = ActiveIncomeSheet(source: source)
         } label: {
-            chip("Still expecting \(amount)?",
+            chip("Still expecting \(amount) from \(source.name)?",
                  textColor: .secondary,
                  backgroundColor: .leftNeutralFill)
                 .frame(minHeight: 44)
                 .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
-        .accessibilityLabel("Change money expected this month, currently \(amount)")
+        .accessibilityLabel("Change \(source.name) income, currently \(amount)")
 
         let confirm = Button {
             withAnimation(reduceMotion ? nil : .spring(duration: 0.4)) {
-                plan.confirmIncome()
+                source.affirmedAt = .now
             }
-            UIImpactFeedbackGenerator(style: .light).impactOccurred()
+            HapticFeedback.lightImpact()
         } label: {
             chip("Yes", textColor: .leftPositive, backgroundColor: .leftPositiveFill)
                 .frame(minHeight: 44)
                 .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
-        .accessibilityLabel("Keep \(amount) as the money expected this month")
+        .accessibilityLabel("Keep \(amount) expected from \(source.name)")
 
         return ViewThatFits(in: .horizontal) {
             HStack(spacing: AppSpacing.sm) {
@@ -324,14 +340,11 @@ struct TodayView: View {
         }
     }
 
-    // A mid-month correction rewrites the whole month's daily rate, so the hero
-    // can drop hundreds in one animation. Unexplained, that reads as a bug —
-    // this says what moved and what the rate is now.
-    private func noteRecalculation(_ plan: MonthPlan) {
-        guard Calendar.current.component(.day, from: .now) > 1 else { return }
+    // Name the source and direction behind the hero's numeric transition.
+    private func noteRecalculation(_ change: IncomeChange) {
         let money = Decimal.FormatStyle.Currency(code: "USD").precision(.fractionLength(0))
-        let from = plan.monthStart.formatted(.dateTime.month(.abbreviated).day())
-        recalcNote = "Recalculated from \(from) — \(plan.dailyRate.formatted(money))/day"
+        let sign = change.delta > 0 ? "+" : "−"
+        recalcNote = "\(sign)\(abs(change.delta).formatted(money)) \(change.sourceName) · budget updated"
     }
 
     private func chip(_ text: String, textColor: Color, backgroundColor: Color) -> some View {
@@ -347,18 +360,16 @@ struct TodayView: View {
 
     // The hero includes rollover. This meter isolates the displayed day's
     // spending pace against that day's daily budget.
-    private func momentumStrip(plan: MonthPlan) -> some View {
-        let spent = plan.spent(on: displayedDate)
-
-        return TodayMeter(spent: spent, dailyRate: plan.dailyRate)
-            .animation(reduceMotion ? nil : .spring(duration: 0.4), value: spent)
+    private func momentumStrip(snapshot: DaySnapshot) -> some View {
+        TodayMeter(spent: snapshot.spent, dailyRate: snapshot.dailyRate)
+            .animation(reduceMotion ? nil : .spring(duration: 0.4), value: snapshot.spent)
     }
 
     // MARK: - Transactions
 
-    private var transactionsSection: some View {
+    private func transactionsSection(_ transactions: [Transaction]) -> some View {
         List {
-            ForEach(todayTransactions) { tx in
+            ForEach(transactions) { tx in
                 Button {
                     activeSpendingSheet = ActiveSpendingSheet(transaction: tx)
                 } label: {
@@ -384,13 +395,6 @@ struct TodayView: View {
         .scrollContentBackground(.hidden)
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
         .background(Color(uiColor: .systemBackground))
-    }
-
-    private var todayTransactions: [Transaction] {
-        guard let plan else { return [] }
-        return plan.transactions
-            .filter { Calendar.current.isDate($0.date, inSameDayAs: displayedDate) }
-            .sorted { $0.date > $1.date }
     }
 
     private func transactionRow(_ tx: Transaction) -> some View {
@@ -451,20 +455,63 @@ struct TodayView: View {
 
     private func delete(_ transaction: Transaction) {
         modelContext.delete(transaction)
-        UIImpactFeedbackGenerator(style: .light).impactOccurred()
+        HapticFeedback.lightImpact()
+    }
+
+    // Resolve the displayed day's numbers in one pass. Accessing the SwiftData
+    // relationship can fault its contents into memory, so keeping all of the
+    // transaction-derived UI together avoids repeating that work per render.
+    private func makeSnapshot(for plan: MonthPlan) -> DaySnapshot {
+        let calendar = Calendar.current
+        let rate = plan.dailyRate
+        let day = calendar.component(.day, from: balanceDate)
+        let startOfDisplayedDay = calendar.startOfDay(for: displayedDate)
+        let startOfPreviousDay = calendar.date(byAdding: .day, value: -1, to: startOfDisplayedDay)
+
+        var spentAsOfBalance: Decimal = 0
+        var spentOnDisplayedDay: Decimal = 0
+        var spentOnPreviousDay: Decimal = 0
+        var displayedTransactions: [Transaction] = []
+
+        for transaction in plan.transactions {
+            if transaction.date <= balanceDate {
+                spentAsOfBalance += transaction.amount
+            }
+            if calendar.isDate(transaction.date, inSameDayAs: displayedDate) {
+                spentOnDisplayedDay += transaction.amount
+                displayedTransactions.append(transaction)
+            }
+            if let startOfPreviousDay,
+               transaction.date >= startOfPreviousDay,
+               transaction.date < startOfDisplayedDay {
+                spentOnPreviousDay += transaction.amount
+            }
+        }
+
+        displayedTransactions.sort { $0.date > $1.date }
+
+        return DaySnapshot(
+            dailyRate: rate,
+            remaining: rate * Decimal(day) - spentAsOfBalance,
+            spent: spentOnDisplayedDay,
+            yesterdayDelta: day > 1 ? rate - spentOnPreviousDay : nil,
+            transactions: displayedTransactions
+        )
     }
 }
 
 #Preview {
     let config = ModelConfiguration(isStoredInMemoryOnly: true)
     let container = try! ModelContainer(
-        for: MonthPlan.self, FixedExpense.self, Transaction.self,
+        for: MonthPlan.self, IncomeSource.self, SavingsGoal.self, FixedExpense.self, Transaction.self,
         configurations: config
     )
     let cal = Calendar.current
     let start = cal.startOfDay(for: cal.date(from: cal.dateComponents([.year, .month], from: .now))!)
-    let plan = MonthPlan(monthStart: start, monthlyIncome: 6200, savingsGoal: 1000)
+    let plan = MonthPlan(monthStart: start, monthlyIncome: 0, savingsGoal: 1000)
     container.mainContext.insert(plan)
+    plan.incomeSources.append(IncomeSource(name: "Salary", amount: 4700, cadence: .fixed, affirmedAt: .now))
+    plan.incomeSources.append(IncomeSource(name: "Client X", amount: 1500, cadence: .variable))
     plan.fixedExpenses.append(FixedExpense(name: "Rent", amount: 1800))
     plan.transactions.append(Transaction(amount: 14.50, category: .food, note: "Lunch"))
     plan.transactions.append(Transaction(amount: 4.75, category: .coffee))

@@ -17,7 +17,7 @@ struct AddSpendingView: View {
     @State private var category: Category = .other
     @State private var note = ""
     @FocusState private var isNoteFocused: Bool
-    @ScaledMetric private var amountSize = 56
+    @ScaledMetric private var amountSize = 64
 
     init(plan: MonthPlan, date: Date = .now, transaction: Transaction? = nil) {
         self.plan = plan
@@ -103,12 +103,15 @@ struct AddSpendingView: View {
                 if showsDateContext {
                     ToolbarItem(placement: .principal) {
                         Text(date, format: .dateTime.weekday(.abbreviated).month(.abbreviated).day())
-                            .font(.dmSans(.caption, weight: .medium))
+                            .font(.dmSans(.subheadline, weight: .medium))
                             .foregroundStyle(.secondary)
                             .lineLimit(1)
                     }
                 }
             }
+        }
+        .onAppear {
+            HapticFeedback.prepareLight()
         }
     }
 
@@ -217,14 +220,14 @@ struct AddSpendingView: View {
             modelContext.insert(tx)
             tx.plan = plan
         }
-        UIImpactFeedbackGenerator(style: .light).impactOccurred()
+        HapticFeedback.lightImpact()
         dismiss()
     }
 
     private func deleteTransaction() {
         guard let transaction else { return }
         modelContext.delete(transaction)
-        UIImpactFeedbackGenerator(style: .light).impactOccurred()
+        HapticFeedback.lightImpact()
         dismiss()
     }
 
@@ -246,11 +249,12 @@ struct AddSpendingView: View {
 #Preview {
     let config = ModelConfiguration(isStoredInMemoryOnly: true)
     let container = try! ModelContainer(
-        for: MonthPlan.self, FixedExpense.self, Transaction.self,
+        for: MonthPlan.self, IncomeSource.self, SavingsGoal.self, FixedExpense.self, Transaction.self,
         configurations: config
     )
     let plan = MonthPlan(monthStart: .now, monthlyIncome: 6200, savingsGoal: 1000)
     container.mainContext.insert(plan)
+    plan.incomeSources.append(IncomeSource(name: "Salary", amount: 6200, cadence: .fixed, affirmedAt: .now))
     return Color.clear
         .fullScreenCover(isPresented: .constant(true)) {
             AddSpendingView(plan: plan)

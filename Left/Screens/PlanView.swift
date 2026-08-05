@@ -2,6 +2,16 @@ import SwiftUI
 import SwiftData
 
 struct PlanView: View {
+    private struct ActiveIncomeSheet: Identifiable {
+        let id = UUID()
+        var source: IncomeSource?
+    }
+
+    private struct ActiveSavingsSheet: Identifiable {
+        let id = UUID()
+        var goal: SavingsGoal?
+    }
+
     @Environment(\.dismiss) private var dismiss
     @Environment(\.modelContext) private var modelContext
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
@@ -10,11 +20,13 @@ struct PlanView: View {
     var onComplete: (() -> Void)?
 
     @State private var isAddingExpense = false
+    @State private var activeIncomeSheet: ActiveIncomeSheet?
+    @State private var activeSavingsSheet: ActiveSavingsSheet?
     @State private var newExpenseName = ""
     @State private var newExpenseAmount: Decimal = 0
     @State private var newExpenseCadence: ExpenseCadence = .monthly
     @State private var expenseBasis: ExpenseBasis = .daily
-    @State private var onboardingStep: OnboardingStep = .cadence
+    @State private var onboardingStep: OnboardingStep = .income
     @FocusState private var isMoneyFieldFocused: Bool
 
     var body: some View {
@@ -41,6 +53,12 @@ struct PlanView: View {
         }
         .sheet(isPresented: $isAddingExpense) {
             recurringExpenseSheet
+        }
+        .sheet(item: $activeIncomeSheet) { sheet in
+            IncomeSheet(plan: plan, source: sheet.source)
+        }
+        .sheet(item: $activeSavingsSheet) { sheet in
+            SavingsGoalSheet(plan: plan, goal: sheet.goal)
         }
         .interactiveDismissDisabled(isOnboarding)
     }
@@ -79,7 +97,7 @@ struct PlanView: View {
 
                 Divider()
 
-                planSection("Savings goal") {
+                planSection("Savings goals") {
                     savingsContent
                 }
                 .padding(.horizontal, AppSpacing.xl)
@@ -94,101 +112,208 @@ struct PlanView: View {
 
     private var incomeContent: some View {
         VStack(alignment: .leading, spacing: AppSpacing.md) {
-            moneyField(value: incomeBinding, accessibilityLabel: "Money available this month")
+            VStack(spacing: 0) {
+                ForEach(Array(plan.incomeSources.enumerated()), id: \.element.persistentModelID) { index, source in
+                    incomeRow(source)
 
-            Text(incomeGuidance)
-                .font(.dmSans(.caption))
-                .foregroundStyle(.secondary)
-                .fixedSize(horizontal: false, vertical: true)
-
-            incomeCadencePicker
-
-            incomeConfirmNote
-        }
-    }
-
-    private var incomeCadencePicker: some View {
-        Picker("Income cadence", selection: incomeCadenceBinding) {
-            ForEach(IncomeCadence.allCases) { cadence in
-                Text(cadence.label).tag(cadence)
+                    if index < plan.incomeSources.count - 1 {
+                        Divider()
+                    }
+                }
             }
-        }
-        .pickerStyle(.segmented)
-        .labelsHidden()
-        .frame(maxWidth: 280, alignment: .leading)
-    }
+            .padding(.horizontal, AppSpacing.md)
+            .background(Color(uiColor: .secondarySystemBackground))
+            .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
 
-    // Typing a number is vouching for it, so editing here counts as confirming
-    // and the note below retires on its own.
-    private var incomeBinding: Binding<Decimal> {
-        Binding {
-            plan.monthlyIncome
-        } set: { newValue in
-            plan.monthlyIncome = max(0, newValue)
-            plan.incomeConfirmedAt = .now
-        }
-    }
+            HStack {
+                Text("Total")
+                    .font(.dmSans(.subheadline))
+                    .foregroundStyle(.secondary)
+                Spacer()
+                Text(plan.incomeTotal, format: .currency(code: "USD"))
+                    .font(.dmSans(.title3, weight: .semibold))
+                    .monospacedDigit()
+                    .contentTransition(.numericText())
+            }
 
-    private var incomeCadenceBinding: Binding<IncomeCadence> {
-        Binding {
-            plan.effectiveIncomeCadence
-        } set: { plan.incomeCadence = $0 }
-    }
-
-    private var incomeGuidance: String {
-        if plan.effectiveIncomeCadence == .variable {
-            "Include invoices you expect to be paid this month, even if the work was completed earlier."
-        } else {
-            "Use the take-home amount you expect to receive this month."
-        }
-    }
-
-    // Where an ignored or dismissed confirm row comes to rest. Unlike the row
-    // on Today, this never expires — it's the permanent recovery path.
-    @ViewBuilder
-    private var incomeConfirmNote: some View {
-        if plan.incomeIsUnconfirmed {
             Button {
-                plan.confirmIncome()
+                activeIncomeSheet = ActiveIncomeSheet()
+            } label: {
+                Label("Add income source", systemImage: "plus")
+                    .font(.dmSans(.subheadline, weight: .medium))
+                    .foregroundStyle(.primary)
+                    .frame(maxWidth: .infinity)
+                    .padding(AppSpacing.md)
+                    .background(Color(uiColor: .secondarySystemFill))
+                    .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+            }
+            .buttonStyle(.plain)
+        }
+    }
+
+    private func incomeRow(_ source: IncomeSource) -> some View {
+        @Bindable var source = source
+
+        return VStack(alignment: .leading, spacing: AppSpacing.xxs) {
+            HStack(spacing: AppSpacing.sm) {
+                TextField("Source name", text: $source.name)
+                    .font(.dmSans(.body, weight: .medium))
+                    .lineLimit(1)
+                    .layoutPriority(1)
+
+                MoneyField(value: incomeAmountBinding(source),
+                           unit: .currency,
+                           prominence: .compact,
+                           accessibilityLabel: "\(source.name) income amount",
+                           focus: $isMoneyFieldFocused)
+
+                Button(role: .destructive) {
+                    deleteIncome(source)
+                } label: {
+                    Image(systemName: "trash")
+                        .font(.dmSans(.subheadline, weight: .medium))
+                        .foregroundStyle(Color.leftNegative)
+                        .frame(width: 44, height: 44)
+                        .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .disabled(!canDeleteIncome)
+                .opacity(canDeleteIncome ? 1 : 0.35)
+                .accessibilityLabel("Remove \(source.name)")
+                .accessibilityHint(!canDeleteIncome
+                                   ? "Set its amount to zero, or add its replacement before removing it."
+                                   : "")
+            }
+
+            Button {
+                activeIncomeSheet = ActiveIncomeSheet(source: source)
             } label: {
                 HStack(spacing: AppSpacing.xs) {
-                    Text(carriedOverNote)
-                    Image(systemName: "checkmark.circle")
+                    if source.isUnconfirmed {
+                        Text(carriedOverNote(for: source))
+                    } else {
+                        Text(source.effectiveCadence.label)
+                    }
+                    Image(systemName: "pencil")
                 }
                 .font(.dmSans(.caption))
                 .foregroundStyle(.secondary)
                 .fixedSize(horizontal: false, vertical: true)
             }
             .buttonStyle(.plain)
-            .accessibilityLabel("Confirm money available this month: \(plan.monthlyIncome.formatted(.currency(code: "USD").precision(.fractionLength(0))))")
+            .accessibilityLabel("Edit \(source.name), \(source.effectiveCadence.label)")
+        }
+        .padding(.vertical, AppSpacing.sm)
+    }
+
+    private func incomeAmountBinding(_ source: IncomeSource) -> Binding<Decimal> {
+        Binding {
+            source.amount
+        } set: { value in
+            source.amount = max(0, value)
+            source.affirmedAt = .now
         }
     }
 
-    private var carriedOverNote: String {
+    private func carriedOverNote(for source: IncomeSource) -> String {
         guard let previous = Calendar.current.date(byAdding: .month, value: -1, to: plan.monthStart) else {
-            return "Not confirmed yet. Tap to confirm what's expected this month."
+            return "Not confirmed yet — tap to confirm"
         }
-        return "Using \(previous.formatted(.dateTime.month(.wide)))'s amount. Tap to confirm what's expected this month."
+        let month = previous.formatted(.dateTime.month(.wide))
+        return "Carried from \(month) — tap to confirm"
     }
 
     // MARK: - Savings
 
     private var savingsContent: some View {
         VStack(alignment: .leading, spacing: AppSpacing.md) {
-            savingsModePicker
+            if !plan.savingsGoals.isEmpty {
+                VStack(spacing: 0) {
+                    ForEach(Array(plan.savingsGoals.enumerated()), id: \.element.persistentModelID) { index, goal in
+                        savingsGoalRow(goal)
 
-            if plan.usesPercentSavings {
-                percentField(value: savingsPercentBinding)
-            } else {
-                moneyField(value: savingsAmountBinding, accessibilityLabel: "Monthly savings goal")
+                        if index < plan.savingsGoals.count - 1 {
+                            Divider()
+                        }
+                    }
+                }
+                .padding(.horizontal, AppSpacing.md)
+                .background(Color(uiColor: .secondarySystemBackground))
+                .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
             }
 
-            savingsResolution
+            Button {
+                activeSavingsSheet = ActiveSavingsSheet()
+            } label: {
+                Label("Add savings goal", systemImage: "plus")
+                    .font(.dmSans(.subheadline, weight: .medium))
+                    .foregroundStyle(.primary)
+                    .frame(maxWidth: .infinity)
+                    .padding(AppSpacing.md)
+                    .background(Color(uiColor: .secondarySystemFill))
+                    .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+            }
+            .buttonStyle(.plain)
+
+            Text("\(plan.savingsAmount.formatted(.currency(code: "USD").precision(.fractionLength(0)))) set aside this month.")
+                .font(.dmSans(.subheadline))
+                .foregroundStyle(.secondary)
+                .monospacedDigit()
+                .contentTransition(.numericText())
         }
-        .animation(reduceMotion ? nil : .easeInOut(duration: 0.18), value: plan.usesPercentSavings)
     }
 
-    private var savingsModePicker: some View {
+    private func savingsGoalRow(_ goal: SavingsGoal) -> some View {
+        HStack(spacing: AppSpacing.sm) {
+            Button {
+                activeSavingsSheet = ActiveSavingsSheet(goal: goal)
+            } label: {
+                HStack(spacing: AppSpacing.md) {
+                    VStack(alignment: .leading, spacing: AppSpacing.xxs) {
+                        Text(goal.name)
+                            .font(.dmSans(.body, weight: .medium))
+                            .foregroundStyle(.primary)
+                            .lineLimit(1)
+
+                        if let percent = goal.percent {
+                            Text("\(percent.formatted(.number))% of income — moves with what you receive")
+                                .font(.dmSans(.caption))
+                                .foregroundStyle(.secondary)
+                                .fixedSize(horizontal: false, vertical: true)
+                        }
+                    }
+
+                    Spacer(minLength: AppSpacing.sm)
+
+                    Text(goal.resolvedAmount(income: plan.incomeTotal),
+                         format: .currency(code: "USD").precision(.fractionLength(0)))
+                        .font(.dmSans(.body, weight: .semibold))
+                        .foregroundStyle(.primary)
+                        .monospacedDigit()
+                        .layoutPriority(1)
+                }
+                .frame(minHeight: 64)
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel("Edit \(goal.name), \(goal.resolvedAmount(income: plan.incomeTotal).formatted(.currency(code: "USD"))) this month")
+
+            Button(role: .destructive) {
+                deleteSavingsGoal(goal)
+            } label: {
+                Image(systemName: "trash")
+                    .font(.dmSans(.subheadline, weight: .medium))
+                    .foregroundStyle(Color.leftNegative)
+                    .frame(width: 44, height: 44)
+                    .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel("Remove \(goal.name)")
+        }
+        .padding(.vertical, AppSpacing.xs)
+    }
+
+    private var onboardingSavingsModePicker: some View {
         Picker("Savings basis", selection: savingsMode) {
             ForEach(SavingsMode.allCases) { mode in
                 Text(mode.label).tag(mode)
@@ -199,18 +324,15 @@ struct PlanView: View {
         .frame(maxWidth: 280, alignment: .leading)
     }
 
-    // The other half of whichever number you typed: percent mode shows the
-    // dollars it works out to this month, amount mode shows the share of
-    // income it represents.
     @ViewBuilder
-    private var savingsResolution: some View {
-        if plan.usesPercentSavings {
-            Text("\(plan.savingsAmount.formatted(.currency(code: "USD").precision(.fractionLength(0)))) this month, and it moves with your income")
+    private var onboardingSavingsResolution: some View {
+        if onboardingUsesPercentSavings {
+            Text("\(onboardingSavingsAmount.formatted(.currency(code: "USD").precision(.fractionLength(0)))) this month, and it moves with what you receive")
                 .font(.dmSans(.caption))
                 .foregroundStyle(.secondary)
                 .fixedSize(horizontal: false, vertical: true)
-        } else if plan.monthlyIncome > 0, plan.savingsGoal > 0 {
-            Text("About \(plan.equivalentPercent().formatted(.number))% of this month's income")
+        } else if plan.incomeTotal > 0, onboardingSavingsAmount > 0 {
+            Text("About \(equivalentPercent(for: onboardingSavingsAmount).formatted(.number))% of this month's income")
                 .font(.dmSans(.caption))
                 .foregroundStyle(.secondary)
         }
@@ -218,31 +340,61 @@ struct PlanView: View {
 
     private var savingsMode: Binding<SavingsMode> {
         Binding {
-            plan.usesPercentSavings ? .percent : .amount
+            onboardingUsesPercentSavings ? .percent : .amount
         } set: { mode in
+            let goal = materializeOnboardingSavingsGoal()
             switch mode {
             case .amount:
-                plan.savingsTarget = .amount(plan.savingsAmount)
+                goal.target = .amount(goal.resolvedAmount(income: plan.incomeTotal))
             case .percent:
-                plan.savingsTarget = .percentOfIncome(plan.equivalentPercent())
+                goal.target = .percentOfIncome(
+                    equivalentPercent(for: goal.resolvedAmount(income: plan.incomeTotal))
+                )
             }
         }
     }
 
-    private var savingsAmountBinding: Binding<Decimal> {
+    private var onboardingSavingsAmountBinding: Binding<Decimal> {
         Binding {
-            plan.savingsGoal
+            plan.savingsGoals.first?.amount ?? plan.savingsGoal
         } set: { newValue in
-            plan.savingsTarget = .amount(newValue)
+            materializeOnboardingSavingsGoal().target = .amount(newValue)
         }
     }
 
-    private var savingsPercentBinding: Binding<Decimal> {
+    private var onboardingSavingsPercentBinding: Binding<Decimal> {
         Binding {
-            plan.savingsPercent ?? 0
+            plan.savingsGoals.first?.percent ?? plan.savingsPercent ?? 0
         } set: { newValue in
-            plan.savingsTarget = .percentOfIncome(newValue)
+            materializeOnboardingSavingsGoal().target = .percentOfIncome(newValue)
         }
+    }
+
+    private var onboardingUsesPercentSavings: Bool {
+        plan.savingsGoals.first?.usesPercent ?? plan.usesPercentSavings
+    }
+
+    private var onboardingSavingsAmount: Decimal {
+        if let goal = plan.savingsGoals.first {
+            return goal.resolvedAmount(income: plan.incomeTotal)
+        }
+        return plan.savingsAmount
+    }
+
+    private func equivalentPercent(for amount: Decimal, fallback: Decimal = 20) -> Decimal {
+        guard plan.incomeTotal > 0, amount > 0 else { return fallback }
+        let percent = (amount / plan.incomeTotal * 100).rounded(scale: 0)
+        return min(max(percent, 0), SavingsGoal.maxPercent)
+    }
+
+    @discardableResult
+    private func materializeOnboardingSavingsGoal() -> SavingsGoal {
+        if let goal = plan.savingsGoals.first { return goal }
+        let goal = SavingsGoal(name: "Savings",
+                               amount: plan.savingsGoal,
+                               percent: plan.savingsPercent)
+        plan.savingsGoals.append(goal)
+        return goal
     }
 
     // MARK: - Derivation
@@ -304,8 +456,6 @@ struct PlanView: View {
     @ViewBuilder
     private var onboardingStepContent: some View {
         switch onboardingStep {
-        case .cadence:
-            onboardingCadenceStep
         case .income:
             onboardingIncomeStep
         case .expenses:
@@ -315,85 +465,108 @@ struct PlanView: View {
         }
     }
 
-    // Asked before income because it frames the income question — and because
-    // it's the answer that decides whether this user is ever asked again.
-    private var onboardingCadenceStep: some View {
-        VStack(spacing: AppSpacing.xxl) {
+    private var onboardingIncomeStep: some View {
+        VStack(spacing: AppSpacing.xl) {
             onboardingHeader(
                 eyebrow: "MONEY COMING IN",
-                title: "Does what you receive change?",
-                description: "This decides how often Left asks what money is available for the month. You can change it later."
+                title: "What's coming in?",
+                description: "Add each source you expect this month. Mark steady income like salary as about the same, and invoices or hourly work as variable."
             )
 
-            VStack(spacing: AppSpacing.md) {
-                ForEach(IncomeCadence.allCases) { cadence in
-                    cadenceCard(cadence)
-                }
-            }
-        }
-        .frame(maxWidth: .infinity)
-    }
-
-    private func cadenceCard(_ cadence: IncomeCadence) -> some View {
-        let isSelected = plan.incomeCadence == cadence
-
-        return Button {
-            withAnimation(reduceMotion ? nil : .easeInOut(duration: 0.18)) {
-                plan.incomeCadence = cadence
-            }
-        } label: {
-            HStack(alignment: .top, spacing: AppSpacing.md) {
-                Image(systemName: cadence.symbol)
-                    .font(.dmSans(.body, weight: .medium))
-                    .foregroundStyle(isSelected ? Color.leftPositive : Color.secondary)
-                    .frame(width: 28, height: 28)
-
-                VStack(alignment: .leading, spacing: AppSpacing.xxs) {
-                    Text(cadence.label)
-                        .font(.dmSans(.body, weight: .semibold))
-                        .foregroundStyle(.primary)
-
-                    Text(cadence.detail)
-                        .font(.dmSans(.caption))
+            VStack(spacing: 0) {
+                if plan.incomeSources.isEmpty {
+                    Text("No income sources added")
+                        .font(.dmSans(.subheadline))
                         .foregroundStyle(.secondary)
-                        .multilineTextAlignment(.leading)
-                        .fixedSize(horizontal: false, vertical: true)
-                }
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, AppSpacing.xl)
+                } else {
+                    ForEach(Array(plan.incomeSources.enumerated()), id: \.element.persistentModelID) { index, source in
+                        onboardingIncomeRow(source)
 
-                Spacer(minLength: 0)
+                        if index < plan.incomeSources.count - 1 {
+                            Divider()
+                        }
+                    }
+                }
             }
-            .padding(AppSpacing.lg)
-            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(.horizontal, AppSpacing.lg)
             .background(Color(uiColor: .secondarySystemBackground))
             .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
-            .overlay {
-                RoundedRectangle(cornerRadius: 16, style: .continuous)
-                    .stroke(isSelected ? Color.leftPositive : Color.clear, lineWidth: 2)
+
+            Button {
+                activeIncomeSheet = ActiveIncomeSheet()
+            } label: {
+                Label("Add income source", systemImage: "plus")
+                    .font(.dmSans(.body, weight: .medium))
+                    .foregroundStyle(.primary)
+                    .frame(maxWidth: .infinity)
+                    .frame(minHeight: 52)
+                    .background(Color(uiColor: .secondarySystemFill))
+                    .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+            }
+            .buttonStyle(.plain)
+
+            if plan.incomeTotal > 0 {
+                HStack {
+                    Text("Total")
+                        .font(.dmSans(.subheadline))
+                        .foregroundStyle(.secondary)
+                    Spacer()
+                    Text(plan.incomeTotal, format: .currency(code: "USD"))
+                        .font(.dmSans(.title3, weight: .semibold))
+                        .monospacedDigit()
+                }
             }
         }
-        .buttonStyle(.plain)
-        .accessibilityLabel("\(cadence.label). \(cadence.detail)")
-        .accessibilityAddTraits(isSelected ? [.isButton, .isSelected] : .isButton)
+        .frame(maxWidth: .infinity)
     }
 
-    private var onboardingIncomeStep: some View {
-        let isVariable = plan.effectiveIncomeCadence == .variable
+    private func onboardingIncomeRow(_ source: IncomeSource) -> some View {
+        HStack(spacing: AppSpacing.sm) {
+            Button {
+                activeIncomeSheet = ActiveIncomeSheet(source: source)
+            } label: {
+                HStack(spacing: AppSpacing.md) {
+                    VStack(alignment: .leading, spacing: AppSpacing.xxs) {
+                        Text(source.name)
+                            .font(.dmSans(.body, weight: .medium))
+                            .foregroundStyle(.primary)
+                            .lineLimit(1)
 
-        return VStack(spacing: AppSpacing.xxl) {
-            onboardingHeader(
-                eyebrow: "MONEY AVAILABLE",
-                title: isVariable ? "What do you expect to receive this month?" : "What do you usually receive each month?",
-                description: isVariable
-                    ? "Include invoices you expect to be paid this month, even if you completed the work earlier. Left checks in when a new month starts."
-                    : "Enter your usual take-home amount. Left uses it as the money available for each month's plan."
-            )
+                        Text(source.effectiveCadence.label)
+                            .font(.dmSans(.caption))
+                            .foregroundStyle(.secondary)
+                    }
 
-            onboardingMoneyField(
-                value: $plan.monthlyIncome,
-                accessibilityLabel: "Money available this month"
-            )
+                    Spacer()
+
+                    Text(source.amount, format: .currency(code: "USD"))
+                        .font(.dmSans(.body, weight: .medium))
+                        .foregroundStyle(.primary)
+                        .monospacedDigit()
+                        .layoutPriority(1)
+                }
+                .frame(minHeight: 64)
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel("Edit \(source.name), \(source.amount.formatted(.currency(code: "USD"))), \(source.effectiveCadence.label)")
+
+            Button(role: .destructive) {
+                deleteIncome(source)
+            } label: {
+                Image(systemName: "xmark")
+                    .font(.dmSans(.caption, weight: .medium))
+                    .foregroundStyle(.secondary)
+                    .frame(width: 44, height: 44)
+                    .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .disabled(!canDeleteIncome)
+            .opacity(canDeleteIncome ? 1 : 0.35)
+            .accessibilityLabel("Remove \(source.name)")
         }
-        .frame(maxWidth: .infinity)
     }
 
     private var onboardingExpensesStep: some View {
@@ -453,21 +626,21 @@ struct PlanView: View {
             )
 
             VStack(spacing: AppSpacing.md) {
-                savingsModePicker
+                onboardingSavingsModePicker
 
-                if plan.usesPercentSavings {
-                    onboardingPercentField(value: savingsPercentBinding)
+                if onboardingUsesPercentSavings {
+                    onboardingPercentField(value: onboardingSavingsPercentBinding)
                 } else {
                     onboardingMoneyField(
-                        value: savingsAmountBinding,
+                        value: onboardingSavingsAmountBinding,
                         accessibilityLabel: "Monthly savings goal"
                     )
                 }
 
-                savingsResolution
+                onboardingSavingsResolution
                     .multilineTextAlignment(.center)
             }
-            .animation(reduceMotion ? nil : .easeInOut(duration: 0.18), value: plan.usesPercentSavings)
+            .animation(reduceMotion ? nil : .easeInOut(duration: 0.18), value: onboardingUsesPercentSavings)
 
             if plan.monthlySpendable > 0 {
                 VStack(spacing: AppSpacing.xs) {
@@ -491,6 +664,9 @@ struct PlanView: View {
             }
         }
         .frame(maxWidth: .infinity)
+        .onAppear {
+            materializeOnboardingSavingsGoal()
+        }
     }
 
     private func onboardingHeader(
@@ -606,12 +782,8 @@ struct PlanView: View {
 
     private var canContinueOnboarding: Bool {
         switch onboardingStep {
-        case .cadence:
-            // No preselection: the point is an explicit declaration, not a
-            // default the user tapped past.
-            plan.incomeCadence != nil
         case .income:
-            plan.monthlyIncome > 0
+            plan.incomeTotal > 0
         case .expenses:
             true
         case .savings:
@@ -624,6 +796,7 @@ struct PlanView: View {
         isMoneyFieldFocused = false
 
         if onboardingStep == .savings {
+            materializeOnboardingSavingsGoal()
             if let onComplete {
                 onComplete()
             } else {
@@ -803,14 +976,6 @@ struct PlanView: View {
                    focus: $isMoneyFieldFocused)
     }
 
-    private func percentField(value: Binding<Decimal>) -> some View {
-        MoneyField(value: value,
-                   unit: .percent,
-                   prominence: .inline,
-                   accessibilityLabel: "Savings percent of income",
-                   focus: $isMoneyFieldFocused)
-    }
-
     private func expenseRow(
         expense: FixedExpense,
         name: Binding<String>,
@@ -894,28 +1059,38 @@ struct PlanView: View {
         plan.fixedExpenses.removeAll { $0.persistentModelID == expense.persistentModelID }
         modelContext.delete(expense)
     }
+
+    private func deleteIncome(_ source: IncomeSource) {
+        plan.incomeSources.removeAll { $0.persistentModelID == source.persistentModelID }
+        modelContext.delete(source)
+    }
+
+    private func deleteSavingsGoal(_ goal: SavingsGoal) {
+        let isLastGoal = plan.savingsGoals.count == 1
+        plan.savingsGoals.removeAll { $0.persistentModelID == goal.persistentModelID }
+        modelContext.delete(goal)
+
+        // Once legacy savings have been materialized, removing the final goal
+        // means "save nothing". Clear the dormant fallback so it cannot return.
+        if isLastGoal {
+            plan.savingsTarget = .amount(0)
+        }
+    }
+
+    // Deleting a newly-created plan's final source correctly leaves zero. A
+    // lazily migrated current plan still has its dormant legacy fallback, so
+    // keep one source until a replacement exists rather than resurrecting it.
+    private var canDeleteIncome: Bool {
+        plan.incomeSources.count > 1 || plan.monthlyIncome <= 0
+    }
 }
 
 private enum OnboardingStep: Int, CaseIterable, Identifiable {
-    case cadence
     case income
     case expenses
     case savings
 
     var id: Int { rawValue }
-}
-
-private enum SavingsMode: String, CaseIterable, Identifiable {
-    case amount, percent
-
-    var id: String { rawValue }
-
-    var label: String {
-        switch self {
-        case .amount: "Amount"
-        case .percent: "% of income"
-        }
-    }
 }
 
 private enum ExpenseBasis: String, CaseIterable, Identifiable {
@@ -956,13 +1131,17 @@ private extension View {
 #Preview {
     let config = ModelConfiguration(isStoredInMemoryOnly: true)
     let container = try! ModelContainer(
-        for: MonthPlan.self, FixedExpense.self, Transaction.self,
+        for: MonthPlan.self, IncomeSource.self, SavingsGoal.self, FixedExpense.self, Transaction.self,
         configurations: config
     )
     let cal = Calendar.current
     let start = cal.startOfDay(for: cal.date(from: cal.dateComponents([.year, .month], from: .now))!)
-    let plan = MonthPlan(monthStart: start, monthlyIncome: 6200, savingsGoal: 1000, savingsPercent: 20)
+    let plan = MonthPlan(monthStart: start, monthlyIncome: 0, savingsGoal: 0)
     container.mainContext.insert(plan)
+    plan.incomeSources.append(IncomeSource(name: "Salary", amount: 4700, cadence: .fixed, affirmedAt: .now))
+    plan.incomeSources.append(IncomeSource(name: "Client X", amount: 1500, cadence: .variable))
+    plan.savingsGoals.append(SavingsGoal(name: "Roth IRA", amount: 500))
+    plan.savingsGoals.append(SavingsGoal(name: "Emergency fund", amount: 0, percent: 20))
     plan.fixedExpenses.append(FixedExpense(name: "Rent", amount: 1800))
     plan.fixedExpenses.append(FixedExpense(name: "Utilities", amount: 200))
     plan.fixedExpenses.append(FixedExpense(name: "Insurance", amount: 900, cadence: .quarterly))

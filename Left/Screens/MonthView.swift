@@ -20,6 +20,18 @@ struct MonthView: View {
         var id: Int { day }
     }
 
+    private enum CalendarGridItem: Identifiable {
+        case blank(Int)
+        case day(Int)
+
+        var id: String {
+            switch self {
+            case .blank(let index): "blank-\(index)"
+            case .day(let day): "day-\(day)"
+            }
+        }
+    }
+
     var body: some View {
         NavigationStack {
             Group {
@@ -128,7 +140,7 @@ struct MonthView: View {
                 ? nil
                 : target.monthStart
         }
-        UIImpactFeedbackGenerator(style: .light).impactOccurred()
+        HapticFeedback.lightImpact()
     }
 
     private func month(atOffset delta: Int) -> MonthPlan? {
@@ -158,11 +170,13 @@ struct MonthView: View {
         let leadingBlanks = (firstWeekday - cal.firstWeekday + 7) % 7
         let spent = spentByDay(plan)
         let columns = Array(repeating: GridItem(.flexible(minimum: 36), spacing: AppSpacing.sm), count: 7)
+        let gridItems = (0..<leadingBlanks).map(CalendarGridItem.blank)
+            + (1...days).map(CalendarGridItem.day)
 
         return VStack(spacing: AppSpacing.md) {
             HStack {
-                ForEach(orderedWeekdaySymbols(cal), id: \.self) { symbol in
-                    Text(symbol)
+                ForEach(Array(orderedWeekdaySymbols(cal).enumerated()), id: \.offset) { weekday in
+                    Text(weekday.element)
                         .font(.dmSans(.caption2, weight: .medium))
                         .foregroundStyle(.secondary)
                         .frame(maxWidth: .infinity)
@@ -170,14 +184,16 @@ struct MonthView: View {
             }
 
             LazyVGrid(columns: columns, spacing: AppSpacing.sm) {
-                ForEach(0..<leadingBlanks, id: \.self) { _ in
-                    Color.clear.frame(minHeight: 44)
-                }
-                ForEach(1...days, id: \.self) { day in
-                    dayCell(day: day,
-                            spent: spent[day] ?? 0,
-                            dailyRate: plan.dailyRate,
-                            isFuture: day > today)
+                ForEach(gridItems) { item in
+                    switch item {
+                    case .blank:
+                        Color.clear.frame(minHeight: 44)
+                    case .day(let day):
+                        dayCell(day: day,
+                                spent: spent[day] ?? 0,
+                                dailyRate: plan.dailyRate,
+                                isFuture: day > today)
+                    }
                 }
             }
         }
@@ -306,20 +322,23 @@ private struct DayTransactionsSheet: View {
 
     private func delete(_ transaction: Transaction) {
         modelContext.delete(transaction)
-        UIImpactFeedbackGenerator(style: .light).impactOccurred()
+        HapticFeedback.lightImpact()
     }
 }
 
 #Preview {
     let config = ModelConfiguration(isStoredInMemoryOnly: true)
     let container = try! ModelContainer(
-        for: MonthPlan.self, FixedExpense.self, Transaction.self,
+        for: MonthPlan.self, IncomeSource.self, SavingsGoal.self, FixedExpense.self, Transaction.self,
         configurations: config
     )
     let cal = Calendar.current
     let start = cal.startOfDay(for: cal.date(from: cal.dateComponents([.year, .month], from: .now))!)
-    let plan = MonthPlan(monthStart: start, monthlyIncome: 6200, savingsGoal: 1000)
+    let plan = MonthPlan(monthStart: start, monthlyIncome: 6200, savingsGoal: 0)
     container.mainContext.insert(plan)
+    plan.incomeSources.append(IncomeSource(name: "Salary", amount: 6200, cadence: .fixed, affirmedAt: .now))
+    plan.savingsGoals.append(SavingsGoal(name: "Roth IRA", amount: 500))
+    plan.savingsGoals.append(SavingsGoal(name: "Emergency fund", amount: 0, percent: 10))
     plan.fixedExpenses.append(FixedExpense(name: "Rent", amount: 1800))
     plan.transactions.append(Transaction(amount: 14.50, category: .food, note: "Lunch"))
     plan.transactions.append(Transaction(amount: 62, date: cal.date(byAdding: .day, value: 2, to: start)!, category: .shopping))

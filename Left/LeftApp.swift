@@ -13,6 +13,8 @@ struct LeftApp: App {
     var sharedModelContainer: ModelContainer = {
         let schema = Schema([
             MonthPlan.self,
+            IncomeSource.self,
+            SavingsGoal.self,
             FixedExpense.self,
             Transaction.self,
         ])
@@ -55,16 +57,16 @@ struct AppRoot: View {
         .fullScreenCover(item: $onboardingPlan) { plan in
             NavigationStack {
                 PlanView(plan: plan, isOnboarding: true) {
-                    // They just typed it, so month one is never asked to
-                    // confirm the number they set up with.
-                    plan.confirmIncome()
                     try? modelContext.save()
                     hasCompletedOnboarding = true
                     onboardingPlan = nil
                 }
             }
         }
-        .task { ensurePlan() }
+        .task {
+            HapticFeedback.prepareLight()
+            ensurePlan()
+        }
         .onChange(of: scenePhase) { _, phase in
             if phase == .active { ensurePlan() }
         }
@@ -91,6 +93,8 @@ struct AppRoot: View {
     private func ensurePlan() {
         let start = currentMonthStart
         if let currentPlan {
+            materializeLegacyIncomeIfNeeded(in: currentPlan)
+            materializeLegacySavingsIfNeeded(in: currentPlan)
             if !hasCompletedOnboarding {
                 onboardingPlan = currentPlan
             }
@@ -100,6 +104,8 @@ struct AppRoot: View {
         if let last = allPlans.last {
             let plan = nextPlan(from: last, for: start)
             modelContext.insert(plan)
+            materializeLegacyIncomeIfNeeded(in: plan)
+            materializeLegacySavingsIfNeeded(in: plan)
             if !hasCompletedOnboarding {
                 onboardingPlan = plan
             }
@@ -112,20 +118,30 @@ struct AppRoot: View {
     }
 
     private func nextPlan(from previous: MonthPlan, for monthStart: Date) -> MonthPlan {
-        let calendar = Calendar.current
-        let immediateNext = previous.nextMonth(calendar: calendar)
-        if calendar.isDate(immediateNext.monthStart, equalTo: monthStart, toGranularity: .month) {
-            return immediateNext
-        }
+        previous.clone(for: monthStart)
+    }
 
-        let plan = MonthPlan(monthStart: monthStart,
-                             monthlyIncome: previous.monthlyIncome,
-                             savingsGoal: previous.savingsGoal,
-                             savingsPercent: previous.savingsPercent,
-                             incomeCadence: previous.incomeCadence)
-        plan.fixedExpenses = previous.fixedExpenses.map {
-            FixedExpense(name: $0.name, amount: $0.amount, cadence: $0.effectiveCadence)
-        }
-        return plan
+    // Deliberately current-plan-only: past scalar plans remain untouched and
+    // continue to read correctly through MonthPlan.incomeTotal's fallback.
+    private func materializeLegacyIncomeIfNeeded(in plan: MonthPlan) {
+        guard plan.incomeSources.isEmpty, plan.monthlyIncome > 0 else { return }
+        let source = IncomeSource(name: "Income",
+                                  amount: plan.monthlyIncome,
+                                  cadence: plan.incomeCadence ?? .fixed,
+                                  affirmedAt: plan.incomeConfirmedAt)
+        plan.incomeSources.append(source)
+        try? modelContext.save()
+    }
+
+    // Deliberately current-plan-only, matching income migration. Historical
+    // plans continue to resolve through the legacy pair without being rewritten.
+    private func materializeLegacySavingsIfNeeded(in plan: MonthPlan) {
+        let hasLegacyTarget = plan.savingsGoal > 0 || (plan.savingsPercent ?? 0) > 0
+        guard plan.savingsGoals.isEmpty, hasLegacyTarget else { return }
+        let goal = SavingsGoal(name: "Savings",
+                               amount: plan.savingsGoal,
+                               percent: plan.savingsPercent)
+        plan.savingsGoals.append(goal)
+        try? modelContext.save()
     }
 }

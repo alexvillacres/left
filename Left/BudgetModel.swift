@@ -10,6 +10,8 @@ final class MonthPlan {
     // First day of the month, normalized to startOfDay. Unique per month.
     @Attribute(.unique) var monthStart: Date
 
+    // Legacy scalar income. New plans read sources; old plans use this only
+    // through incomeTotal's fallback.
     var monthlyIncome: Decimal
 
     // The flat dollar goal. Still holds the last flat value while the plan is
@@ -20,19 +22,22 @@ final class MonthPlan {
     // Optional so existing plans migrate straight to the flat-amount target.
     var savingsPercent: Decimal?
 
-    // Whether the user earns the same every month or not. Optional so plans
-    // written before this existed migrate to `.fixed` — the quiet default,
-    // which never prompts. See `effectiveIncomeCadence`.
+    // Legacy plan-level cadence. New code reads cadence from IncomeSource.
     var incomeCadence: IncomeCadence?
 
-    // When the user last vouched for this month's income. Nil on a plan cloned
-    // forward from last month: that number is inherited, not affirmed.
+    // Legacy plan-level affirmation timestamp. New code writes IncomeSource.
     var incomeConfirmedAt: Date?
 
     // When this record was made, which is not the same as when its month
     // started — install on the 14th and the plan is a day old in a half-spent
     // month. Windows count from here. Optional for migration.
     var createdAt: Date?
+
+    @Relationship(deleteRule: .cascade, inverse: \IncomeSource.plan)
+    var incomeSources: [IncomeSource] = []
+
+    @Relationship(deleteRule: .cascade, inverse: \SavingsGoal.plan)
+    var savingsGoals: [SavingsGoal] = []
 
     @Relationship(deleteRule: .cascade, inverse: \FixedExpense.plan)
     var fixedExpenses: [FixedExpense] = []
@@ -54,26 +59,36 @@ final class MonthPlan {
         self.createdAt = createdAt
     }
 
-    // Clone settings forward when a new month begins. Income, expenses and the
-    // savings target all carry; `incomeConfirmedAt` deliberately does not — an
-    // inherited number has not been vouched for yet.
-    func nextMonth(calendar: Calendar = .current) -> MonthPlan {
-        let start = calendar.date(byAdding: .month, value: 1, to: monthStart)!
-        let plan = MonthPlan(monthStart: start,
-                             monthlyIncome: monthlyIncome,
+    // The one clone path for both adjacent months and gaps. Per-source
+    // affirmation deliberately does not carry: inherited variable income has
+    // not been vouched for in the new month.
+    func clone(for monthStart: Date) -> MonthPlan {
+        let hasLegacyIncomeOnly = incomeSources.isEmpty
+        let plan = MonthPlan(monthStart: monthStart,
+                             monthlyIncome: hasLegacyIncomeOnly ? monthlyIncome : 0,
                              savingsGoal: savingsGoal,
                              savingsPercent: savingsPercent,
-                             incomeCadence: incomeCadence)
+                             incomeCadence: hasLegacyIncomeOnly ? incomeCadence : nil)
+        plan.incomeSources = incomeSources.map {
+            IncomeSource(name: $0.name, amount: $0.amount, cadence: $0.effectiveCadence)
+        }
+        plan.savingsGoals = savingsGoals.map {
+            SavingsGoal(name: $0.name, amount: $0.amount, percent: $0.percent)
+        }
         plan.fixedExpenses = fixedExpenses.map {
             FixedExpense(name: $0.name, amount: $0.amount, cadence: $0.effectiveCadence)
         }
         return plan
     }
+
+    func nextMonth(calendar: Calendar = .current) -> MonthPlan {
+        let start = calendar.date(byAdding: .month, value: 1, to: monthStart)!
+        return clone(for: start)
+    }
 }
 
 // MARK: - Income cadence
-// Declared once during onboarding. A fixed earner is never asked to confirm
-// income again; a variable earner is asked at the start of every month.
+// Stored per source: one plan can mix a steady salary with variable invoices.
 
 enum IncomeCadence: String, Codable, CaseIterable, Identifiable {
     case fixed, variable
@@ -87,31 +102,11 @@ enum IncomeCadence: String, Codable, CaseIterable, Identifiable {
         }
     }
 
-    var detail: String {
-        switch self {
-        case .fixed: "Salary, retainers, or anything steady enough that you'd type the same number twice."
-        case .variable: "Freelance, commission, or hourly. We'll ask what you expect to receive each month."
-        }
-    }
-
-    var symbol: String {
-        switch self {
-        case .fixed: "equal"
-        case .variable: "chart.line.uptrend.xyaxis"
-        }
-    }
 }
 
 extension MonthPlan {
     // How long a freshly inherited income stays open for confirmation.
     static let incomeConfirmWindowDays = 7
-
-    // Nil means the plan predates the cadence choice. Treat those as fixed:
-    // they were set up under a model that never asked, so asking now would be
-    // a prompt about a month already underway.
-    var effectiveIncomeCadence: IncomeCadence {
-        incomeCadence ?? .fixed
-    }
 
     var effectiveCreatedAt: Date {
         createdAt ?? monthStart
@@ -123,35 +118,72 @@ extension MonthPlan {
         return calendar.dateComponents([.day], from: from, to: to).day ?? 0
     }
 
-    // The confirm row exists only for a variable earner, only while the income
-    // is inherited rather than affirmed, and only for the plan's first week.
-    // After that it retires quietly — PlanView keeps the recovery path.
-    func needsIncomeConfirmation(on date: Date = .now, calendar: Calendar = .current) -> Bool {
-        guard effectiveIncomeCadence == .variable,
-              incomeConfirmedAt == nil,
-              monthlyIncome > 0 else { return false }
-        let elapsed = daysSinceCreated(on: date, calendar: calendar)
-        return elapsed >= 0 && elapsed < Self.incomeConfirmWindowDays
+    // The Today prompt exists only during a plan's first week. Plan keeps the
+    // permanent recovery note for any variable source that was never affirmed.
+    func unconfirmedIncomeSources(on date: Date = .now,
+                                  calendar: Calendar = .current,
+                                  withinWindow: Bool = true) -> [IncomeSource] {
+        if withinWindow {
+            let elapsed = daysSinceCreated(on: date, calendar: calendar)
+            guard elapsed >= 0 && elapsed < Self.incomeConfirmWindowDays else { return [] }
+        }
+
+        return incomeSources
+            .filter(\.isUnconfirmed)
+            .sorted {
+                if $0.amount == $1.amount { return $0.name.localizedCaseInsensitiveCompare($1.name) == .orderedAscending }
+                return $0.amount > $1.amount
+            }
     }
 
-    // True once the window has closed on an income nobody ever vouched for.
-    // Drives the quiet note in PlanView, which never expires.
-    var incomeIsUnconfirmed: Bool {
-        effectiveIncomeCadence == .variable && incomeConfirmedAt == nil && monthlyIncome > 0
+    func needsIncomeConfirmation(on date: Date = .now, calendar: Calendar = .current) -> Bool {
+        let elapsed = daysSinceCreated(on: date, calendar: calendar)
+        return elapsed >= 0
+            && elapsed < Self.incomeConfirmWindowDays
+            && incomeSources.contains(where: \.isUnconfirmed)
+    }
+}
+
+// MARK: - Income source
+
+@Model
+final class IncomeSource {
+    var name: String
+    var amount: Decimal
+    var cadence: IncomeCadence?
+    var affirmedAt: Date?
+    var plan: MonthPlan?
+
+    init(name: String,
+         amount: Decimal,
+         cadence: IncomeCadence = .fixed,
+         affirmedAt: Date? = nil) {
+        self.name = name
+        self.amount = amount
+        self.cadence = cadence
+        self.affirmedAt = affirmedAt
+    }
+
+    var effectiveCadence: IncomeCadence {
+        cadence ?? .fixed
+    }
+
+    var isUnconfirmed: Bool {
+        effectiveCadence == .variable && affirmedAt == nil && amount > 0
     }
 
     @discardableResult
-    func confirmIncome(_ newValue: Decimal? = nil, on date: Date = .now) -> Bool {
-        let changed = newValue.map { $0 != monthlyIncome } ?? false
+    func affirm(amount newValue: Decimal? = nil, on date: Date = .now) -> Bool {
+        let changed = newValue.map { max(0, $0) != amount } ?? false
         if let newValue {
-            monthlyIncome = max(0, newValue)
+            amount = max(0, newValue)
         }
-        incomeConfirmedAt = date
+        affirmedAt = date
         return changed
     }
 }
 
-// MARK: - Savings target
+// MARK: - Savings
 // A flat amount is right for "I owe my Roth $583 a month". A percentage is
 // right for variable income — it scales with the month instead of eating the
 // whole daily budget in a lean one.
@@ -161,8 +193,60 @@ enum SavingsTarget: Equatable {
     case percentOfIncome(Decimal)
 }
 
+@Model
+final class SavingsGoal {
+    static let maxPercent: Decimal = 100
+
+    var name: String
+
+    // The flat dollar goal. Like MonthPlan's legacy pair, this preserves the
+    // last flat value while percent is non-nil so mode switches are reversible.
+    var amount: Decimal
+    var percent: Decimal?
+    var plan: MonthPlan?
+
+    init(name: String, amount: Decimal, percent: Decimal? = nil) {
+        self.name = name
+        self.amount = max(0, amount)
+        self.percent = percent.map { min(max(0, $0), Self.maxPercent) }
+    }
+
+    var target: SavingsTarget {
+        get {
+            if let percent {
+                .percentOfIncome(percent)
+            } else {
+                .amount(amount)
+            }
+        }
+        set {
+            switch newValue {
+            case .amount(let value):
+                amount = max(0, value)
+                percent = nil
+            case .percentOfIncome(let value):
+                percent = min(max(0, value), Self.maxPercent)
+            }
+        }
+    }
+
+    var usesPercent: Bool {
+        percent != nil
+    }
+
+    func resolvedAmount(income: Decimal) -> Decimal {
+        switch target {
+        case .amount(let value):
+            return max(0, value)
+        case .percentOfIncome(let percent):
+            let cappedPercent = min(max(0, percent), Self.maxPercent)
+            return (max(0, income) * cappedPercent / 100).roundedToCents()
+        }
+    }
+}
+
 extension MonthPlan {
-    static let maxSavingsPercent: Decimal = 100
+    static let maxSavingsPercent = SavingsGoal.maxPercent
 
     var savingsTarget: SavingsTarget {
         get {
@@ -190,21 +274,24 @@ extension MonthPlan {
     // Dollars set aside this month, whichever shape the target takes.
     // This is what the budget math consumes — nothing else reads savingsGoal.
     var savingsAmount: Decimal {
-        switch savingsTarget {
+        savingsAmount(for: incomeTotal)
+    }
+
+    // Used by DerivationLine while an income sheet is previewing a draft. All
+    // percent goals resolve against that draft, not the persisted income.
+    func savingsAmount(for income: Decimal) -> Decimal {
+        if !savingsGoals.isEmpty {
+            return savingsGoals.reduce(0) { partial, goal in
+                partial + goal.resolvedAmount(income: income)
+            }
+        }
+
+        return switch savingsTarget {
         case .amount(let value):
             max(0, value)
         case .percentOfIncome(let percent):
-            (monthlyIncome * percent / 100).roundedToCents()
+            (max(0, income) * percent / 100).roundedToCents()
         }
-    }
-
-    // Switching modes shouldn't move the number under the user. Going to
-    // percent, keep the equivalent share of income; going to amount, keep the
-    // dollars currently resolved.
-    func equivalentPercent(fallback: Decimal = 20) -> Decimal {
-        guard monthlyIncome > 0, savingsGoal > 0 else { return fallback }
-        let percent = (savingsGoal / monthlyIncome * 100).rounded(scale: 0)
-        return min(max(percent, 0), Self.maxSavingsPercent)
     }
 }
 
@@ -331,13 +418,20 @@ enum Category: String, Codable, CaseIterable, Identifiable {
 // No stored rollover, no stored daily balances.
 
 extension MonthPlan {
+    // Existing stores remain readable before lazy migration materializes their
+    // current month's legacy scalar as an IncomeSource.
+    var incomeTotal: Decimal {
+        guard !incomeSources.isEmpty else { return monthlyIncome }
+        return incomeSources.reduce(0) { $0 + $1.amount }
+    }
+
     var fixedTotal: Decimal {
         fixedExpenses.reduce(0) { $0 + $1.monthlyAmount }
     }
 
     // What's available for daily spending across the whole month.
     var monthlySpendable: Decimal {
-        monthlyIncome - fixedTotal - savingsAmount
+        incomeTotal - fixedTotal - savingsAmount
     }
 
     func daysInMonth(calendar: Calendar = .current) -> Int {
