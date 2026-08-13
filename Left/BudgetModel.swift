@@ -4,6 +4,9 @@ import SwiftData
 // MARK: - MonthPlan
 // One record per calendar month. Snapshots income / expenses / savings
 // so past months stay historically accurate when your income changes.
+// Rollover remains derived: carriedGross caches the prior plan's final position,
+// carriedAllocated is the only stored money decision, and carryAnnouncedAt is
+// bookkeeping so that decision is offered once.
 
 @Model
 final class MonthPlan {
@@ -33,11 +36,26 @@ final class MonthPlan {
     // month. Windows count from here. Optional for migration.
     var createdAt: Date?
 
+    // Recomputed on launch so later edits to history still flow forward.
+    // Optional keeps stores from before cross-month carry readable as zero.
+    var carriedGross: Decimal?
+
+    // This survives reconciliation because only the user can decide that part
+    // of an inherited surplus belongs in savings.
+    var carriedAllocated: Decimal = 0
+
+    // Delivery state belongs to this boundary, not to the plan template.
+    // Optional keeps stores from before the month-open summary migratable.
+    var carryAnnouncedAt: Date?
+
     @Relationship(deleteRule: .cascade, inverse: \IncomeSource.plan)
     var incomeSources: [IncomeSource] = []
 
     @Relationship(deleteRule: .cascade, inverse: \SavingsGoal.plan)
     var savingsGoals: [SavingsGoal] = []
+
+    @Relationship(deleteRule: .cascade, inverse: \SavingsAllocation.plan)
+    var savingsAllocations: [SavingsAllocation] = []
 
     @Relationship(deleteRule: .cascade, inverse: \FixedExpense.plan)
     var fixedExpenses: [FixedExpense] = []
@@ -61,7 +79,8 @@ final class MonthPlan {
 
     // The one clone path for both adjacent months and gaps. Per-source
     // affirmation deliberately does not carry: inherited variable income has
-    // not been vouched for in the new month.
+    // not been vouched for in the new month. All three carry fields also stay
+    // at their defaults because carry is a boundary fact, not template data.
     func clone(for monthStart: Date) -> MonthPlan {
         let hasLegacyIncomeOnly = incomeSources.isEmpty
         let plan = MonthPlan(monthStart: monthStart,
@@ -245,6 +264,27 @@ final class SavingsGoal {
     }
 }
 
+// Allocations are history, not budget inputs. Confirmation stays separate
+// because Left can suggest a transfer but cannot make one for the user.
+@Model
+final class SavingsAllocation {
+    var name: String
+    var amount: Decimal
+    var date: Date
+    var confirmedAt: Date?
+    var plan: MonthPlan?
+
+    init(name: String,
+         amount: Decimal,
+         date: Date = .now,
+         confirmedAt: Date? = nil) {
+        self.name = name
+        self.amount = amount
+        self.date = date
+        self.confirmedAt = confirmedAt
+    }
+}
+
 extension MonthPlan {
     static let maxSavingsPercent = SavingsGoal.maxPercent
 
@@ -415,7 +455,8 @@ enum Category: String, Codable, CaseIterable, Identifiable {
 
 // MARK: - Derived math
 // Everything on screen is computed from the plan + transactions.
-// No stored rollover, no stored daily balances.
+// No stored daily balances; cross-month carry is cached only so reconciliation
+// has a migration-safe place to persist the latest derived boundary value.
 
 extension MonthPlan {
     // Existing stores remain readable before lazy migration materializes their
@@ -429,9 +470,35 @@ extension MonthPlan {
         fixedExpenses.reduce(0) { $0 + $1.monthlyAmount }
     }
 
+    var carriedIn: Decimal {
+        (carriedGross ?? 0) - carriedAllocated
+    }
+
     // What's available for daily spending across the whole month.
     var monthlySpendable: Decimal {
         incomeTotal - fixedTotal - savingsAmount
+    }
+
+    // An untouched cushion must survive another boundary, while every transaction
+    // still gets the chance to contribute, including one late on the final day.
+    func endingSurplus(calendar: Calendar = .current) -> Decimal {
+        let nextMonth = calendar.date(byAdding: .month, value: 1, to: monthStart)!
+        return monthlySpendable
+            - spent(asOf: nextMonth.addingTimeInterval(-1))
+            + carriedIn
+    }
+
+    // Spending draws the allowance and cushion down together; allowance earned
+    // later in the month lets the cushion recover without any warning state.
+    // A deficit stays in the hero, while this floor simply leaves nothing to move.
+    func cushion(on date: Date = .now, calendar: Calendar = .current) -> Decimal {
+        max(0, min(carriedIn, remainingToday(on: date, calendar: calendar)))
+    }
+
+    // The transfer sheet's safety cap intentionally has its own semantic entry
+    // point so its contract cannot drift with how the cushion is presented.
+    func allocatableSurplus(on date: Date = .now) -> Decimal {
+        cushion(on: date)
     }
 
     func daysInMonth(calendar: Calendar = .current) -> Int {
@@ -454,13 +521,13 @@ extension MonthPlan {
             .reduce(0) { $0 + $1.amount }
     }
 
-    // The hero number. Rollover and overspend-borrowing fall out
-    // of this formula automatically:
-    //   allowance earned so far − everything spent so far
+    // Carry raises the hero without changing the plan-supported rate. Allocating
+    // a dollar therefore removes exactly a dollar here, with no retroactive rate
+    // or calendar-tint changes.
     func remainingToday(on date: Date = .now, calendar: Calendar = .current) -> Decimal {
         let day = calendar.component(.day, from: date)   // 1-based
         let earned = dailyRate * Decimal(day)
-        return earned - spent(asOf: date)
+        return earned - spent(asOf: date) + carriedIn
     }
 
     // Shown as the "+$27 rolled over" chip: how far ahead (or behind)
