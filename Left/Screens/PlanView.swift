@@ -1169,7 +1169,7 @@ struct PlanView: View {
                                     }
                                 }
                                 .pickerStyle(.menu)
-                                .tint(Color.leftFernAction)
+                                .tint(Color.leftAccent)
                             }
 
                             MonthDurationPicker(startsOn: $newExpenseStartsOn,

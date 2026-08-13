@@ -127,7 +127,7 @@ struct FloatingTabBar: View {
         Button(action: action.perform) {
             Image(systemName: "plus")
                 .font(.system(size: 24, weight: .semibold))
-                .foregroundStyle(Color.leftPositive)
+                .foregroundStyle(Color.leftAccent)
                 .frame(width: Self.height, height: Self.height)
                 .background {
                     Circle()

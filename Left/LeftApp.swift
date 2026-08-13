@@ -118,7 +118,7 @@ struct AppRoot: View {
         }
         .environment(\.font, .dmSans(.body))
         .tracking(BudgetTypography.appTracking)
-        .tint(.leftPositive)
+        .tint(.leftAccent)
         .background(Color(uiColor: .systemBackground).ignoresSafeArea())
         .fullScreenCover(item: $onboardingPlan) { plan in
             NavigationStack {

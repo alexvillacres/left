@@ -143,7 +143,7 @@ struct IncomeSheet: View {
                     }
                 }
                 .pickerStyle(.menu)
-                .tint(Color.leftFernAction)
+                .tint(Color.leftAccent)
             }
 
             MonthDurationPicker(startsOn: $draftStartsOn,

@@ -27,7 +27,7 @@ struct MonthDurationPicker: View {
                         .frame(width: 96, alignment: .leading)
 
                     Text(durationLabel)
-                        .foregroundStyle(Color.leftFernAction)
+                        .foregroundStyle(Color.leftAccent)
                         .frame(maxWidth: .infinity, alignment: .leading)
                         .lineLimit(1)
                         .minimumScaleFactor(0.85)
@@ -78,7 +78,7 @@ struct MonthDurationPicker: View {
                     startsOn = nil
                     endsAfter = nil
                 }
-                .foregroundStyle(Color.leftFernAction)
+                .foregroundStyle(Color.leftAccent)
             }
             .font(.system(size: 15))
         } else if startsOn != nil {
@@ -102,18 +102,18 @@ struct MonthDurationPicker: View {
             VStack(spacing: 1) {
                 Text(month.formatted(.dateTime.month(.abbreviated)))
                     .font(.system(size: 17, weight: .medium))
-                    .foregroundStyle(endpoint ? .white : inRange ? Color.leftFernRangeText : .primary)
+                    .foregroundStyle(endpoint ? .white : inRange ? Color.leftOnAccentFill : .primary)
 
                 Text(month.formatted(.dateTime.year()))
                     .font(.system(size: 13))
-                    .foregroundStyle(endpoint ? Color.leftFernEndpointYear : inRange ? Color.leftFernRangeYear : Color.leftMonthYear)
+                    .foregroundStyle(endpoint ? Color.leftOnAccent : inRange ? Color.leftAccentMuted : Color.leftMonthYear)
             }
             .frame(maxWidth: .infinity)
             .frame(height: 64)
-            .background(endpoint ? Color.leftFernEndpoint : inRange ? Color.leftFernRangeFill : Color(uiColor: .systemBackground))
+            .background(endpoint ? Color.leftAccentStrong : inRange ? Color.leftAccentFill : Color(uiColor: .systemBackground))
             .overlay {
                 RoundedRectangle(cornerRadius: 12, style: .continuous)
-                    .stroke(endpoint ? Color.leftFernEndpoint : inRange ? Color.leftFernRangeFill : Color.leftMonthBorder, lineWidth: 1)
+                    .stroke(endpoint ? Color.leftAccentStrong : inRange ? Color.leftAccentFill : Color.leftMonthBorder, lineWidth: 1)
             }
             .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
         }
