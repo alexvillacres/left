@@ -1,5 +1,18 @@
 import SwiftUI
 
+enum BudgetTypography {
+    static let headingSize: CGFloat = 24
+    static let bodySize: CGFloat = 17
+    static let letterSpacingPercent: CGFloat = -0.02
+
+    static func tracking(for pointSize: CGFloat) -> CGFloat {
+        pointSize * letterSpacingPercent
+    }
+
+    static let appTracking = tracking(for: bodySize)
+    static let headingTracking = tracking(for: headingSize)
+}
+
 extension Font {
     static func dmSans(_ textStyle: TextStyle, weight: Weight = .regular) -> Font {
         .custom(dmSansName(for: weight), size: defaultSize(for: textStyle), relativeTo: textStyle)

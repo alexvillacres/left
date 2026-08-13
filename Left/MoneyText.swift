@@ -45,7 +45,7 @@ struct HeroMoneyText: View {
     private func styledText(pointSize: CGFloat) -> some View {
         label
             .font(.dmSans(size: pointSize, weight: .semibold, relativeTo: .largeTitle))
-            .tracking(pointSize * -0.04)
+            .tracking(BudgetTypography.tracking(for: pointSize))
             .monospacedDigit()
             .lineLimit(1)
             .fixedSize()
