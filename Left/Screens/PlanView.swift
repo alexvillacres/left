@@ -203,7 +203,6 @@ struct PlanView: View {
                 AddAction(
                     id: "plan.income.add",
                     accessibilityLabel: "Add income source",
-                    prominence: .secondary,
                     perform: { activeIncomeSheet = ActiveIncomeSheet() }
                 )
             )
@@ -248,7 +247,6 @@ struct PlanView: View {
                 AddAction(
                     id: "plan.fixed-expenses.add",
                     accessibilityLabel: "Add expense",
-                    prominence: .secondary,
                     perform: { presentExpenseEditor() }
                 )
             )
@@ -275,7 +273,6 @@ struct PlanView: View {
                 AddAction(
                     id: "plan.savings.add",
                     accessibilityLabel: "Add savings goal",
-                    prominence: .secondary,
                     perform: { activeSavingsSheet = ActiveSavingsSheet() }
                 )
             )

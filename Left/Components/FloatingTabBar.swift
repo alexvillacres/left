@@ -1,20 +1,13 @@
 import SwiftUI
 
-enum AddActionProminence: Equatable {
-    case primary
-    case secondary
-}
-
 struct AddAction: Equatable, Identifiable {
     let id: String
     let accessibilityLabel: String
-    let prominence: AddActionProminence
     let perform: () -> Void
 
     static func == (lhs: AddAction, rhs: AddAction) -> Bool {
         lhs.id == rhs.id
             && lhs.accessibilityLabel == rhs.accessibilityLabel
-            && lhs.prominence == rhs.prominence
     }
 }
 
@@ -86,9 +79,13 @@ struct FloatingTabBar: View {
     var body: some View {
         HStack(spacing: AppSpacing.md) {
             tabCapsule
-            actionSlot
+
+            if let addAction {
+                actionSlot(addAction)
+            }
         }
-        .frame(width: 348, height: Self.height)
+        .frame(height: Self.height)
+        .animation(reduceMotion ? nil : .spring(duration: 0.4), value: addAction != nil)
     }
 
     private var tabCapsule: some View {
@@ -111,23 +108,17 @@ struct FloatingTabBar: View {
         .accessibilityElement(children: .contain)
     }
 
-    private var actionSlot: some View {
+    private func actionSlot(_ action: AddAction) -> some View {
         ZStack {
-            Color.clear
-                .accessibilityHidden(true)
-
-            if let addAction {
-                if reduceMotion {
-                    actionButton(addAction)
-                        .id(addAction.id)
-                } else {
-                    actionButton(addAction)
-                        .id(addAction.id)
-                        .transition(.blurReplace)
-                }
+            if reduceMotion {
+                actionButton(action)
+                    .id(action.id)
+            } else {
+                actionButton(action)
+                    .id(action.id)
+                    .transition(.blurReplace)
             }
         }
-        // The action may disappear, but its layout slot never does.
         .frame(width: Self.height, height: Self.height)
         .animation(reduceMotion ? nil : .spring(duration: 0.2, bounce: 0.2), value: addAction?.id)
     }
@@ -136,32 +127,22 @@ struct FloatingTabBar: View {
         Button(action: action.perform) {
             Image(systemName: "plus")
                 .font(.system(size: 24, weight: .semibold))
-                .foregroundStyle(actionForeground(for: action.prominence))
+                .foregroundStyle(Color.leftPositive)
                 .frame(width: Self.height, height: Self.height)
                 .background {
                     Circle()
-                        .fill(actionBackground(for: action.prominence))
+                        .fill(Color.leftTabBarSurface)
                         .shadow(color: .black.opacity(0.12), radius: 16, y: 6)
                         .shadow(color: .black.opacity(0.05), radius: 3, y: 1)
                 }
                 .overlay {
-                    if action.prominence == .secondary {
-                        Circle()
-                            .strokeBorder(Color.leftTabBarBorder, lineWidth: 0.5)
-                    }
+                    Circle()
+                        .strokeBorder(Color.leftTabBarBorder, lineWidth: 0.5)
                 }
                 .contentShape(Circle())
         }
         .buttonStyle(.plain)
         .accessibilityLabel(action.accessibilityLabel)
-    }
-
-    private func actionBackground(for prominence: AddActionProminence) -> Color {
-        prominence == .primary ? .primary : .leftTabBarSurface
-    }
-
-    private func actionForeground(for prominence: AddActionProminence) -> Color {
-        prominence == .primary ? Color(uiColor: .systemBackground) : .leftPositive
     }
 
     private func item(_ tab: AppTab) -> some View {
@@ -207,7 +188,6 @@ struct FloatingTabBar: View {
             addAction: AddAction(
                 id: "preview.add-spending",
                 accessibilityLabel: "Add spending",
-                prominence: .primary,
                 perform: {}
             )
         )

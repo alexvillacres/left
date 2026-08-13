@@ -100,7 +100,6 @@ struct TodayView: View {
                 AddAction(
                     id: "today.add-spending",
                     accessibilityLabel: "Add spending",
-                    prominence: .primary,
                     perform: { activeSpendingSheet = ActiveSpendingSheet() }
                 )
             )

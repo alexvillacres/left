@@ -72,6 +72,13 @@ struct LeftApp: App {
 }
 
 struct AppRoot: View {
+    private static let addActionIDs: Set<String> = [
+        "today.add-spending",
+        "plan.income.add",
+        "plan.fixed-expenses.add",
+        "plan.savings.add",
+    ]
+
     @Environment(\.modelContext) private var modelContext
     @Environment(\.scenePhase) private var scenePhase
     @Query(sort: \MonthPlan.monthStart) private var allPlans: [MonthPlan]
@@ -96,6 +103,10 @@ struct AppRoot: View {
                 .padding(.bottom, AppSpacing.xs)
         }
         .environment(\.setAddAction) { action in
+            assert(
+                action.map { Self.addActionIDs.contains($0.id) } ?? true,
+                "Only Today and the three Plan editors may supply a navigation add action."
+            )
             addAction = action
         }
         .environment(\.clearAddAction) { id in
