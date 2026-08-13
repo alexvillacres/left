@@ -54,6 +54,7 @@ extension Color {
     static let meterTrack = Color.dynamic(light: Ramp.neutral50, dark: Ramp.neutralDark800)
     static let meterTrackBorder = Color.dynamic(light: Ramp.neutral100, dark: Ramp.neutralDark700)
     static let meterFill = Color.dynamic(light: 0xD1D1D1, dark: Ramp.neutral500)
+    static let meterWarningFill = Color.dynamic(light: 0xE8C27A, dark: 0x8A6A1F)
     static let meterOverspentFill = Color.dynamic(light: 0xE29A99, dark: 0x8A2E2D)
 
     static let leftNeutralFill = Color.dynamic(light: Ramp.neutral100, dark: Ramp.neutralDark700)

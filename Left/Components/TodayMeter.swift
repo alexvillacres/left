@@ -1,5 +1,20 @@
 import SwiftUI
 
+enum BudgetState {
+    static let nearLimitRemainingFraction: Decimal = 0.25
+
+    case positive
+    case warning
+    case negative
+
+    static func resolve(remaining: Decimal, dailyRate: Decimal) -> BudgetState {
+        guard dailyRate > 0 else { return .positive }
+        if remaining <= 0 { return .negative }
+        if remaining <= dailyRate * nearLimitRemainingFraction { return .warning }
+        return .positive
+    }
+}
+
 struct TodayMeter: View {
     let spent: Decimal
     let dailyRate: Decimal
@@ -31,15 +46,12 @@ struct TodayMeter: View {
         return 1 - spentFraction
     }
 
-    // Move through the existing semantic palette as today's budget is used.
-    // The final red overlay remains partially transparent over warning amber,
-    // producing an orange-red nub just before the fill is fully depleted.
-    private var warningOpacity: Double {
-        min(Double(spentFraction) / 0.65, 1)
+    private var budgetState: BudgetState {
+        BudgetState.resolve(remaining: remaining, dailyRate: dailyRate)
     }
 
-    private var negativeOpacity: Double {
-        max((Double(spentFraction) - 0.65) / 0.35, 0) * 0.65
+    private var fillColor: Color {
+        budgetState == .warning ? .meterWarningFill : .meterFill
     }
 
     var body: some View {
@@ -60,18 +72,10 @@ struct TodayMeter: View {
                         .frame(width: availableWidth)
                         .padding(fillInset)
                 } else if fillWidth > 0 {
-                    ZStack {
-                        RoundedRectangle(cornerRadius: fillCornerRadius, style: .continuous)
-                            .fill(Color.meterFill)
-                        RoundedRectangle(cornerRadius: fillCornerRadius, style: .continuous)
-                            .fill(Color.leftWarning)
-                            .opacity(warningOpacity)
-                        RoundedRectangle(cornerRadius: fillCornerRadius, style: .continuous)
-                            .fill(Color.leftNegative)
-                            .opacity(negativeOpacity)
-                    }
-                    .frame(width: fillWidth)
-                    .padding(fillInset)
+                    RoundedRectangle(cornerRadius: fillCornerRadius, style: .continuous)
+                        .fill(fillColor)
+                        .frame(width: fillWidth)
+                        .padding(fillInset)
                 }
 
                 Text(meterLabel)
@@ -95,7 +99,8 @@ struct TodayMeter: View {
             return "Today, \(amountOver) over the \(budget) budget"
         }
 
-        return "Today, \(remaining.formatted(.currency(code: "USD"))) left of the \(budget) budget"
+        let amounts = "Today, \(remaining.formatted(.currency(code: "USD"))) left of the \(budget) budget"
+        return budgetState == .warning ? "\(amounts), near limit" : amounts
     }
 
     private var meterLabel: String {
@@ -109,6 +114,7 @@ struct TodayMeter: View {
 #Preview {
     VStack(spacing: AppSpacing.xl) {
         TodayMeter(spent: 24, dailyRate: 68)
+        TodayMeter(spent: 55, dailyRate: 68)
         TodayMeter(spent: 68, dailyRate: 68)
         TodayMeter(spent: 82, dailyRate: 68)
     }

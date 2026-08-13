@@ -30,7 +30,6 @@ struct TodayView: View {
     private struct DaySnapshot {
         let dailyRate: Decimal
         let remaining: Decimal
-        let spent: Decimal
         let yesterdayDelta: Decimal?
         let transactions: [Transaction]
     }
@@ -259,13 +258,21 @@ struct TodayView: View {
     private func heroAmount(snapshot: DaySnapshot?) -> some View {
         if let snapshot {
             HeroMoneyText(amount: snapshot.remaining, size: heroSize, suffix: "left")
-                .foregroundStyle(.primary)
+                .foregroundStyle(heroColor(for: snapshot))
                 .contentTransition(.numericText())
                 .animation(reduceMotion ? nil : .spring(duration: 0.4), value: snapshot.remaining)
         } else {
             Text("$– left")
                 .font(.dmSans(size: heroSize, weight: .semibold, relativeTo: .largeTitle))
                 .foregroundStyle(.secondary)
+        }
+    }
+
+    private func heroColor(for snapshot: DaySnapshot) -> Color {
+        switch BudgetState.resolve(remaining: snapshot.remaining, dailyRate: snapshot.dailyRate) {
+        case .positive: .leftPositive
+        case .warning: .leftWarning
+        case .negative: .leftNegative
         }
     }
 
@@ -368,11 +375,14 @@ struct TodayView: View {
             .clipShape(Capsule())
     }
 
-    // The hero includes rollover. This meter isolates the displayed day's
-    // spending pace against that day's daily budget.
+    // Use the hero's rollover-aware balance so its state and the meter's state
+    // always resolve from the same remaining amount and daily rate.
     private func momentumStrip(snapshot: DaySnapshot) -> some View {
-        TodayMeter(spent: snapshot.spent, dailyRate: snapshot.dailyRate)
-            .animation(reduceMotion ? nil : .spring(duration: 0.4), value: snapshot.spent)
+        TodayMeter(
+            spent: snapshot.dailyRate - snapshot.remaining,
+            dailyRate: snapshot.dailyRate
+        )
+            .animation(reduceMotion ? nil : .spring(duration: 0.4), value: snapshot.remaining)
     }
 
     // MARK: - Transactions
@@ -452,7 +462,6 @@ struct TodayView: View {
         let startOfPreviousDay = calendar.date(byAdding: .day, value: -1, to: startOfDisplayedDay)
 
         var spentAsOfBalance: Decimal = 0
-        var spentOnDisplayedDay: Decimal = 0
         var spentOnPreviousDay: Decimal = 0
         var displayedTransactions: [Transaction] = []
 
@@ -461,7 +470,6 @@ struct TodayView: View {
                 spentAsOfBalance += transaction.amount
             }
             if calendar.isDate(transaction.date, inSameDayAs: displayedDate) {
-                spentOnDisplayedDay += transaction.amount
                 displayedTransactions.append(transaction)
             }
             if let startOfPreviousDay,
@@ -476,7 +484,6 @@ struct TodayView: View {
         return DaySnapshot(
             dailyRate: rate,
             remaining: rate * Decimal(day) - spentAsOfBalance + plan.carriedIn,
-            spent: spentOnDisplayedDay,
             yesterdayDelta: day > 1 ? rate - spentOnPreviousDay : nil,
             transactions: displayedTransactions
         )
