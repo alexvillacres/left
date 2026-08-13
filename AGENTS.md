@@ -167,9 +167,11 @@ build and run in Xcode before continuing)
 5. Month-boundary logic + polish pass (dark mode audit, dynamic type).
 6. Delete ContentView.swift if any reference to it still remains.
 
-Note: when creating new .swift files, they must belong to the Left
-target. If the build fails with "cannot find type" on a file that
-exists, target membership is the first thing to check.
+Note: the project uses Xcode 16 `fileSystemSynchronizedGroups`, so new
+and renamed .swift files are picked up from disk — no project.pbxproj
+edit and no target-membership step. Use `git mv` for renames so history
+is preserved. If the build fails with "cannot find type" on a file that
+exists, the cause is a real compile error elsewhere, not membership.
 
 ## Definition of done for the MVP
 
