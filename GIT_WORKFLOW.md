@@ -251,14 +251,59 @@ targets alone, and that stands. The checks are therefore manual and short:
 
 ---
 
+## Verifying a commit builds
+
+The working tree contains everything you are *about* to commit, so building it
+proves nothing about the commit itself. Build the commit in a throwaway
+worktree instead:
+
+```sh
+git worktree add /tmp/left-verify HEAD --detach
+cd /tmp/left-verify
+xcodebuild -project Left.xcodeproj -scheme Left \
+  -destination 'platform=iOS Simulator,name=iPhone 17' \
+  -configuration Debug -derivedDataPath /tmp/left-dd build 2>&1 \
+  | grep -E "error:|BUILD (SUCCEEDED|FAILED)"
+cd - && git worktree remove /tmp/left-verify --force
+```
+
+This is how `c3c0f2e` was caught: it referenced `SavingsAllocation`,
+`StoreRecoveryView`, `SettingsView`, `SegmentedControl` and half a dozen model
+properties that were still sitting uncommitted, so `main` did not compile for
+eight days without anyone noticing. The working tree built fine the whole time.
+
+## Splitting a messy working tree
+
+When one file holds two unrelated changes, stage it by hunk rather than
+committing both. `git add -p` is the interactive way; for surgical control, dump
+the diff, delete the hunks you do not want, and stage what is left:
+
+```sh
+git diff Left/BudgetModel.swift > /tmp/bm.patch
+grep -n '^@@' /tmp/bm.patch          # find hunk boundaries
+$EDITOR /tmp/bm.patch                # keep only the hunks for this commit
+git apply --cached --recount /tmp/bm.patch
+```
+
+`--recount` fixes the line arithmetic in the `@@` headers so you can edit hunks
+freely, including splitting one in half. The working tree is untouched — only
+the index changes — so the rest of the work stays exactly where it was.
+
+Verify the split landed where you meant before committing:
+
+```sh
+git diff --cached --stat     # what is going in
+git diff --stat              # what is staying behind
+```
+
 ## Immediate cleanup
 
-Three things are outstanding as of 2026-08-13:
+As of 2026-08-13:
 
-1. **A large uncommitted working tree** — settings, store recovery, floating tab
-   bar, segmented control, month duration picker, app icon, `Info.plist`. That
-   is at least four separate commits, not one. Split it by decision.
-2. **Two stale branches** — `add-spending-iteration` and `feature/today-meter`.
-   Confirm they are merged into `main` (`git branch --merged main`), then
-   delete them locally and on `origin`.
-3. **No tags.** Cut `v0.1.0`–`v0.3.0` retroactively, or start at `v0.4.0`.
+1. **Two stale branches** — `add-spending-iteration` and `feature/today-meter`,
+   both confirmed merged into `main`. Delete them:
+   `git branch -d add-spending-iteration feature/today-meter`
+2. **No tags.** Cut `v0.1.0`–`v0.3.0` retroactively, or start at `v0.4.0`.
+3. **A stale stash** — `stash@{0}` holds a pre-split backup whose
+   `LeftApp`/`TodayView`/`PlanView`/`FloatingTabBar` are older than `main`.
+   Drop it once you are satisfied with the history: `git stash drop`.
