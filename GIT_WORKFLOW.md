@@ -10,6 +10,116 @@ Every commit should read like that one.
 
 ---
 
+## Start here: the three places
+
+Git has three places, not one. Nearly every beginner confusion comes from not
+seeing this:
+
+| Place | What it is | Where you see it |
+|---|---|---|
+| **Working tree** | The actual files on disk | What Xcode edits when you type |
+| **Staging area** (the "index") | A draft of your next commit | `git diff --cached` |
+| **History** | Sealed, permanent commits | `git log` |
+
+Your desk (working tree) → the box you are packing (staging) → the shelf of
+labelled boxes (history).
+
+`git add` looks like bureaucracy before `git commit`. It is the opposite:
+**staging is the feature.** It is what lets one messy working tree become
+several clean commits without editing a line of code — put a few things in the
+box, seal it, put a few more in, seal that. The files on disk never change.
+
+This also explains the command that trips up everyone:
+
+```sh
+git diff            # desk vs box   — what you have NOT staged
+git diff --cached   # box vs shelf  — what you HAVE staged
+```
+
+If you `git add` a file and then `git diff` shows nothing, that is why. It is
+not broken.
+
+### Reviewing: zoom out before you zoom in
+
+Three levels, in this order. Raw diffs are the *last* question you ask, not the
+first:
+
+```sh
+git status --short              # 1. WHICH files changed
+git diff --stat                 # 2. HOW MUCH changed in each
+git diff Left/Palette.swift     # 3. WHAT exactly changed, in one file
+```
+
+Levels 1 and 2 are where you should live. Level 3 is for a file you are
+specifically suspicious about. Reading a 980-line diff top to bottom is almost
+always the wrong move.
+
+Better than any terminal diff, in order of value:
+
+1. **Xcode's change bars**, while you work. The blue marks in the editor gutter;
+   click one for "Show Change." `⌥⌘C` opens the Source Control navigator. Most
+   reviewing should happen here, continuously — not in a terminal at the end.
+2. **A GitHub PR**, for reviewing a finished chunk. Worth it even solo:
+   collapsible files, comments, and "viewed" checkboxes beat anything local.
+
+   ```sh
+   git switch -c feature/thing
+   # ... work, commit ...
+   git push -u origin feature/thing
+   gh pr create --fill && gh pr view --web
+   ```
+3. **`delta`**, if you want terminal diffs to be readable:
+   `brew install git-delta && git config --global core.pager delta`
+
+### The daily loop
+
+```sh
+git status --short                       # what is already dirty
+# ... make ONE coherent change in Xcode ...
+git add Left/Screens/SettingsView.swift  # name files explicitly
+git diff --cached                        # read what you are about to seal
+git commit                               # editor opens for a real message
+```
+
+Two rules that would have prevented every problem found on 2026-08-13:
+
+- **Never `git add -A` or `git add .`** — that is how unrelated work gets swept
+  into a commit. Name the files.
+- **Build before you commit**, not after.
+
+The deeper habit is simply committing more often. The reason this repo
+accumulated seventeen dirty files across a week — and hid a broken `main` inside
+them — was not a missing tool. If you can describe what you did in one sentence
+without the word "and," commit it now.
+
+### Do not learn these yet
+
+`rebase`, `cherry-pick`, `reset --hard`, `push --force`, submodules. None are
+needed on a solo repo, and the last two are the ones that actually destroy work.
+
+### The safety net
+
+Committed work is almost never truly lost. If you panic:
+
+```sh
+git reflog          # every position HEAD has been in, with SHAs
+git checkout <sha>  # go look at one
+```
+
+The genuine danger zone is **uncommitted** work, which nothing can recover.
+One more reason to commit often.
+
+### Aliases worth setting
+
+```sh
+git config --global alias.s "status --short"
+git config --global alias.l "log --oneline --graph -15"
+git config --global alias.staged "diff --cached"
+git config --global alias.last "show --stat HEAD"
+```
+
+---
+
 ## Branches
 
 | Branch | Purpose |
@@ -239,18 +349,6 @@ targets alone, and that stands. The checks are therefore manual and short:
 
 ---
 
-## Documents in this repo
-
-| File | What it is | When to edit |
-|---|---|---|
-| `AGENTS.md` | The brief. What the app is and the rules it is built under. `CLAUDE.md` is a symlink to it — edit `AGENTS.md`. | Rarely. When a rule genuinely changes. |
-| `DECISIONS.md` | Why the app is the way it is. Numbered, permanent. | Whenever a decision constrains future work. |
-| `NAMING.md` | The spending / recurring-expense vocabulary split. | When user-facing vocabulary changes. |
-| `APP_STORE_CHECKLIST.md` | Submission requirements and their status. | As items land. |
-| `GIT_WORKFLOW.md` | This file. | When the process changes. |
-
----
-
 ## Verifying a commit builds
 
 The working tree contains everything you are *about* to commit, so building it
@@ -274,9 +372,19 @@ eight days without anyone noticing. The working tree built fine the whole time.
 
 ## Splitting a messy working tree
 
-When one file holds two unrelated changes, stage it by hunk rather than
-committing both. `git add -p` is the interactive way; for surgical control, dump
-the diff, delete the hunks you do not want, and stage what is left:
+When one file holds two unrelated changes, stage it in pieces rather than
+committing both together. Start with the interactive version:
+
+```sh
+git add -p Left/BudgetModel.swift
+```
+
+Git walks you through each chunk asking `Stage this hunk [y,n,q,a,d,s,e,?]`.
+Press `y` to include it, `n` to skip, `s` to split the chunk into smaller ones,
+`e` to edit it by hand, `?` for the full list. This handles most cases.
+
+When a single chunk mixes both changes and `s` will not split it far enough,
+dump the diff, delete the hunks you do not want, and stage what is left:
 
 ```sh
 git diff Left/BudgetModel.swift > /tmp/bm.patch
@@ -295,6 +403,20 @@ Verify the split landed where you meant before committing:
 git diff --cached --stat     # what is going in
 git diff --stat              # what is staying behind
 ```
+
+## Documents in this repo
+
+| File | What it is | When to edit |
+|---|---|---|
+| `AGENTS.md` | The brief. What the app is and the rules it is built under. `CLAUDE.md` is a symlink to it — edit `AGENTS.md`. | Rarely. When a rule genuinely changes. |
+| `DECISIONS.md` | Why the app is the way it is. Numbered, permanent. | Whenever a decision constrains future work. |
+| `NAMING.md` | The spending / recurring-expense vocabulary split. | When user-facing vocabulary changes. |
+| `APP_STORE_CHECKLIST.md` | Submission requirements and their status. | As items land. |
+| `GIT_WORKFLOW.md` | This file. | When the process changes. |
+
+---
+
+---
 
 ## Immediate cleanup
 
