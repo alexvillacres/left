@@ -22,6 +22,9 @@ struct IncomeSheet: View {
     @State private var draftName: String
     @State private var draftAmount: Decimal
     @State private var draftCadence: IncomeCadence
+    @State private var draftStartsOn: Date?
+    @State private var draftEndsAfter: Date?
+    @State private var isDurationExpanded = false
     @FocusState private var isNameFocused: Bool
     @FocusState private var isAmountFocused: Bool
 
@@ -34,11 +37,20 @@ struct IncomeSheet: View {
         _draftName = State(initialValue: source?.name ?? "")
         _draftAmount = State(initialValue: source?.amount ?? 0)
         _draftCadence = State(initialValue: source?.effectiveCadence ?? .fixed)
+        _draftStartsOn = State(initialValue: source?.startsOn)
+        _draftEndsAfter = State(initialValue: source?.endsAfter)
     }
 
     private var originalAmount: Decimal { source?.amount ?? 0 }
     private var previewIncome: Decimal {
-        plan.incomeTotal - originalAmount + max(0, draftAmount)
+        let originalContribution = source?.covers(month: plan.monthStart) == true ? originalAmount : 0
+        let draftContribution = draftCoversPlanMonth ? max(0, draftAmount) : 0
+        return plan.incomeTotal - originalContribution + draftContribution
+    }
+
+    private var draftCoversPlanMonth: Bool {
+        (draftStartsOn.map { $0 <= plan.monthStart } ?? true)
+            && (draftEndsAfter.map { plan.monthStart <= $0 } ?? true)
     }
 
     private var trimmedName: String {
@@ -94,85 +106,57 @@ struct IncomeSheet: View {
                 }
             }
         }
-        .presentationDetents([.height(570), .large])
+        .presentationDetents([.large])
         .presentationDragIndicator(.visible)
     }
 
     private var header: some View {
-        VStack(alignment: .leading, spacing: AppSpacing.xxs) {
-            Text(source == nil ? "Add income" : "Edit income")
-                .font(.dmSans(size: 28, weight: .bold, relativeTo: .title))
-                .foregroundStyle(.primary)
-
-            if let inheritedFrom, let source {
-                Text("Using \(inheritedFrom)'s \(source.name) amount until you confirm")
-                    .font(.dmSans(.subheadline))
-                    .foregroundStyle(.secondary)
-            } else {
-                Text("Money expected in \(monthName)")
-                    .font(.dmSans(.subheadline))
-                    .foregroundStyle(.secondary)
-            }
-        }
-        .fixedSize(horizontal: false, vertical: true)
+        PlanSheetHeader(
+            title: source == nil ? "Add income" : "Edit income",
+            subtitle: inheritedFrom.map { "Using \($0)'s \(source?.name ?? "income") amount until you confirm" }
+                ?? "Money expected in \(monthName)"
+        )
     }
 
     private var fields: some View {
-        VStack(alignment: .leading, spacing: AppSpacing.md) {
-            TextField("Source name", text: $draftName)
-                .font(.dmSans(.body, weight: .medium))
-                .textInputAutocapitalization(.words)
-                .focused($isNameFocused)
-                .padding(.horizontal, AppSpacing.md)
-                .frame(minHeight: 52)
-                .background(Color(uiColor: .secondarySystemBackground))
-                .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
-                .accessibilityLabel("Income source name")
+        VStack(alignment: .leading, spacing: 0) {
+            PlanSheetRow("Name") {
+                TextField("Source name", text: $draftName)
+                    .textInputAutocapitalization(.words)
+                    .focused($isNameFocused)
+                    .accessibilityLabel("Income source name")
+            }
 
-            MoneyField(value: $draftAmount,
-                       unit: .currency,
-                       prominence: .prominent,
-                       alignment: .leading,
-                       accessibilityLabel: "Amount expected from \(trimmedName.isEmpty ? "this source" : trimmedName)",
-                       focus: $isAmountFocused)
+            PlanSheetRow("Amount") {
+                MoneyField(value: $draftAmount,
+                           unit: .currency,
+                           prominence: .inline,
+                           alignment: .leading,
+                           accessibilityLabel: "Amount expected from \(trimmedName.isEmpty ? "this source" : trimmedName)",
+                           focus: $isAmountFocused)
+            }
 
-            VStack(alignment: .leading, spacing: AppSpacing.xs) {
-                Text("Does this amount change?")
-                    .font(.dmSans(.caption))
-                    .foregroundStyle(.secondary)
-
+            PlanSheetRow("Repeats") {
                 Picker("Income cadence", selection: $draftCadence) {
                     ForEach(IncomeCadence.allCases) { cadence in
                         Text(cadence.label).tag(cadence)
                     }
                 }
-                .pickerStyle(.segmented)
-                .labelsHidden()
+                .pickerStyle(.menu)
+                .tint(Color.leftFernAction)
             }
+
+            MonthDurationPicker(startsOn: $draftStartsOn,
+                                endsAfter: $draftEndsAfter,
+                                isExpanded: $isDurationExpanded)
         }
     }
 
     private var actions: some View {
-        VStack(spacing: AppSpacing.xs) {
-            Button(action: save) {
-                Text(source == nil ? "Add income" : "Save")
-                    .font(.dmSans(.body, weight: .semibold))
-                    .foregroundStyle(Color(uiColor: .systemBackground))
-                    .frame(maxWidth: .infinity)
-                    .frame(minHeight: 52)
-                    .background(Color.primary)
-                    .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
-            }
-            .buttonStyle(.plain)
-            .disabled(!canSave)
-            .opacity(canSave ? 1 : 0.35)
-
-            Button("Cancel") { dismiss() }
-                .font(.dmSans(.subheadline, weight: .medium))
-                .foregroundStyle(.secondary)
-                .frame(maxWidth: .infinity)
-                .frame(minHeight: 44)
-        }
+        PlanSheetActions(primaryTitle: source == nil ? "Add income" : "Save",
+                         isEnabled: canSave,
+                         save: save,
+                         cancel: { dismiss() })
     }
 
     private func save() {
@@ -193,13 +177,17 @@ struct IncomeSheet: View {
         if let source {
             source.name = trimmedName
             source.cadence = draftCadence
+            source.startsOn = draftStartsOn
+            source.endsAfter = draftEndsAfter
             source.affirm(amount: draftAmount)
         } else {
             plan.incomeSources.append(
                 IncomeSource(name: trimmedName,
                              amount: draftAmount,
                              cadence: draftCadence,
-                             affirmedAt: .now)
+                             affirmedAt: .now,
+                             startsOn: draftStartsOn,
+                             endsAfter: draftEndsAfter)
             )
         }
 

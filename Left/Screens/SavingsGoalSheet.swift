@@ -95,16 +95,10 @@ struct SavingsGoalSheet: View {
     }
 
     private var header: some View {
-        VStack(alignment: .leading, spacing: AppSpacing.xxs) {
-            Text(goal == nil ? "Add savings goal" : "Edit savings goal")
-                .font(.dmSans(size: 28, weight: .bold, relativeTo: .title))
-                .foregroundStyle(.primary)
-
-            Text("A label for money you plan to set aside this month")
-                .font(.dmSans(.subheadline))
-                .foregroundStyle(.secondary)
-        }
-        .fixedSize(horizontal: false, vertical: true)
+        PlanSheetHeader(
+            title: goal == nil ? "Add savings goal" : "Edit savings goal",
+            subtitle: "A label for money you plan to set aside this month"
+        )
     }
 
     private var fields: some View {
@@ -119,13 +113,11 @@ struct SavingsGoalSheet: View {
                 .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
                 .accessibilityLabel("Savings goal name")
 
-            Picker("Savings basis", selection: modeBinding) {
-                ForEach(SavingsMode.allCases) { mode in
-                    Text(mode.label).tag(mode)
-                }
-            }
-            .pickerStyle(.segmented)
-            .labelsHidden()
+            SegmentedControl(
+                options: SavingsMode.allCases,
+                selection: modeBinding,
+                label: \.label
+            )
 
             MoneyField(value: valueBinding,
                        unit: mode == .percent ? .percent : .currency,
