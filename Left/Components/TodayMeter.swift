@@ -99,7 +99,10 @@ struct TodayMeter: View {
     }
 
     private var meterLabel: String {
-        remaining.formatted(.currency(code: "USD"))
+        remaining.formatted(
+            .currency(code: "USD")
+                .precision(.fractionLength(0))
+        )
     }
 }
 
