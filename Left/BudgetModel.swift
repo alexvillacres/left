@@ -88,14 +88,25 @@ final class MonthPlan {
                              savingsGoal: savingsGoal,
                              savingsPercent: savingsPercent,
                              incomeCadence: hasLegacyIncomeOnly ? incomeCadence : nil)
-        plan.incomeSources = incomeSources.map {
-            IncomeSource(name: $0.name, amount: $0.amount, cadence: $0.effectiveCadence)
+        let targetMonth = Calendar.current.leftMonthStart(for: monthStart)
+        plan.incomeSources = incomeSources.compactMap {
+            guard $0.covers(month: targetMonth) else { return nil }
+            return IncomeSource(name: $0.name,
+                                amount: $0.amount,
+                                cadence: $0.effectiveCadence,
+                                startsOn: $0.startsOn,
+                                endsAfter: $0.endsAfter)
         }
         plan.savingsGoals = savingsGoals.map {
             SavingsGoal(name: $0.name, amount: $0.amount, percent: $0.percent)
         }
-        plan.fixedExpenses = fixedExpenses.map {
-            FixedExpense(name: $0.name, amount: $0.amount, cadence: $0.effectiveCadence)
+        plan.fixedExpenses = fixedExpenses.compactMap {
+            guard $0.covers(month: targetMonth) else { return nil }
+            return FixedExpense(name: $0.name,
+                                amount: $0.amount,
+                                cadence: $0.effectiveCadence,
+                                startsOn: $0.startsOn,
+                                endsAfter: $0.endsAfter)
         }
         return plan
     }
@@ -171,16 +182,32 @@ final class IncomeSource {
     var amount: Decimal
     var cadence: IncomeCadence?
     var affirmedAt: Date?
+    var startsOn: Date? {
+        didSet {
+            let normalized = startsOn.map { Calendar.current.leftMonthStart(for: $0) }
+            if startsOn != normalized { startsOn = normalized }
+        }
+    }
+    var endsAfter: Date? {
+        didSet {
+            let normalized = endsAfter.map { Calendar.current.leftMonthStart(for: $0) }
+            if endsAfter != normalized { endsAfter = normalized }
+        }
+    }
     var plan: MonthPlan?
 
     init(name: String,
          amount: Decimal,
          cadence: IncomeCadence = .fixed,
-         affirmedAt: Date? = nil) {
+         affirmedAt: Date? = nil,
+         startsOn: Date? = nil,
+         endsAfter: Date? = nil) {
         self.name = name
         self.amount = amount
         self.cadence = cadence
         self.affirmedAt = affirmedAt
+        self.startsOn = startsOn.map { Calendar.current.leftMonthStart(for: $0) }
+        self.endsAfter = endsAfter.map { Calendar.current.leftMonthStart(for: $0) }
     }
 
     var effectiveCadence: IncomeCadence {
@@ -355,14 +382,48 @@ final class FixedExpense {
     var name: String
     var amount: Decimal
     var cadence: ExpenseCadence?
+    var startsOn: Date? {
+        didSet {
+            let normalized = startsOn.map { Calendar.current.leftMonthStart(for: $0) }
+            if startsOn != normalized { startsOn = normalized }
+        }
+    }
+    var endsAfter: Date? {
+        didSet {
+            let normalized = endsAfter.map { Calendar.current.leftMonthStart(for: $0) }
+            if endsAfter != normalized { endsAfter = normalized }
+        }
+    }
     var plan: MonthPlan?
 
-    init(name: String, amount: Decimal, cadence: ExpenseCadence = .monthly) {
+    init(name: String,
+         amount: Decimal,
+         cadence: ExpenseCadence = .monthly,
+         startsOn: Date? = nil,
+         endsAfter: Date? = nil) {
         self.name = name
         self.amount = amount
         self.cadence = cadence
+        self.startsOn = startsOn.map { Calendar.current.leftMonthStart(for: $0) }
+        self.endsAfter = endsAfter.map { Calendar.current.leftMonthStart(for: $0) }
     }
 }
+
+protocol MonthWindowCovering {
+    var startsOn: Date? { get set }
+    var endsAfter: Date? { get set }
+}
+
+extension MonthWindowCovering {
+    func covers(month: Date) -> Bool {
+        let month = Calendar.current.leftMonthStart(for: month)
+        return startsOn.map { $0 <= month } ?? true
+            && endsAfter.map { month <= $0 } ?? true
+    }
+}
+
+extension FixedExpense: MonthWindowCovering {}
+extension IncomeSource: MonthWindowCovering {}
 
 enum ExpenseCadence: String, Codable, CaseIterable, Identifiable {
     case monthly, quarterly, annually
@@ -459,15 +520,23 @@ enum Category: String, Codable, CaseIterable, Identifiable {
 // has a migration-safe place to persist the latest derived boundary value.
 
 extension MonthPlan {
+    var activeIncomeSources: [IncomeSource] {
+        incomeSources.filter { $0.covers(month: monthStart) }
+    }
+
+    var activeFixedExpenses: [FixedExpense] {
+        fixedExpenses.filter { $0.covers(month: monthStart) }
+    }
+
     // Existing stores remain readable before lazy migration materializes their
     // current month's legacy scalar as an IncomeSource.
     var incomeTotal: Decimal {
         guard !incomeSources.isEmpty else { return monthlyIncome }
-        return incomeSources.reduce(0) { $0 + $1.amount }
+        return activeIncomeSources.reduce(0) { $0 + $1.amount }
     }
 
     var fixedTotal: Decimal {
-        fixedExpenses.reduce(0) { $0 + $1.monthlyAmount }
+        activeFixedExpenses.reduce(0) { $0 + $1.monthlyAmount }
     }
 
     var carriedIn: Decimal {

@@ -15,6 +15,18 @@ private enum Ramp {
 
 extension Color {
 
+    // MARK: - Month windows
+
+    static let leftFernAction = Color.dynamic(light: 0x509341, dark: 0x8DDC70)
+    static let leftFernRangeFill = Color.dynamic(light: 0xD6F1CE, dark: 0x1C4F14)
+    static let leftFernRangeText = Color.dynamic(light: 0x003100, dark: 0xD6F1CE)
+    static let leftFernRangeYear = Color.dynamic(light: 0x336D29, dark: 0x8DDC70)
+    static let leftFernEndpoint = Color.dynamic(light: 0x336D29, dark: 0x509341)
+    static let leftFernEndpointYear = Color.dynamic(light: 0xC6E6BC, dark: 0xD6F1CE)
+    static let leftMonthYear = Color.dynamic(light: 0x727671, dark: 0xBBBFBA)
+    static let leftMonthBorder = Color.dynamic(light: 0xE8ECE7, dark: 0x3E413D)
+    static let leftDurationDivider = Color.dynamic(light: 0xEDEFEC, dark: 0x3E413D)
+
     // MARK: - State
 
     // Positive stays deliberately neutral; warning and negative retain their

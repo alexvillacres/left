@@ -10,12 +10,14 @@ import SwiftUI
 struct DerivationLine: View {
     let plan: MonthPlan
     var income: Decimal? = nil
+    var fixedTotal: Decimal? = nil
 
     private var effectiveIncome: Decimal { income ?? plan.incomeTotal }
+    private var effectiveFixedTotal: Decimal { fixedTotal ?? plan.fixedTotal }
 
     private var savings: Decimal { plan.savingsAmount(for: effectiveIncome) }
 
-    private var spendable: Decimal { effectiveIncome - plan.fixedTotal - savings }
+    private var spendable: Decimal { effectiveIncome - effectiveFixedTotal - savings }
 
     private var dailyRate: Decimal { spendable / Decimal(plan.daysInMonth()) }
 
@@ -37,7 +39,7 @@ struct DerivationLine: View {
     private var rateString: String { "\(dailyRate.formatted(money))/day" }
 
     var body: some View {
-        let lead = "\(effectiveIncome.formatted(money)) − \(plan.fixedTotal.formatted(money)) − \(savingsTerm) = \(spendable.formatted(money)) ÷ \(plan.daysInMonth()) days = "
+        let lead = "\(effectiveIncome.formatted(money)) − \(effectiveFixedTotal.formatted(money)) − \(savingsTerm) = \(spendable.formatted(money)) ÷ \(plan.daysInMonth()) days = "
 
         let rateText = Text(rateString)
             .font(.dmSans(.subheadline, weight: .bold))
@@ -52,6 +54,6 @@ struct DerivationLine: View {
             .background(Color(uiColor: .secondarySystemBackground))
             .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
             .accessibilityElement(children: .ignore)
-            .accessibilityLabel("Money available \(effectiveIncome.formatted(money)), minus recurring expenses \(plan.fixedTotal.formatted(money)), minus savings \(savingsTerm), leaves \(spendable.formatted(money)) across \(plan.daysInMonth()) days, or \(rateString).")
+            .accessibilityLabel("Money available \(effectiveIncome.formatted(money)), minus recurring expenses \(effectiveFixedTotal.formatted(money)), minus savings \(savingsTerm), leaves \(spendable.formatted(money)) across \(plan.daysInMonth()) days, or \(rateString).")
     }
 }
