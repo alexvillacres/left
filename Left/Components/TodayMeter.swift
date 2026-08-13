@@ -14,6 +14,10 @@ struct TodayMeter: View {
         dailyRate > 0 && spent > dailyRate
     }
 
+    private var remaining: Decimal {
+        dailyRate - spent
+    }
+
     private var spentFraction: CGFloat {
         guard dailyRate > 0 else { return spent > 0 ? 1 : 0 }
 
@@ -69,6 +73,14 @@ struct TodayMeter: View {
                     .frame(width: fillWidth)
                     .padding(fillInset)
                 }
+
+                Text(meterLabel)
+                    .font(.dmSans(.subheadline, weight: .regular))
+                    .monospacedDigit()
+                    .foregroundStyle(.secondary)
+                    .frame(maxWidth: .infinity)
+                    .padding(.horizontal, AppSpacing.md)
+                    .contentTransition(.numericText())
             }
         }
         .frame(height: meterHeight)
@@ -79,11 +91,15 @@ struct TodayMeter: View {
     private var accessibilityLabel: String {
         let budget = dailyRate.formatted(.currency(code: "USD"))
         if isOverspent {
-            return "Today, over the \(budget) budget"
+            let amountOver = abs(remaining).formatted(.currency(code: "USD"))
+            return "Today, \(amountOver) over the \(budget) budget"
         }
 
-        let amountSpent = spent.formatted(.currency(code: "USD"))
-        return "Today, \(amountSpent) of \(budget) spent"
+        return "Today, \(remaining.formatted(.currency(code: "USD"))) left of the \(budget) budget"
+    }
+
+    private var meterLabel: String {
+        remaining.formatted(.currency(code: "USD"))
     }
 }
 

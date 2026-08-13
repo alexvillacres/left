@@ -283,9 +283,11 @@ private struct DayTransactionsSheet: View {
                                     .frame(width: 28)
                                 if let note = tx.note, !note.isEmpty {
                                     Text(note)
+                                        .font(.dmSans(.body, weight: .medium))
                                         .lineLimit(2)
                                 } else {
                                     Text(tx.category.label)
+                                        .font(.dmSans(.body, weight: .medium))
                                         .foregroundStyle(.secondary)
                                         .lineLimit(1)
                                 }
@@ -294,11 +296,16 @@ private struct DayTransactionsSheet: View {
                                     .layoutPriority(1)
                             }
                             .frame(maxWidth: .infinity, alignment: .leading)
+                            .padding(.horizontal, AppSpacing.xl)
                             .contentShape(Rectangle())
                         }
                         .buttonStyle(.plain)
-                        .alignmentGuide(.listRowSeparatorLeading) { dimensions in
-                            dimensions[.leading]
+                        .listRowInsets(EdgeInsets())
+                        .alignmentGuide(.listRowSeparatorLeading) { _ in
+                            0
+                        }
+                        .alignmentGuide(.listRowSeparatorTrailing) { dimensions in
+                            dimensions.width
                         }
                         .swipeActions(edge: .trailing) {
                             Button(role: .destructive) {
@@ -313,6 +320,8 @@ private struct DayTransactionsSheet: View {
             }
             .navigationTitle(date.formatted(.dateTime.weekday(.abbreviated).month(.abbreviated).day()))
             .navigationBarTitleDisplayMode(.inline)
+            .background(Color(uiColor: .systemBackground).ignoresSafeArea())
+
         }
         .presentationDetents([.medium, .large])
         .fullScreenCover(item: $editingTransaction) { transaction in
