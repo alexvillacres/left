@@ -12,20 +12,30 @@ struct PlanView: View {
         var goal: SavingsGoal?
     }
 
+    private struct ActiveExpenseSheet: Identifiable {
+        let id = UUID()
+        var expense: FixedExpense?
+    }
+
     @Environment(\.dismiss) private var dismiss
     @Environment(\.modelContext) private var modelContext
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.setAddAction) private var setAddAction
+    @Environment(\.clearAddAction) private var clearAddAction
     @Bindable var plan: MonthPlan
     var isOnboarding: Bool = false
     var onComplete: (() -> Void)?
 
-    @State private var isAddingExpense = false
+    @State private var activeExpenseSheet: ActiveExpenseSheet?
     @State private var activeIncomeSheet: ActiveIncomeSheet?
     @State private var activeSavingsSheet: ActiveSavingsSheet?
     @State private var newExpenseName = ""
     @State private var newExpenseAmount: Decimal = 0
     @State private var newExpenseCadence: ExpenseCadence = .monthly
-    @State private var expenseBasis: ExpenseBasis = .daily
+    @State private var newExpenseStartsOn: Date?
+    @State private var newExpenseEndsAfter: Date?
+    @State private var isExpenseDurationExpanded = false
+    @State private var expenseBasis: ExpenseBasis = .monthly
     @State private var onboardingStep: OnboardingStep = .income
     @FocusState private var isMoneyFieldFocused: Bool
 
@@ -38,8 +48,6 @@ struct PlanView: View {
             }
         }
         .background(Color(uiColor: .systemBackground).ignoresSafeArea())
-        .navigationBarTitleDisplayMode(.inline)
-        .toolbar(.hidden, for: .navigationBar)
         .toolbar {
             if isMoneyFieldFocused {
                 ToolbarItemGroup(placement: .keyboard) {
@@ -51,8 +59,8 @@ struct PlanView: View {
                 }
             }
         }
-        .sheet(isPresented: $isAddingExpense) {
-            recurringExpenseSheet
+        .sheet(item: $activeExpenseSheet) { sheet in
+            recurringExpenseSheet(expense: sheet.expense)
         }
         .sheet(item: $activeIncomeSheet) { sheet in
             IncomeSheet(plan: plan, source: sheet.source)
@@ -65,262 +73,481 @@ struct PlanView: View {
 
     private var planEditor: some View {
         VStack(spacing: 0) {
-            planScroll
+            ScrollView {
+                VStack(alignment: .leading, spacing: AppSpacing.lg) {
+                    screenTitle("Plan")
 
-            Divider()
+                    VStack(spacing: 0) {
+                        NavigationLink {
+                            incomeEditor
+                        } label: {
+                            planSummaryRow(
+                                title: "Income",
+                                subtitle: itemCount(plan.incomeSources.count, singular: "source"),
+                                amount: plan.incomeTotal,
+                                subtractsFromPlan: false
+                            )
+                        }
 
-            derivationLine
+                        Divider()
+                            .padding(.horizontal, -AppSpacing.xl)
+
+                        NavigationLink {
+                            fixedExpensesEditor
+                        } label: {
+                            planSummaryRow(
+                                title: "Fixed expenses",
+                                subtitle: itemCount(plan.fixedExpenses.count, singular: "expense"),
+                                amount: plan.fixedTotal,
+                                subtractsFromPlan: true
+                            )
+                        }
+
+                        Divider()
+                            .padding(.horizontal, -AppSpacing.xl)
+
+                        NavigationLink {
+                            savingsEditor
+                        } label: {
+                            planSummaryRow(
+                                title: "Savings",
+                                subtitle: savingsSummary,
+                                amount: plan.savingsAmount,
+                                subtractsFromPlan: true
+                            )
+                        }
+                    }
+                    .buttonStyle(.plain)
+                }
                 .padding(.horizontal, AppSpacing.xl)
-                .padding(.vertical, AppSpacing.md)
-                .background(Color(uiColor: .systemBackground))
+                .padding(.top, AppSpacing.sm)
+                .padding(.bottom, AppSpacing.xl)
+            }
+
+            planDerivationFooter
+        }
+        .navigationTitle("Plan")
+        .navigationBarTitleDisplayMode(.inline)
+        .toolbar(.hidden, for: .navigationBar)
+        .onAppear {
+            // Defensive cleanup for the NavigationStack pop path. The editor
+            // also clears on disappearance, so either lifecycle ordering leaves
+            // the Plan root with its reserved empty slot.
+            setAddAction(nil)
         }
     }
 
-    private var planScroll: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: AppSpacing.lg) {
-                VStack(alignment: .leading, spacing: AppSpacing.xl) {
-                    screenTitle("My Plan")
+    private func planSummaryRow(
+        title: String,
+        subtitle: String,
+        amount: Decimal,
+        subtractsFromPlan: Bool
+    ) -> some View {
+        HStack(spacing: AppSpacing.md) {
+            VStack(alignment: .leading, spacing: AppSpacing.xxs) {
+                Text(title)
+                    .font(.dmSans(.body, weight: .medium))
+                    .foregroundStyle(.primary)
 
-                    planSection("Money available this month") {
-                        incomeContent
+                Text(subtitle)
+                    .font(.dmSans(.caption))
+                    .foregroundStyle(.secondary)
+            }
+
+            Spacer(minLength: AppSpacing.sm)
+
+            Text(summaryAmount(amount, subtractsFromPlan: subtractsFromPlan))
+                .font(.dmSans(.body, weight: .medium))
+                .foregroundStyle(.primary)
+                .monospacedDigit()
+                .contentTransition(.numericText())
+
+            Image(systemName: "chevron.right")
+                .font(.caption.weight(.semibold))
+                .foregroundStyle(Color(uiColor: .tertiaryLabel))
+        }
+        .frame(maxWidth: .infinity)
+        .padding(.vertical, AppSpacing.lg)
+        .contentShape(Rectangle())
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel("\(title), \(subtitle), \(summaryAmount(amount, subtractsFromPlan: subtractsFromPlan))")
+        .accessibilityHint("Opens \(title.lowercased()) editor")
+    }
+
+    // MARK: - Editors
+
+    private var incomeEditor: some View {
+        editorScreen(title: "Income", total: plan.incomeTotal) {
+            VStack(spacing: 0) {
+                ForEach(Array(sortedIncomeSources.enumerated()), id: \.element.persistentModelID) { index, source in
+                    incomeEditorRow(source)
+
+                    if index < sortedIncomeSources.count - 1 {
+                        Divider()
+                            .padding(.horizontal, -AppSpacing.xl)
                     }
                 }
-                .padding(.horizontal, AppSpacing.xl)
 
-                Divider()
-
-                planSection("Recurring expenses") {
-                    fixedExpensesContent
+                if !plan.incomeSources.isEmpty {
+                    Divider()
+                        .padding(.horizontal, -AppSpacing.xl)
                 }
-                .padding(.horizontal, AppSpacing.xl)
 
-                Divider()
-
-                planSection("Savings goals") {
-                    savingsContent
+                addRow("Add income source") {
+                    activeIncomeSheet = ActiveIncomeSheet()
                 }
-                .padding(.horizontal, AppSpacing.xl)
             }
-            .padding(.top, AppSpacing.sm)
-            .padding(.bottom, AppSpacing.xl)
         }
-        .contentMargins(.horizontal, 0, for: .scrollContent)
+        .onAppear {
+            setAddAction(
+                AddAction(
+                    id: "plan.income.add",
+                    accessibilityLabel: "Add income source",
+                    prominence: .secondary,
+                    perform: { activeIncomeSheet = ActiveIncomeSheet() }
+                )
+            )
+        }
+        .onDisappear {
+            clearAddAction("plan.income.add")
+        }
+    }
+
+    private var fixedExpensesEditor: some View {
+        editorScreen(title: "Fixed expenses", total: plan.fixedTotal) {
+            VStack(alignment: .leading, spacing: AppSpacing.md) {
+                SegmentedControl(
+                    options: [ExpenseBasis.monthly, .daily],
+                    selection: $expenseBasis,
+                    label: \.label
+                )
+
+                VStack(spacing: 0) {
+                    ForEach(Array(sortedFixedExpenses.enumerated()), id: \.element.persistentModelID) { index, expense in
+                        fixedExpenseEditorRow(expense)
+
+                        if index < sortedFixedExpenses.count - 1 {
+                            Divider()
+                                .padding(.horizontal, -AppSpacing.xl)
+                        }
+                    }
+
+                    if !plan.fixedExpenses.isEmpty {
+                        Divider()
+                            .padding(.horizontal, -AppSpacing.xl)
+                    }
+
+                    addRow("Add expense") {
+                        presentExpenseEditor()
+                    }
+                }
+            }
+        }
+        .onAppear {
+            setAddAction(
+                AddAction(
+                    id: "plan.fixed-expenses.add",
+                    accessibilityLabel: "Add expense",
+                    prominence: .secondary,
+                    perform: { presentExpenseEditor() }
+                )
+            )
+        }
+        .onDisappear {
+            clearAddAction("plan.fixed-expenses.add")
+        }
+    }
+
+    private var savingsEditor: some View {
+        editorScreen(title: "Savings", total: plan.savingsAmount) {
+            VStack(alignment: .leading, spacing: AppSpacing.md) {
+                ForEach(sortedSavingsGoals) { goal in
+                    savingsGoalCard(goal)
+                }
+
+                addRow("Add savings goal") {
+                    activeSavingsSheet = ActiveSavingsSheet()
+                }
+            }
+        }
+        .onAppear {
+            setAddAction(
+                AddAction(
+                    id: "plan.savings.add",
+                    accessibilityLabel: "Add savings goal",
+                    prominence: .secondary,
+                    perform: { activeSavingsSheet = ActiveSavingsSheet() }
+                )
+            )
+        }
+        .onDisappear {
+            clearAddAction("plan.savings.add")
+        }
+    }
+
+    private func editorScreen<Content: View>(
+        title: String,
+        total: Decimal,
+        @ViewBuilder content: () -> Content
+    ) -> some View {
+        VStack(spacing: 0) {
+            ScrollView {
+                VStack(alignment: .leading, spacing: AppSpacing.lg) {
+                    HStack(alignment: .firstTextBaseline, spacing: AppSpacing.md) {
+                        Text(title)
+                            .font(.dmSans(size: BudgetTypography.headingSize, weight: .bold, relativeTo: .title2))
+                            .tracking(BudgetTypography.headingTracking)
+                            .foregroundStyle(.primary)
+
+                        Spacer(minLength: AppSpacing.sm)
+
+                        Text(total, format: wholeDollarFormat)
+                            .font(.dmSans(.title2, weight: .semibold))
+                            .foregroundStyle(.primary)
+                            .monospacedDigit()
+                            .contentTransition(.numericText())
+                    }
+
+                    content()
+                }
+                .padding(.horizontal, AppSpacing.xl)
+                .padding(.top, AppSpacing.xs)
+                .padding(.bottom, AppSpacing.xl)
+            }
+
+            planDerivationFooter
+        }
+        .background(Color(uiColor: .systemBackground).ignoresSafeArea())
+        .navigationTitle("")
+        .navigationBarTitleDisplayMode(.inline)
+        .toolbar(.visible, for: .navigationBar)
     }
 
     // MARK: - Income
 
-    private var incomeContent: some View {
-        VStack(alignment: .leading, spacing: AppSpacing.md) {
-            VStack(spacing: 0) {
-                ForEach(Array(plan.incomeSources.enumerated()), id: \.element.persistentModelID) { index, source in
-                    incomeRow(source)
+    private func incomeEditorRow(_ source: IncomeSource) -> some View {
+        let startsLater = source.startsOn.map { $0 > plan.monthStart } ?? false
 
-                    if index < plan.incomeSources.count - 1 {
-                        Divider()
+        return Button {
+            activeIncomeSheet = ActiveIncomeSheet(source: source)
+        } label: {
+            HStack(spacing: AppSpacing.sm) {
+                VStack(alignment: .leading, spacing: AppSpacing.xxs) {
+                    Text(source.name)
+                        .font(.dmSans(.body, weight: .medium))
+                        .foregroundStyle(.primary)
+                        .lineLimit(1)
+
+                    if let windowNote = windowNote(startsOn: source.startsOn, endsAfter: source.endsAfter) {
+                        Text(windowNote)
+                            .font(.dmSans(.caption))
+                            .foregroundStyle(.secondary)
                     }
-                }
-            }
-            .padding(.horizontal, AppSpacing.md)
-            .background(Color(uiColor: .secondarySystemBackground))
-            .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
 
-            HStack {
-                Text("Total")
-                    .font(.dmSans(.subheadline))
-                    .foregroundStyle(.secondary)
-                Spacer()
-                Text(plan.incomeTotal, format: .currency(code: "USD"))
-                    .font(.dmSans(.title3, weight: .semibold))
+                    Text(incomeNote(for: source))
+                        .font(.dmSans(.caption))
+                        .foregroundStyle(source.isUnconfirmed ? Color.leftWarning : .secondary)
+                        .lineLimit(2)
+                }
+
+                Spacer(minLength: AppSpacing.sm)
+
+                Text(source.amount, format: wholeDollarFormat)
+                    .font(.dmSans(.body, weight: .medium))
+                    .foregroundStyle(.primary)
                     .monospacedDigit()
                     .contentTransition(.numericText())
             }
-
-            Button {
-                activeIncomeSheet = ActiveIncomeSheet()
-            } label: {
-                Label("Add income source", systemImage: "plus")
-                    .font(.dmSans(.subheadline, weight: .medium))
-                    .foregroundStyle(.primary)
-                    .frame(maxWidth: .infinity)
-                    .padding(AppSpacing.md)
-                    .background(Color(uiColor: .secondarySystemFill))
-                    .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
-            }
-            .buttonStyle(.plain)
+            .opacity(startsLater ? 0.52 : 1)
+            .frame(maxWidth: .infinity)
+            .padding(.vertical, AppSpacing.lg)
+            .contentShape(Rectangle())
         }
-    }
-
-    private func incomeRow(_ source: IncomeSource) -> some View {
-        @Bindable var source = source
-
-        return VStack(alignment: .leading, spacing: AppSpacing.xxs) {
-            HStack(spacing: AppSpacing.sm) {
-                TextField("Source name", text: $source.name)
-                    .font(.dmSans(.body, weight: .medium))
-                    .lineLimit(1)
-                    .layoutPriority(1)
-
-                MoneyField(value: incomeAmountBinding(source),
-                           unit: .currency,
-                           prominence: .compact,
-                           accessibilityLabel: "\(source.name) income amount",
-                           focus: $isMoneyFieldFocused)
-
-                Button(role: .destructive) {
+        .buttonStyle(.plain)
+        .contextMenu {
+            if canDeleteIncome {
+                Button("Delete \(source.name)", systemImage: "trash", role: .destructive) {
                     deleteIncome(source)
-                } label: {
-                    Image(systemName: "trash")
-                        .font(.dmSans(.subheadline, weight: .medium))
-                        .foregroundStyle(Color.leftNegative)
-                        .frame(width: 44, height: 44)
-                        .contentShape(Rectangle())
                 }
-                .buttonStyle(.plain)
-                .disabled(!canDeleteIncome)
-                .opacity(canDeleteIncome ? 1 : 0.35)
-                .accessibilityLabel("Remove \(source.name)")
-                .accessibilityHint(!canDeleteIncome
-                                   ? "Set its amount to zero, or add its replacement before removing it."
-                                   : "")
             }
-
-            Button {
-                activeIncomeSheet = ActiveIncomeSheet(source: source)
-            } label: {
-                HStack(spacing: AppSpacing.xs) {
-                    if source.isUnconfirmed {
-                        Text(carriedOverNote(for: source))
-                    } else {
-                        Text(source.effectiveCadence.label)
-                    }
-                    Image(systemName: "pencil")
-                }
-                .font(.dmSans(.caption))
-                .foregroundStyle(.secondary)
-                .fixedSize(horizontal: false, vertical: true)
-            }
-            .buttonStyle(.plain)
-            .accessibilityLabel("Edit \(source.name), \(source.effectiveCadence.label)")
         }
-        .padding(.vertical, AppSpacing.sm)
+        .accessibilityAction(named: Text("Delete \(source.name)")) {
+            if canDeleteIncome {
+                deleteIncome(source)
+            }
+        }
+        .accessibilityLabel("\(source.name), \(source.amount.formatted(wholeDollarFormat)), \(incomeNote(for: source))")
+        .accessibilityHint("Opens income source editor")
     }
 
-    private func incomeAmountBinding(_ source: IncomeSource) -> Binding<Decimal> {
-        Binding {
-            source.amount
-        } set: { value in
-            source.amount = max(0, value)
-            source.affirmedAt = .now
+    private func incomeNote(for source: IncomeSource) -> String {
+        if source.isUnconfirmed,
+           let previous = Calendar.current.date(byAdding: .month, value: -1, to: plan.monthStart) {
+            return "Carried from \(previous.formatted(.dateTime.month(.wide))) · not yet confirmed"
         }
+
+        if let affirmedAt = source.affirmedAt {
+            return "\(source.effectiveCadence.label) · confirmed \(affirmedAt.formatted(.dateTime.month(.abbreviated).day()))"
+        }
+
+        return source.effectiveCadence.label
     }
 
-    private func carriedOverNote(for source: IncomeSource) -> String {
-        guard let previous = Calendar.current.date(byAdding: .month, value: -1, to: plan.monthStart) else {
-            return "Not confirmed yet — tap to confirm"
-        }
-        let month = previous.formatted(.dateTime.month(.wide))
-        return "Carried from \(month) — tap to confirm"
-    }
+    // MARK: - Fixed expenses
 
-    // MARK: - Savings
+    private func fixedExpenseEditorRow(_ expense: FixedExpense) -> some View {
+        let startsLater = expense.startsOn.map { $0 > plan.monthStart } ?? false
 
-    private var savingsContent: some View {
-        VStack(alignment: .leading, spacing: AppSpacing.md) {
-            if !plan.savingsGoals.isEmpty {
-                VStack(spacing: 0) {
-                    ForEach(Array(plan.savingsGoals.enumerated()), id: \.element.persistentModelID) { index, goal in
-                        savingsGoalRow(goal)
-
-                        if index < plan.savingsGoals.count - 1 {
-                            Divider()
-                        }
-                    }
-                }
-                .padding(.horizontal, AppSpacing.md)
-                .background(Color(uiColor: .secondarySystemBackground))
-                .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
-            }
-
-            Button {
-                activeSavingsSheet = ActiveSavingsSheet()
-            } label: {
-                Label("Add savings goal", systemImage: "plus")
-                    .font(.dmSans(.subheadline, weight: .medium))
-                    .foregroundStyle(.primary)
-                    .frame(maxWidth: .infinity)
-                    .padding(AppSpacing.md)
-                    .background(Color(uiColor: .secondarySystemFill))
-                    .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
-            }
-            .buttonStyle(.plain)
-
-            Text("\(plan.savingsAmount.formatted(.currency(code: "USD").precision(.fractionLength(0)))) set aside this month.")
-                .font(.dmSans(.subheadline))
-                .foregroundStyle(.secondary)
-                .monospacedDigit()
-                .contentTransition(.numericText())
-        }
-    }
-
-    private func savingsGoalRow(_ goal: SavingsGoal) -> some View {
-        HStack(spacing: AppSpacing.sm) {
-            Button {
-                activeSavingsSheet = ActiveSavingsSheet(goal: goal)
-            } label: {
-                HStack(spacing: AppSpacing.md) {
-                    VStack(alignment: .leading, spacing: AppSpacing.xxs) {
-                        Text(goal.name)
+        return Button {
+            presentExpenseEditor(expense)
+        } label: {
+            HStack(spacing: AppSpacing.md) {
+                VStack(alignment: .leading, spacing: AppSpacing.xxs) {
+                    HStack(spacing: AppSpacing.sm) {
+                        Text(expense.name)
                             .font(.dmSans(.body, weight: .medium))
                             .foregroundStyle(.primary)
                             .lineLimit(1)
 
-                        if let percent = goal.percent {
-                            Text("\(percent.formatted(.number))% of income — moves with what you receive")
-                                .font(.dmSans(.caption))
+                        if let cadenceLabel = expenseCadenceLabel(expense) {
+                            Text(cadenceLabel)
+                                .font(.dmSans(.footnote))
                                 .foregroundStyle(.secondary)
-                                .fixedSize(horizontal: false, vertical: true)
+                                .lineLimit(1)
+                                .fixedSize(horizontal: true, vertical: false)
+                                .padding(.horizontal, 10)
+                                .padding(.vertical, AppSpacing.xxs)
+                                .background(Color(uiColor: .secondarySystemFill))
+                                .clipShape(Capsule())
                         }
                     }
 
+                    if let note = windowNote(startsOn: expense.startsOn, endsAfter: expense.endsAfter) {
+                        Text(note)
+                            .font(.dmSans(.caption))
+                            .foregroundStyle(.secondary)
+                    }
+                }
+
+                Spacer(minLength: AppSpacing.sm)
+
+                Text(expenseDisplayAmount(expense), format: expenseDisplayFormat)
+                    .font(.dmSans(.body, weight: .medium))
+                    .foregroundStyle(.primary)
+                    .monospacedDigit()
+                    .contentTransition(.numericText())
+            }
+            .opacity(startsLater ? 0.52 : 1)
+            .frame(maxWidth: .infinity)
+            .padding(.vertical, AppSpacing.lg)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .contextMenu {
+            Button("Delete \(expense.name)", systemImage: "trash", role: .destructive) {
+                deleteExpense(expense)
+            }
+        }
+        .accessibilityAction(named: Text("Delete \(expense.name)")) {
+            deleteExpense(expense)
+        }
+        .accessibilityLabel("\(expense.name), \(expenseCadenceLabel(expense) ?? "Billed monthly"), \(expenseDisplayAmount(expense).formatted(expenseDisplayFormat)), \(expenseBasis.label)")
+        .accessibilityHint("Opens fixed expense editor")
+    }
+
+    // MARK: - Savings
+
+    private func savingsGoalCard(_ goal: SavingsGoal) -> some View {
+        VStack(alignment: .leading, spacing: AppSpacing.sm) {
+            Button {
+                activeSavingsSheet = ActiveSavingsSheet(goal: goal)
+            } label: {
+                HStack(alignment: .firstTextBaseline, spacing: AppSpacing.md) {
+                    Text(goal.name)
+                        .font(.dmSans(.body, weight: .medium))
+                        .foregroundStyle(.primary)
+                        .lineLimit(1)
+
                     Spacer(minLength: AppSpacing.sm)
 
-                    Text(goal.resolvedAmount(income: plan.incomeTotal),
-                         format: .currency(code: "USD").precision(.fractionLength(0)))
-                        .font(.dmSans(.body, weight: .semibold))
+                    Text(savingsGoalValue(goal))
+                        .font(.dmSans(.body, weight: .medium))
                         .foregroundStyle(.primary)
                         .monospacedDigit()
-                        .layoutPriority(1)
+                        .contentTransition(.numericText())
                 }
-                .frame(minHeight: 64)
+                .frame(maxWidth: .infinity, minHeight: 28)
                 .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
-            .accessibilityLabel("Edit \(goal.name), \(goal.resolvedAmount(income: plan.incomeTotal).formatted(.currency(code: "USD"))) this month")
+            .accessibilityLabel("Edit \(goal.name), \(savingsGoalValue(goal))")
 
-            Button(role: .destructive) {
-                deleteSavingsGoal(goal)
-            } label: {
-                Image(systemName: "trash")
-                    .font(.dmSans(.subheadline, weight: .medium))
-                    .foregroundStyle(Color.leftNegative)
-                    .frame(width: 44, height: 44)
-                    .contentShape(Rectangle())
-            }
-            .buttonStyle(.plain)
-            .accessibilityLabel("Remove \(goal.name)")
+            SegmentedControl(
+                options: SavingsMode.allCases,
+                selection: savingsModeBinding(for: goal),
+                label: \.label
+            )
+
+            Text(savingsResolution(for: goal))
+                .font(.dmSans(.caption))
+                .foregroundStyle(.secondary)
+                .monospacedDigit()
         }
-        .padding(.vertical, AppSpacing.xs)
+        .padding(AppSpacing.md)
+        .background(Color(uiColor: .secondarySystemBackground))
+        .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+        .contextMenu {
+            Button("Delete \(goal.name)", systemImage: "trash", role: .destructive) {
+                deleteSavingsGoal(goal)
+            }
+        }
+        .accessibilityAction(named: Text("Delete \(goal.name)")) {
+            deleteSavingsGoal(goal)
+        }
+    }
+
+    private func savingsModeBinding(for goal: SavingsGoal) -> Binding<SavingsMode> {
+        Binding {
+            goal.usesPercent ? .percent : .amount
+        } set: { mode in
+            guard mode != (goal.usesPercent ? .percent : .amount) else { return }
+            let resolved = goal.resolvedAmount(income: plan.incomeTotal)
+
+            switch mode {
+            case .amount:
+                goal.target = .amount(resolved)
+            case .percent:
+                let percent = plan.incomeTotal > 0
+                    ? (resolved / plan.incomeTotal * 100).rounded(scale: 1)
+                    : 0
+                goal.target = .percentOfIncome(percent)
+            }
+        }
+    }
+
+    private func savingsGoalValue(_ goal: SavingsGoal) -> String {
+        if let percent = goal.percent {
+            return "\(percent.formatted(.number))%"
+        }
+        return goal.amount.formatted(wholeDollarFormat)
+    }
+
+    private func savingsResolution(for goal: SavingsGoal) -> String {
+        if goal.usesPercent {
+            return "≈ \(goal.resolvedAmount(income: plan.incomeTotal).formatted(wholeDollarFormat)) this month"
+        }
+
+        guard plan.incomeTotal > 0 else { return "0% of income" }
+        let percent = goal.amount / plan.incomeTotal * 100
+        return "≈ \(percent.formatted(.number.precision(.fractionLength(1))))% of \(plan.incomeTotal.formatted(wholeDollarFormat))"
     }
 
     private var onboardingSavingsModePicker: some View {
-        Picker("Savings basis", selection: savingsMode) {
-            ForEach(SavingsMode.allCases) { mode in
-                Text(mode.label).tag(mode)
-            }
-        }
-        .pickerStyle(.segmented)
-        .labelsHidden()
+        SegmentedControl(
+            options: SavingsMode.allCases,
+            selection: savingsMode,
+            label: \.label
+        )
         .frame(maxWidth: 280, alignment: .leading)
     }
 
@@ -399,8 +626,109 @@ struct PlanView: View {
 
     // MARK: - Derivation
 
-    private var derivationLine: some View {
-        DerivationLine(plan: plan)
+    private var planDerivationFooter: some View {
+        let income = plan.incomeTotal
+        let savings = plan.savingsAmount
+        let spendable = income - plan.fixedTotal - savings
+        let dailyRate = spendable / Decimal(plan.daysInMonth())
+        let equation = "\(income.formatted(wholeDollarFormat)) − \(plan.fixedTotal.formatted(wholeDollarFormat)) − \(savings.formatted(wholeDollarFormat)) = \(spendable.formatted(wholeDollarFormat)) ÷ \(plan.daysInMonth()) days"
+        let rate = "\(dailyRate.formatted(dailyDollarFormat))/day"
+
+        return VStack(alignment: .leading, spacing: AppSpacing.xxs) {
+            Text(equation)
+                .font(.dmSans(.caption))
+                .foregroundStyle(.secondary)
+                .monospacedDigit()
+                .lineLimit(1)
+                .minimumScaleFactor(0.72)
+
+            Text(rate)
+                .font(.dmSans(.title3, weight: .bold))
+                .foregroundStyle(.primary)
+                .monospacedDigit()
+                .contentTransition(.numericText())
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(.horizontal, AppSpacing.xl)
+        .padding(.vertical, AppSpacing.md)
+        .background(Color(uiColor: .systemBackground))
+        .overlay(alignment: .top) { Divider() }
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel("Income \(income.formatted(wholeDollarFormat)), minus fixed expenses \(plan.fixedTotal.formatted(wholeDollarFormat)), minus savings \(savings.formatted(wholeDollarFormat)), leaves \(spendable.formatted(wholeDollarFormat)) across \(plan.daysInMonth()) days, or \(rate).")
+    }
+
+    private var wholeDollarFormat: Decimal.FormatStyle.Currency {
+        .init(code: "USD").precision(.fractionLength(0))
+    }
+
+    private var dailyDollarFormat: Decimal.FormatStyle.Currency {
+        .init(code: "USD").precision(.fractionLength(2))
+    }
+
+    private var expenseDisplayFormat: Decimal.FormatStyle.Currency {
+        expenseBasis == .daily ? dailyDollarFormat : wholeDollarFormat
+    }
+
+    private var savingsSummary: String {
+        let goals = itemCount(plan.savingsGoals.count, singular: "goal")
+        guard plan.incomeTotal > 0, plan.savingsAmount > 0 else { return goals }
+        let percent = plan.savingsAmount / plan.incomeTotal * 100
+        return "\(goals) · \(percent.formatted(.number.precision(.fractionLength(0))))% of income"
+    }
+
+    private var sortedIncomeSources: [IncomeSource] {
+        plan.incomeSources.sorted {
+            if $0.amount != $1.amount { return $0.amount > $1.amount }
+            return $0.name.localizedCaseInsensitiveCompare($1.name) == .orderedAscending
+        }
+    }
+
+    private var sortedFixedExpenses: [FixedExpense] {
+        plan.fixedExpenses.sorted {
+            if $0.monthlyAmount != $1.monthlyAmount { return $0.monthlyAmount > $1.monthlyAmount }
+            return $0.name.localizedCaseInsensitiveCompare($1.name) == .orderedAscending
+        }
+    }
+
+    private var sortedSavingsGoals: [SavingsGoal] {
+        plan.savingsGoals.sorted {
+            let leftAmount = $0.resolvedAmount(income: plan.incomeTotal)
+            let rightAmount = $1.resolvedAmount(income: plan.incomeTotal)
+            if leftAmount != rightAmount { return leftAmount > rightAmount }
+            return $0.name.localizedCaseInsensitiveCompare($1.name) == .orderedAscending
+        }
+    }
+
+    private func itemCount(_ count: Int, singular: String) -> String {
+        "\(count) \(count == 1 ? singular : singular + "s")"
+    }
+
+    private func summaryAmount(_ amount: Decimal, subtractsFromPlan: Bool) -> String {
+        let formatted = amount.formatted(wholeDollarFormat)
+        return subtractsFromPlan && amount != 0 ? "−\(formatted)" : formatted
+    }
+
+    private func expenseDisplayAmount(_ expense: FixedExpense) -> Decimal {
+        switch expenseBasis {
+        case .daily:
+            expense.monthlyAmount / Decimal(plan.daysInMonth())
+        case .monthly:
+            expense.monthlyAmount
+        case .annually:
+            expense.monthlyAmount * 12
+        }
+    }
+
+    private func addRow(_ title: String, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            Text(title)
+                .font(.dmSans(.body, weight: .medium))
+                .foregroundStyle(Color.leftPositive)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(.vertical, AppSpacing.lg)
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
     }
 
     // MARK: - Onboarding
@@ -429,13 +757,13 @@ struct PlanView: View {
                 .background(Color(uiColor: .systemBackground))
         }
         .accessibilityElement(children: .contain)
+        .toolbar(.hidden, for: .navigationBar)
     }
 
     private var onboardingProgress: some View {
         VStack(spacing: AppSpacing.md) {
             Text("SET UP YOUR PLAN")
                 .font(.dmSans(.caption2, weight: .medium))
-                .tracking(0.08)
                 .foregroundStyle(.secondary)
 
             HStack(spacing: AppSpacing.sm) {
@@ -481,11 +809,12 @@ struct PlanView: View {
                         .frame(maxWidth: .infinity)
                         .padding(.vertical, AppSpacing.xl)
                 } else {
-                    ForEach(Array(plan.incomeSources.enumerated()), id: \.element.persistentModelID) { index, source in
+                    ForEach(Array(sortedIncomeSources.enumerated()), id: \.element.persistentModelID) { index, source in
                         onboardingIncomeRow(source)
 
-                        if index < plan.incomeSources.count - 1 {
+                        if index < sortedIncomeSources.count - 1 {
                             Divider()
+                                .padding(.horizontal, -AppSpacing.lg)
                         }
                     }
                 }
@@ -547,7 +876,7 @@ struct PlanView: View {
                         .monospacedDigit()
                         .layoutPriority(1)
                 }
-                .frame(minHeight: 64)
+                .padding(.vertical, AppSpacing.lg)
                 .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
@@ -585,11 +914,12 @@ struct PlanView: View {
                         .frame(maxWidth: .infinity)
                         .padding(.vertical, AppSpacing.xl)
                 } else {
-                    ForEach(Array(plan.fixedExpenses.enumerated()), id: \.element.persistentModelID) { index, expense in
+                    ForEach(Array(sortedFixedExpenses.enumerated()), id: \.element.persistentModelID) { index, expense in
                         onboardingExpenseRow(expense)
 
-                        if index < plan.fixedExpenses.count - 1 {
+                        if index < sortedFixedExpenses.count - 1 {
                             Divider()
+                                .padding(.horizontal, -AppSpacing.lg)
                         }
                     }
                 }
@@ -599,10 +929,7 @@ struct PlanView: View {
             .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
 
             Button {
-                newExpenseName = ""
-                newExpenseAmount = 0
-                newExpenseCadence = .monthly
-                isAddingExpense = true
+                presentExpenseEditor()
             } label: {
                 Label("Add recurring expense", systemImage: "plus")
                     .font(.dmSans(.body, weight: .medium))
@@ -677,12 +1004,11 @@ struct PlanView: View {
         VStack(spacing: AppSpacing.md) {
             Text(eyebrow)
                 .font(.dmSans(.caption2, weight: .medium))
-                .tracking(0.08)
                 .foregroundStyle(Color.leftPositive)
 
             Text(title)
-                .font(.dmSans(size: 32, weight: .bold, relativeTo: .largeTitle))
-                .tracking(-0.02)
+                .font(.dmSans(size: BudgetTypography.headingSize, weight: .bold, relativeTo: .title2))
+                .tracking(BudgetTypography.headingTracking)
                 .multilineTextAlignment(.center)
                 .foregroundStyle(.primary)
 
@@ -745,7 +1071,7 @@ struct PlanView: View {
             .buttonStyle(.plain)
             .accessibilityLabel("Remove \(expense.name)")
         }
-        .frame(minHeight: 64)
+        .padding(.vertical, AppSpacing.lg)
     }
 
     private var onboardingNavigation: some View {
@@ -818,112 +1144,60 @@ struct PlanView: View {
         }
     }
 
-    private var fixedExpensesContent: some View {
-        VStack(alignment: .leading, spacing: AppSpacing.md) {
-            Picker("Expense basis", selection: $expenseBasis) {
-                ForEach(ExpenseBasis.allCases) { basis in
-                    Text(basis.label).tag(basis)
-                }
-            }
-            .pickerStyle(.segmented)
-            .labelsHidden()
-            .frame(maxWidth: 280, alignment: .leading)
-
-            VStack(alignment: .leading, spacing: AppSpacing.lg) {
-                VStack(spacing: 0) {
-                    ForEach(plan.fixedExpenses) { expense in
-                        @Bindable var expense = expense
-                        expenseRow(
-                            expense: expense,
-                            name: $expense.name,
-                            amount: $expense.amount
-                        )
-                    }
-                }
-
-                Button {
-                    newExpenseName = ""
-                    newExpenseAmount = 0
-                    newExpenseCadence = .monthly
-                    isAddingExpense = true
-                } label: {
-                    Label("Add recurring expense", systemImage: "plus")
-                        .labelStyle(.titleAndIcon)
-                        .font(.dmSans(.subheadline, weight: .medium))
-                        .foregroundStyle(.primary)
-                        .frame(maxWidth: .infinity)
-                        .padding(AppSpacing.md)
-                        .background(Color(uiColor: .secondarySystemFill))
-                        .clipShape(RoundedRectangle(cornerRadius: 8))
-                }
-                .buttonStyle(.plain)
-            }
-        }
-    }
-
-    private var recurringExpenseSheet: some View {
+    private func recurringExpenseSheet(expense: FixedExpense?) -> some View {
         NavigationStack {
-            Form {
-                Section {
-                    TextField("Name", text: $newExpenseName)
-                        .multilineTextAlignment(.leading)
-                        .neutralControl()
-                        .listRowInsets(planInsets)
-                        .listRowBackground(Color.clear)
-                }
-                Section {
-                    moneyField(value: $newExpenseAmount, accessibilityLabel: "Recurring expense amount")
-                    Picker("Cadence", selection: $newExpenseCadence) {
-                        ForEach(ExpenseCadence.allCases) { cadence in
-                            Text(cadence.label).tag(cadence)
+            VStack(spacing: 0) {
+                ScrollView {
+                    VStack(alignment: .leading, spacing: AppSpacing.lg) {
+                        PlanSheetHeader(
+                            title: expense == nil ? "Add recurring expense" : "Edit recurring expense",
+                            subtitle: "Recurring cost in \(plan.monthStart.formatted(.dateTime.month(.wide)))"
+                        )
+
+                        VStack(spacing: 0) {
+                            PlanSheetRow("Name") {
+                                TextField("Expense name", text: $newExpenseName)
+                                    .multilineTextAlignment(.leading)
+                                    .neutralControl()
+                            }
+
+                            PlanSheetRow("Amount") {
+                                moneyField(value: $newExpenseAmount, accessibilityLabel: "Recurring expense amount")
+                            }
+
+                            PlanSheetRow("Repeats") {
+                                Picker("Repeats", selection: $newExpenseCadence) {
+                                    ForEach(ExpenseCadence.allCases) { cadence in
+                                        Text(cadence.label).tag(cadence)
+                                    }
+                                }
+                                .pickerStyle(.menu)
+                                .tint(Color.leftFernAction)
+                            }
+
+                            MonthDurationPicker(startsOn: $newExpenseStartsOn,
+                                                endsAfter: $newExpenseEndsAfter,
+                                                isExpanded: $isExpenseDurationExpanded)
                         }
+
+                        DerivationLine(plan: plan, fixedTotal: previewFixedTotal(replacing: expense))
                     }
-                    .pickerStyle(.segmented)
-                    .labelsHidden()
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .listRowInsets(planInsets)
-                    .listRowBackground(Color.clear)
+                    .padding(.horizontal, AppSpacing.xl)
+                    .padding(.top, AppSpacing.xl)
+                    .padding(.bottom, AppSpacing.lg)
                 }
+                .scrollDismissesKeyboard(.interactively)
+
+                PlanSheetActions(primaryTitle: expense == nil ? "Add expense" : "Save",
+                                 isEnabled: canSaveExpense,
+                                 save: { saveExpense(expense) },
+                                 cancel: { activeExpenseSheet = nil })
+                .padding(.horizontal, AppSpacing.xl)
+                .padding(.bottom, AppSpacing.lg)
+                .background(Color(uiColor: .systemBackground))
             }
-            .scrollContentBackground(.hidden)
             .background(Color(uiColor: .systemBackground).ignoresSafeArea())
-            .navigationTitle("New recurring expense")
-            .navigationBarTitleDisplayMode(.inline)
             .toolbar {
-                ToolbarItem(placement: .cancellationAction) {
-                    Button {
-                        isAddingExpense = false
-                    } label: {
-                        Text("Cancel")
-                            .font(.dmSans(.subheadline, weight: .medium))
-                            .foregroundStyle(.secondary)
-                            .padding(.horizontal, AppSpacing.md)
-                            .padding(.vertical, AppSpacing.xs)
-                            .overlay {
-                                Capsule()
-                                    .stroke(Color(uiColor: .separator), lineWidth: 1)
-                            }
-                    }
-                    .buttonStyle(.plain)
-                }
-                ToolbarItem(placement: .confirmationAction) {
-                    Button {
-                        addExpense()
-                    } label: {
-                        Text("Add")
-                            .font(.dmSans(.subheadline, weight: .medium))
-                            .foregroundStyle(.primary)
-                            .padding(.horizontal, AppSpacing.md)
-                            .padding(.vertical, AppSpacing.xs)
-                            .overlay {
-                                Capsule()
-                                    .stroke(Color(uiColor: .separator), lineWidth: 1)
-                            }
-                    }
-                    .buttonStyle(.plain)
-                    .disabled(newExpenseName.isEmpty || newExpenseAmount <= 0)
-                    .opacity(newExpenseName.isEmpty || newExpenseAmount <= 0 ? 0.35 : 1)
-                }
                 if isMoneyFieldFocused {
                     ToolbarItemGroup(placement: .keyboard) {
                         Spacer()
@@ -935,37 +1209,16 @@ struct PlanView: View {
                 }
             }
         }
-        .presentationDetents([.height(320)])
-    }
-
-    private var planInsets: EdgeInsets {
-        EdgeInsets(top: AppSpacing.xs, leading: AppSpacing.xl, bottom: AppSpacing.xs, trailing: AppSpacing.xl)
+        .presentationDetents([.large])
+        .presentationDragIndicator(.visible)
     }
 
     private func screenTitle(_ title: String) -> some View {
         Text(title)
-            .font(.dmSans(size: 32, weight: .bold, relativeTo: .largeTitle))
+            .font(.dmSans(size: BudgetTypography.headingSize, weight: .bold, relativeTo: .title2))
+            .tracking(BudgetTypography.headingTracking)
             .foregroundStyle(.primary)
-            .frame(maxWidth: .infinity, minHeight: 50, alignment: .leading)
-    }
-
-    private func planSection<Content: View>(
-        _ title: String,
-        @ViewBuilder content: () -> Content
-    ) -> some View {
-        VStack(alignment: .leading, spacing: AppSpacing.sm) {
-            sectionHeader(title)
-            content()
-        }
-    }
-
-    private func sectionHeader(_ title: String) -> some View {
-        Text(title.uppercased())
-            .font(.dmSans(.caption2, weight: .medium))
-            .foregroundStyle(.secondary)
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .tracking(0.44)
-            .textCase(nil)
+            .frame(maxWidth: .infinity, minHeight: 44, alignment: .leading)
     }
 
     private func moneyField(value: Binding<Decimal>, accessibilityLabel: String = "Amount") -> some View {
@@ -976,83 +1229,52 @@ struct PlanView: View {
                    focus: $isMoneyFieldFocused)
     }
 
-    private func expenseRow(
-        expense: FixedExpense,
-        name: Binding<String>,
-        amount: Binding<Decimal>
-    ) -> some View {
-        VStack(alignment: .leading, spacing: AppSpacing.xs) {
-            HStack(alignment: .lastTextBaseline, spacing: AppSpacing.sm) {
-                TextField("Name", text: name)
-                    .font(.dmSans(.body, weight: .medium))
-                    .multilineTextAlignment(.leading)
-                    .lineLimit(1)
-                    .layoutPriority(1)
-
-                HStack(alignment: .firstTextBaseline, spacing: AppSpacing.xs) {
-                    Text(expenseAmount(expense, for: expenseBasis), format: .currency(code: "USD"))
-                        .font(.dmSans(.title3, weight: .semibold))
-                        .foregroundStyle(.primary)
-                        .monospacedDigit()
-
-                    Text(expenseBasis.suffix)
-                        .font(.dmSans(.caption))
-                        .foregroundStyle(.secondary)
-                }
-                .fixedSize()
-
-                Button(role: .destructive) {
-                    deleteExpense(expense)
-                } label: {
-                    Image(systemName: "trash")
-                        .font(.dmSans(.subheadline, weight: .medium))
-                        .foregroundStyle(Color.leftNegative)
-                        .frame(width: 44, height: 44)
-                        .contentShape(Rectangle())
-                }
-                .buttonStyle(.plain)
-                .accessibilityLabel("Remove \(expense.name)")
-            }
-
-            HStack(spacing: AppSpacing.xs) {
-                Text("Billed \(expense.effectiveCadence.label.lowercased()) at")
-                    .font(.dmSans(.caption))
-                    .foregroundStyle(.secondary)
-
-                MoneyField(value: amount,
-                           unit: .currency,
-                           prominence: .compact,
-                           accessibilityLabel: "\(expense.name) billed amount",
-                           focus: $isMoneyFieldFocused)
-            }
-        }
-        .padding(.vertical, AppSpacing.sm)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .contextMenu {
-            Button("Delete \(expense.name)", systemImage: "trash", role: .destructive) {
-                deleteExpense(expense)
-            }
-        }
-        .accessibilityAction(named: Text("Delete \(expense.name)")) {
-            deleteExpense(expense)
-        }
+    private func presentExpenseEditor(_ expense: FixedExpense? = nil) {
+        newExpenseName = expense?.name ?? ""
+        newExpenseAmount = expense?.amount ?? 0
+        newExpenseCadence = expense?.effectiveCadence ?? .monthly
+        newExpenseStartsOn = expense?.startsOn
+        newExpenseEndsAfter = expense?.endsAfter
+        isExpenseDurationExpanded = false
+        activeExpenseSheet = ActiveExpenseSheet(expense: expense)
     }
 
-    private func expenseAmount(_ expense: FixedExpense, for basis: ExpenseBasis) -> Decimal {
-        switch basis {
-        case .daily:
-            expense.monthlyAmount / Decimal(plan.daysInMonth())
-        case .monthly:
-            expense.monthlyAmount
-        case .annually:
-            expense.monthlyAmount * 12
+    private func saveExpense(_ expense: FixedExpense?) {
+        guard canSaveExpense else { return }
+        let trimmedName = newExpenseName.trimmingCharacters(in: .whitespacesAndNewlines)
+        if let expense {
+            expense.name = trimmedName
+            expense.amount = newExpenseAmount
+            expense.cadence = newExpenseCadence
+            expense.startsOn = newExpenseStartsOn
+            expense.endsAfter = newExpenseEndsAfter
+        } else {
+            plan.fixedExpenses.append(
+                FixedExpense(name: trimmedName,
+                             amount: newExpenseAmount,
+                             cadence: newExpenseCadence,
+                             startsOn: newExpenseStartsOn,
+                             endsAfter: newExpenseEndsAfter)
+            )
         }
+        activeExpenseSheet = nil
     }
 
-    private func addExpense() {
-        guard !newExpenseName.isEmpty, newExpenseAmount > 0 else { return }
-        plan.fixedExpenses.append(FixedExpense(name: newExpenseName, amount: newExpenseAmount, cadence: newExpenseCadence))
-        isAddingExpense = false
+    private var canSaveExpense: Bool {
+        !newExpenseName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+            && newExpenseAmount > 0
+    }
+
+    private func previewFixedTotal(replacing expense: FixedExpense?) -> Decimal {
+        let original = expense?.covers(month: plan.monthStart) == true
+            ? expense?.monthlyAmount ?? 0
+            : 0
+        let draftCoversMonth = (newExpenseStartsOn.map { $0 <= plan.monthStart } ?? true)
+            && (newExpenseEndsAfter.map { plan.monthStart <= $0 } ?? true)
+        let draft = draftCoversMonth
+            ? newExpenseAmount / newExpenseCadence.divisorToMonthly
+            : 0
+        return plan.fixedTotal - original + draft
     }
 
     private func deleteExpense(_ expense: FixedExpense) {
@@ -1082,6 +1304,21 @@ struct PlanView: View {
     // keep one source until a replacement exists rather than resurrecting it.
     private var canDeleteIncome: Bool {
         plan.incomeSources.count > 1 || plan.monthlyIncome <= 0
+    }
+
+    private func expenseCadenceLabel(_ expense: FixedExpense) -> String? {
+        guard expense.effectiveCadence != .monthly else { return nil }
+        return "Billed \(expense.effectiveCadence.label.lowercased())"
+    }
+
+    private func windowNote(startsOn: Date?, endsAfter: Date?) -> String? {
+        if let startsOn, startsOn > plan.monthStart {
+            return "Starts \(startsOn.formatted(.dateTime.month(.abbreviated).year()))"
+        }
+        if let endsAfter, endsAfter > plan.monthStart {
+            return "Through \(endsAfter.formatted(.dateTime.month(.abbreviated).year()))"
+        }
+        return nil
     }
 }
 

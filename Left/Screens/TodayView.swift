@@ -11,6 +11,8 @@ struct TodayView: View {
     @Environment(\.modelContext) private var modelContext
     @Environment(\.scenePhase) private var scenePhase
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.setAddAction) private var setAddAction
+    @Environment(\.clearAddAction) private var clearAddAction
     @ScaledMetric private var heroSize = 44
     // Scales so the block grows with the type inside it instead of clipping.
     @ScaledMetric private var heroBlockHeight: CGFloat = 220
@@ -63,10 +65,6 @@ struct TodayView: View {
             VStack(spacing: 0) {
                 heroSection(plan: plan, snapshot: snapshot)
                 transactionsSection(snapshot?.transactions ?? [])
-
-                if let plan {
-                    bottomControls(plan: plan)
-                }
             }
             .contentShape(Rectangle())
             .simultaneousGesture(daySwipeGesture)
@@ -96,6 +94,19 @@ struct TodayView: View {
             guard newPhase == .active else { return }
             // Session-scoped: the explanation is for the jump you just watched.
             recalcNote = nil
+        }
+        .onAppear {
+            setAddAction(
+                AddAction(
+                    id: "today.add-spending",
+                    accessibilityLabel: "Add spending",
+                    prominence: .primary,
+                    perform: { activeSpendingSheet = ActiveSpendingSheet() }
+                )
+            )
+        }
+        .onDisappear {
+            clearAddAction("today.add-spending")
         }
     }
 
@@ -273,7 +284,7 @@ struct TodayView: View {
             incomeConfirmRow(source)
         } else if let delta = snapshot.yesterdayDelta, delta > 0 {
             chip(
-                "+\(delta.formatted(.currency(code: "USD"))) saved yesterday",
+                "+\(delta.formatted(.currency(code: "USD"))) left from yesterday",
                 textColor: .leftPositive,
                 backgroundColor: .leftPositiveFill
             )
@@ -378,8 +389,11 @@ struct TodayView: View {
                 .buttonStyle(.plain)
                 .listRowInsets(EdgeInsets())
                 .listRowBackground(Color(uiColor: .systemBackground))
-                .alignmentGuide(.listRowSeparatorLeading) { dimensions in
-                    dimensions[.leading]
+                .alignmentGuide(.listRowSeparatorLeading) { _ in
+                    0
+                }
+                .alignmentGuide(.listRowSeparatorTrailing) { dimensions in
+                    dimensions.width
                 }
                 .swipeActions(edge: .trailing) {
                     Button(role: .destructive) {
@@ -405,9 +419,11 @@ struct TodayView: View {
                 .frame(width: 28)
             if let note = tx.note, !note.isEmpty {
                 Text(note)
+                    .font(.dmSans(.body, weight: .medium))
                     .lineLimit(2)
             } else {
-                    Text(tx.category.label)
+                Text(tx.category.label)
+                    .font(.dmSans(.body, weight: .medium))
                     .foregroundStyle(.secondary)
                     .lineLimit(1)
             }
@@ -419,38 +435,6 @@ struct TodayView: View {
         .padding(.vertical, AppSpacing.md)
         .frame(maxWidth: .infinity, alignment: .leading)
         .contentShape(Rectangle())
-    }
-
-    // MARK: - Bottom controls
-
-    private func bottomControls(plan: MonthPlan) -> some View {
-        addButton
-        .frame(maxWidth: .infinity, alignment: .trailing)
-        .padding(.horizontal, AppSpacing.xl)
-        .padding(.top, AppSpacing.md)
-        .padding(.bottom, AppSpacing.sm)
-        .background(Color(uiColor: .systemBackground))
-    }
-
-    // MARK: - Add button
-
-    // Logging spending is the only action this screen offers, so the button
-    // carries no label — a 56pt circle in the bottom-right corner, where a
-    // thumb already rests. The glyph is a fixed size rather than a scaled one:
-    // it is an icon inside a fixed circle, and scaling it would clip.
-    private var addButton: some View {
-        Button {
-            activeSpendingSheet = ActiveSpendingSheet()
-        } label: {
-            Image(systemName: "plus")
-                .font(.system(size: 24, weight: .semibold))
-                .foregroundStyle(Color(uiColor: .systemBackground))
-                .frame(width: 56, height: 56)
-                .background(Color.primary)
-                .clipShape(Circle())
-        }
-        .buttonStyle(.plain)
-        .accessibilityLabel("Add spending")
     }
 
     private func delete(_ transaction: Transaction) {
@@ -492,7 +476,7 @@ struct TodayView: View {
 
         return DaySnapshot(
             dailyRate: rate,
-            remaining: rate * Decimal(day) - spentAsOfBalance,
+            remaining: rate * Decimal(day) - spentAsOfBalance + plan.carriedIn,
             spent: spentOnDisplayedDay,
             yesterdayDelta: day > 1 ? rate - spentOnPreviousDay : nil,
             transactions: displayedTransactions
