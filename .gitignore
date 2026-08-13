@@ -1,0 +1,14 @@
+# macOS
+.DS_Store
+
+# Xcode build products and local caches
+build/
+DerivedData/
+*.xcuserstate
+
+# Per-user Xcode state: which scheme you last selected, breakpoints, window
+# layout. Never anyone else's business, and it changes on every launch.
+xcuserdata/
+
+# Shared schemes are deliberately NOT ignored — they define how the app is
+# built, so they belong in version control.
