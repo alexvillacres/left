@@ -252,10 +252,24 @@ private struct DayTransactionsSheet: View {
     let day: Int
 
     @Environment(\.modelContext) private var modelContext
-    @State private var editingTransaction: Transaction?
+    @State private var activeSpendingSheet: ActiveSpendingSheet?
+
+    private struct ActiveSpendingSheet: Identifiable {
+        let id = UUID()
+        var transaction: Transaction?
+    }
 
     private var date: Date {
         Calendar.current.date(byAdding: .day, value: day - 1, to: plan.monthStart)!
+    }
+
+    private var transactionDate: Date {
+        let calendar = Calendar.current
+        let currentTime = calendar.dateComponents([.hour, .minute, .second], from: .now)
+        return calendar.date(bySettingHour: currentTime.hour ?? 0,
+                             minute: currentTime.minute ?? 0,
+                             second: currentTime.second ?? 0,
+                             of: date) ?? date
     }
 
     private var transactions: [Transaction] {
@@ -274,7 +288,7 @@ private struct DayTransactionsSheet: View {
                 } else {
                     List(transactions) { tx in
                         Button {
-                            editingTransaction = tx
+                            activeSpendingSheet = ActiveSpendingSheet(transaction: tx)
                         } label: {
                             HStack(spacing: AppSpacing.md) {
                                 Image(systemName: tx.category.symbol)
@@ -321,11 +335,34 @@ private struct DayTransactionsSheet: View {
             .navigationTitle(date.formatted(.dateTime.weekday(.abbreviated).month(.abbreviated).day()))
             .navigationBarTitleDisplayMode(.inline)
             .background(Color(uiColor: .systemBackground).ignoresSafeArea())
-
+            .toolbar {
+                if #available(iOS 26.0, *) {
+                    addSpendingToolbarItem
+                        .sharedBackgroundVisibility(.hidden)
+                } else {
+                    addSpendingToolbarItem
+                }
+            }
         }
         .presentationDetents([.medium, .large])
-        .fullScreenCover(item: $editingTransaction) { transaction in
-            AddSpendingView(plan: plan, transaction: transaction)
+        .fullScreenCover(item: $activeSpendingSheet) { sheet in
+            AddSpendingView(plan: plan, date: transactionDate, transaction: sheet.transaction)
+        }
+    }
+
+    private var addSpendingToolbarItem: some ToolbarContent {
+        ToolbarItem(placement: .topBarTrailing) {
+            Button {
+                activeSpendingSheet = ActiveSpendingSheet()
+            } label: {
+                Image(systemName: "plus")
+                    .font(.dmSans(.subheadline, weight: .medium))
+                    .frame(width: 44, height: 44)
+                    .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .foregroundStyle(.primary)
+            .accessibilityLabel("Add spending for \(date.formatted(.dateTime.month(.wide).day()))")
         }
     }
 
