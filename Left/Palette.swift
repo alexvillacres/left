@@ -31,6 +31,15 @@ extension Color {
     static let leftNegativeFill = Color.dynamic(light: 0xF7DEDD, dark: 0x3C1F1E)
     static let leftNeutralFill = Color.dynamic(light: Ramp.neutral100, dark: 0x2C2C2C)
 
+    // MARK: - Tab bar
+
+    // The capsule reads as elevated, not translucent. In light mode it matches
+    // the page and separates on shadow alone; shadows vanish against black, so
+    // dark mode lifts the surface instead.
+    static let leftTabBarSurface = Color.dynamic(light: 0xFFFFFF, dark: 0x1C1C1C)
+    static let leftTabBarBorder = Color.dynamic(light: Ramp.neutral100, dark: 0x2C2C2C)
+    static let leftTabActiveFill = Color.dynamic(light: Ramp.neutral100, dark: 0x2C2C2C)
+
     // MARK: - Meter
 
     // The fill colors bake in their own blending — callers must not apply
