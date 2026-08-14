@@ -758,20 +758,14 @@ struct PlanView: View {
     }
 
     private var onboardingProgress: some View {
-        VStack(spacing: AppSpacing.md) {
-            Text("SET UP YOUR PLAN")
-                .font(.dmSans(.caption2, weight: .medium))
-                .foregroundStyle(.secondary)
-
-            HStack(spacing: AppSpacing.sm) {
-                ForEach(OnboardingStep.allCases) { step in
-                    Capsule()
-                        .fill(step.rawValue <= onboardingStep.rawValue
-                              ? Color.leftPositive
-                              : Color(uiColor: .tertiarySystemFill))
-                        .frame(maxWidth: .infinity)
-                        .frame(height: 4)
-                }
+        HStack(spacing: AppSpacing.sm) {
+            ForEach(OnboardingStep.allCases) { step in
+                Capsule()
+                    .fill(step.rawValue <= onboardingStep.rawValue
+                          ? Color.leftPositive
+                          : Color(uiColor: .tertiarySystemFill))
+                    .frame(maxWidth: .infinity)
+                    .frame(height: 4)
             }
         }
         .accessibilityElement(children: .ignore)

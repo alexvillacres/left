@@ -21,7 +21,6 @@ struct IncomeSheet: View {
     @Environment(\.dismiss) private var dismiss
     @State private var draftName: String
     @State private var draftAmount: Decimal
-    @State private var draftCadence: IncomeCadence
     @State private var draftStartsOn: Date?
     @State private var draftEndsAfter: Date?
     @State private var isDurationExpanded = false
@@ -36,7 +35,6 @@ struct IncomeSheet: View {
         self.onSave = onSave
         _draftName = State(initialValue: source?.name ?? "")
         _draftAmount = State(initialValue: source?.amount ?? 0)
-        _draftCadence = State(initialValue: source?.effectiveCadence ?? .fixed)
         _draftStartsOn = State(initialValue: source?.startsOn)
         _draftEndsAfter = State(initialValue: source?.endsAfter)
     }
@@ -136,16 +134,6 @@ struct IncomeSheet: View {
                            focus: $isAmountFocused)
             }
 
-            PlanSheetRow("Repeats") {
-                Picker("Income cadence", selection: $draftCadence) {
-                    ForEach(IncomeCadence.allCases) { cadence in
-                        Text(cadence.label).tag(cadence)
-                    }
-                }
-                .pickerStyle(.menu)
-                .tint(Color.leftAccent)
-            }
-
             MonthDurationPicker(startsOn: $draftStartsOn,
                                 endsAfter: $draftEndsAfter,
                                 isExpanded: $isDurationExpanded)
@@ -175,17 +163,22 @@ struct IncomeSheet: View {
         }
 
         if let source {
+            let amountChanged = max(0, draftAmount) != source.amount
             source.name = trimmedName
-            source.cadence = draftCadence
             source.startsOn = draftStartsOn
             source.endsAfter = draftEndsAfter
-            source.affirm(amount: draftAmount)
+            if source.inherited && amountChanged {
+                source.cadence = .variable
+            }
+            if source.effectiveCadence == .variable {
+                source.affirm(amount: draftAmount)
+            } else {
+                source.amount = max(0, draftAmount)
+            }
         } else {
             plan.incomeSources.append(
                 IncomeSource(name: trimmedName,
                              amount: draftAmount,
-                             cadence: draftCadence,
-                             affirmedAt: .now,
                              startsOn: draftStartsOn,
                              endsAfter: draftEndsAfter)
             )

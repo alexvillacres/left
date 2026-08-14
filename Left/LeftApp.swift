@@ -122,7 +122,7 @@ struct AppRoot: View {
         .background(Color(uiColor: .systemBackground).ignoresSafeArea())
         .fullScreenCover(item: $onboardingPlan) { plan in
             NavigationStack {
-                PlanView(plan: plan, isOnboarding: true) {
+                OnboardingView(plan: plan) {
                     try? modelContext.save()
                     hasCompletedOnboarding = true
                     onboardingPlan = nil

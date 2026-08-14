@@ -94,6 +94,7 @@ final class MonthPlan {
             return IncomeSource(name: $0.name,
                                 amount: $0.amount,
                                 cadence: $0.effectiveCadence,
+                                inherited: true,
                                 startsOn: $0.startsOn,
                                 endsAfter: $0.endsAfter)
         }
@@ -182,6 +183,7 @@ final class IncomeSource {
     var amount: Decimal
     var cadence: IncomeCadence?
     var affirmedAt: Date?
+    var inherited: Bool = false
     var startsOn: Date? {
         didSet {
             let normalized = startsOn.map { Calendar.current.leftMonthStart(for: $0) }
@@ -200,12 +202,14 @@ final class IncomeSource {
          amount: Decimal,
          cadence: IncomeCadence = .fixed,
          affirmedAt: Date? = nil,
+         inherited: Bool = false,
          startsOn: Date? = nil,
          endsAfter: Date? = nil) {
         self.name = name
         self.amount = amount
         self.cadence = cadence
         self.affirmedAt = affirmedAt
+        self.inherited = inherited
         self.startsOn = startsOn.map { Calendar.current.leftMonthStart(for: $0) }
         self.endsAfter = endsAfter.map { Calendar.current.leftMonthStart(for: $0) }
     }
