@@ -548,11 +548,36 @@ extension MonthPlan {
         incomeTotal - fixedTotal - savingsAmount
     }
 
+    var firstActiveDay: Int {
+        let calendar = Calendar.current
+        let days = daysInMonth(calendar: calendar)
+        let nextMonth = calendar.date(byAdding: .month, value: 1, to: monthStart)!
+
+        if effectiveCreatedAt < monthStart { return 1 }
+        if effectiveCreatedAt >= nextMonth { return days }
+        return min(max(calendar.component(.day, from: effectiveCreatedAt), 1), days)
+    }
+
+    func earnedDays(through date: Date, calendar: Calendar = .current) -> Int {
+        let elapsed = calendar.component(.day, from: date) - firstActiveDay + 1
+        return min(max(elapsed, 0), daysInMonth(calendar: calendar))
+    }
+
+    // A partial first month keeps the normal daily rate but grants it only for
+    // days when the plan existed, instead of inflating it across fewer days.
+    var plannedSpend: Decimal {
+        if firstActiveDay == 1 { return monthlySpendable }
+        let calendar = Calendar.current
+        let nextMonth = calendar.date(byAdding: .month, value: 1, to: monthStart)!
+        let monthEnd = nextMonth.addingTimeInterval(-1)
+        return dailyRate * Decimal(earnedDays(through: monthEnd, calendar: calendar))
+    }
+
     // An untouched cushion must survive another boundary, while every transaction
     // still gets the chance to contribute, including one late on the final day.
     func endingSurplus(calendar: Calendar = .current) -> Decimal {
         let nextMonth = calendar.date(byAdding: .month, value: 1, to: monthStart)!
-        return monthlySpendable
+        return plannedSpend
             - spent(asOf: nextMonth.addingTimeInterval(-1))
             + carriedIn
     }
@@ -594,18 +619,23 @@ extension MonthPlan {
     // a dollar therefore removes exactly a dollar here, with no retroactive rate
     // or calendar-tint changes.
     func remainingToday(on date: Date = .now, calendar: Calendar = .current) -> Decimal {
-        let day = calendar.component(.day, from: date)   // 1-based
-        let earned = dailyRate * Decimal(day)
-        return earned - spent(asOf: date) + carriedIn
+        remainingToday(on: date, spentAsOf: spent(asOf: date), calendar: calendar)
+    }
+
+    func remainingToday(on date: Date,
+                        spentAsOf: Decimal,
+                        calendar: Calendar = .current) -> Decimal {
+        let earned = dailyRate * Decimal(earnedDays(through: date, calendar: calendar))
+        return earned - spentAsOf + carriedIn
     }
 
     // Shown as the "+$27 rolled over" chip: how far ahead (or behind)
     // you were entering today.
     func carryover(into date: Date = .now, calendar: Calendar = .current) -> Decimal {
-        let day = calendar.component(.day, from: date)
-        guard day > 1 else { return 0 }
+        let earnedDays = earnedDays(through: date, calendar: calendar)
+        guard earnedDays > 1 else { return 0 }
         let startOfToday = calendar.startOfDay(for: date)
-        let earnedThroughYesterday = dailyRate * Decimal(day - 1)
+        let earnedThroughYesterday = dailyRate * Decimal(earnedDays - 1)
         let spentThroughYesterday = transactions
             .filter { $0.date < startOfToday }
             .reduce(0) { $0 + $1.amount }
@@ -613,17 +643,23 @@ extension MonthPlan {
     }
 
     // Shown as the "+$12 saved yesterday" chip: yesterday's daily budget
-    // minus what yesterday actually cost. Nil on day 1 — there is no
-    // yesterday in this month to report on.
+    // minus what yesterday actually cost. A new plan has no prior budgeting
+    // day to report even when the calendar is already part-way through a month.
     func yesterdayDelta(for date: Date = .now, calendar: Calendar = .current) -> Decimal? {
-        let day = calendar.component(.day, from: date)
-        guard day > 1 else { return nil }
         let startOfToday = calendar.startOfDay(for: date)
         let startOfYesterday = calendar.date(byAdding: .day, value: -1, to: startOfToday)!
         let spentYesterday = transactions
             .filter { $0.date >= startOfYesterday && $0.date < startOfToday }
             .reduce(0) { $0 + $1.amount }
-        return dailyRate - spentYesterday
+        return yesterdayDelta(for: date, spentOnPreviousDay: spentYesterday, calendar: calendar)
+    }
+
+    func yesterdayDelta(for date: Date,
+                        spentOnPreviousDay: Decimal,
+                        calendar: Calendar = .current) -> Decimal? {
+        let day = calendar.component(.day, from: date)
+        guard day > firstActiveDay else { return nil }
+        return dailyRate - spentOnPreviousDay
     }
 
     // Month screen: net position for the "you're $41 ahead" line.
@@ -634,11 +670,15 @@ extension MonthPlan {
     // Projected savings if current pace holds: goal + whatever surplus
     // exists at month end. Powers the end-of-month summary.
     func projectedSavings(on date: Date = .now, calendar: Calendar = .current) -> Decimal {
-        let day = calendar.component(.day, from: date)
-        let remaining = daysInMonth() - day
-        let pace = day > 0 ? spent(asOf: date) / Decimal(day) : 0
-        let projectedSpend = spent(asOf: date) + pace * Decimal(remaining)
-        return savingsAmount + (monthlySpendable - projectedSpend)
+        let elapsed = earnedDays(through: date, calendar: calendar)
+        let nextMonth = calendar.date(byAdding: .month, value: 1, to: monthStart)!
+        let monthEnd = nextMonth.addingTimeInterval(-1)
+        let totalEarned = earnedDays(through: monthEnd,
+                                    calendar: calendar)
+        let spentToDate = spent(asOf: date)
+        let pace = elapsed > 0 ? spentToDate / Decimal(elapsed) : 0
+        let projectedSpend = spentToDate + pace * Decimal(max(0, totalEarned - elapsed))
+        return savingsAmount + (plannedSpend - projectedSpend)
     }
 }
 

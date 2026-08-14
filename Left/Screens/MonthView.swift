@@ -91,7 +91,7 @@ struct MonthView: View {
             HStack(alignment: .firstTextBaseline, spacing: AppSpacing.xs) {
                 MoneyText(amount: plan.spent(asOf: evaluationDate))
                     .font(.dmSans(.title2, weight: .semibold))
-                Text("of \(plan.monthlySpendable.formatted(.currency(code: "USD"))) spent")
+                Text("of \(plan.plannedSpend.formatted(.currency(code: "USD"))) spent")
                     .font(.dmSans(.subheadline))
                     .foregroundStyle(.secondary)
                     .lineLimit(1)
@@ -189,40 +189,46 @@ struct MonthView: View {
                     case .blank:
                         Color.clear.frame(minHeight: 44)
                     case .day(let day):
+                        let isUnavailable = day < plan.firstActiveDay || day > today
                         dayCell(day: day,
                                 spent: spent[day] ?? 0,
                                 dailyRate: plan.dailyRate,
-                                isFuture: day > today)
+                                isUnavailable: isUnavailable)
                     }
                 }
             }
         }
     }
 
-    private func dayCell(day: Int, spent: Decimal, dailyRate: Decimal, isFuture: Bool) -> some View {
+    private func dayCell(day: Int,
+                         spent: Decimal,
+                         dailyRate: Decimal,
+                         isUnavailable: Bool) -> some View {
         Button {
             selectedDay = DaySelection(day: day)
         } label: {
             Text("\(day)")
                 .font(.dmSans(.subheadline, weight: .medium))
                 .monospacedDigit()
-                .foregroundStyle(isFuture ? .secondary : .primary)
+                .foregroundStyle(isUnavailable ? .secondary : .primary)
                 .lineLimit(1)
                 .minimumScaleFactor(0.75)
                 .frame(maxWidth: .infinity)
                 .frame(minHeight: 44)
-                .background(tint(spent: spent, dailyRate: dailyRate, isFuture: isFuture))
+                .background(tint(spent: spent,
+                                 dailyRate: dailyRate,
+                                 isUnavailable: isUnavailable))
                 .clipShape(RoundedRectangle(cornerRadius: 8))
         }
         .buttonStyle(.plain)
-        .disabled(isFuture)
-        .accessibilityLabel(isFuture
+        .disabled(isUnavailable)
+        .accessibilityLabel(isUnavailable
             ? "Day \(day)"
             : "Day \(day), spent \(spent.formatted(.currency(code: "USD")))")
     }
 
-    private func tint(spent: Decimal, dailyRate: Decimal, isFuture: Bool) -> Color {
-        if isFuture { return .clear }
+    private func tint(spent: Decimal, dailyRate: Decimal, isUnavailable: Bool) -> Color {
+        if isUnavailable { return .clear }
         if spent < dailyRate { return .leftPositive.opacity(0.16) }
         if spent <= dailyRate * Decimal(1.1) { return .leftWarning.opacity(0.18) }
         return .leftNegative.opacity(0.16)

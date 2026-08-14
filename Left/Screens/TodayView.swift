@@ -447,7 +447,6 @@ struct TodayView: View {
     private func makeSnapshot(for plan: MonthPlan) -> DaySnapshot {
         let calendar = Calendar.current
         let rate = plan.dailyRate
-        let day = calendar.component(.day, from: balanceDate)
         let startOfDisplayedDay = calendar.startOfDay(for: displayedDate)
         let startOfPreviousDay = calendar.date(byAdding: .day, value: -1, to: startOfDisplayedDay)
 
@@ -475,9 +474,13 @@ struct TodayView: View {
 
         return DaySnapshot(
             dailyRate: rate,
-            remaining: rate * Decimal(day) - spentAsOfBalance + plan.carriedIn,
+            remaining: plan.remainingToday(on: balanceDate,
+                                           spentAsOf: spentAsOfBalance,
+                                           calendar: calendar),
             spent: spentOnDisplayedDay,
-            yesterdayDelta: day > 1 ? rate - spentOnPreviousDay : nil,
+            yesterdayDelta: plan.yesterdayDelta(for: displayedDate,
+                                                spentOnPreviousDay: spentOnPreviousDay,
+                                                calendar: calendar),
             transactions: displayedTransactions
         )
     }
