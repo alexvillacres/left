@@ -49,7 +49,7 @@ item still needs a decision or a real-device test._
 
 - [ ] Add the always-visible Plan derivation:
       `income − fixed expenses − savings = spendable ÷ days = daily rate`.
-      **Status:** `DerivationLine` exists and is fully built (including a
+      **Status:** `DerivationBar` exists and is fully built (including a
       VoiceOver label and live previewing of unsaved values), but it is only
       shown inside the income sheet and the recurring-expense sheet. The Plan
       root shows three summary rows with no pinned derivation, and the savings
@@ -110,7 +110,7 @@ item still needs a decision or a real-device test._
       calendar cells use `minimumScaleFactor`. Not yet tested at AX sizes.
 - [ ] Test VoiceOver navigation and spoken currency values.
       **Status:** ~37 `accessibilityLabel` calls across the app, spoken currency
-      in the derivation line and calendar cells, and named accessibility actions
+      in the derivation bar and calendar cells, and named accessibility actions
       for day/month navigation. Needs a real VoiceOver run.
 - [ ] Make calendar outcomes understandable without relying only on color.
       **Status:** cell tint is the only visual signal; the spent amount is

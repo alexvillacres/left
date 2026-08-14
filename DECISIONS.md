@@ -331,3 +331,18 @@ makes divergence impossible while keeping both filenames working, so any tool
 looking for either name still finds the brief.
 
 **Constrains:** Edit `AGENTS.md`. Never replace the symlink with a real file.
+
+### 020. Action sheets own an opaque system background
+**Date:** 2026-08-14 · **Status:** Active
+**Where:** `Left/Components/DerivationBar.swift`, Plan editor sheets
+
+Action sheets use the app's custom header and paint
+`Color(uiColor: .systemBackground)` edge to edge, including an explicit solid
+presentation background.
+
+**Why:** Allowing the system presentation or navigation surface to show through
+introduces Apple's glass treatment, which does not match the app's quiet,
+solid-surface sheet language.
+
+**Constrains:** New action sheets must provide their own opaque background and
+must not rely on built-in glass navigation chrome for their primary surface.

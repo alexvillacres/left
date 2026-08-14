@@ -124,7 +124,7 @@ struct PlanView: View {
                 .padding(.bottom, AppSpacing.xl)
             }
 
-            planDerivationFooter
+            planDerivationBarFooter
         }
         .navigationTitle("Plan")
         .navigationBarTitleDisplayMode(.inline)
@@ -312,7 +312,7 @@ struct PlanView: View {
                 .padding(.bottom, AppSpacing.xl)
             }
 
-            planDerivationFooter
+            planDerivationBarFooter
         }
         .background(Color(uiColor: .systemBackground).ignoresSafeArea())
         .navigationTitle("")
@@ -623,35 +623,12 @@ struct PlanView: View {
 
     // MARK: - Derivation
 
-    private var planDerivationFooter: some View {
-        let income = plan.incomeTotal
-        let savings = plan.savingsAmount
-        let spendable = income - plan.fixedTotal - savings
-        let dailyRate = spendable / Decimal(plan.daysInMonth())
-        let equation = "\(income.formatted(wholeDollarFormat)) − \(plan.fixedTotal.formatted(wholeDollarFormat)) − \(savings.formatted(wholeDollarFormat)) = \(spendable.formatted(wholeDollarFormat)) ÷ \(plan.daysInMonth()) days"
-        let rate = "\(dailyRate.formatted(dailyDollarFormat))/day"
-
-        return VStack(alignment: .leading, spacing: AppSpacing.xxs) {
-            Text(equation)
-                .font(.dmSans(.caption))
-                .foregroundStyle(.secondary)
-                .monospacedDigit()
-                .lineLimit(1)
-                .minimumScaleFactor(0.72)
-
-            Text(rate)
-                .font(.dmSans(.title3, weight: .bold))
-                .foregroundStyle(.primary)
-                .monospacedDigit()
-                .contentTransition(.numericText())
-        }
-        .frame(maxWidth: .infinity, alignment: .leading)
+    private var planDerivationBarFooter: some View {
+        DerivationBar(plan: plan)
         .padding(.horizontal, AppSpacing.xl)
         .padding(.vertical, AppSpacing.md)
         .background(Color(uiColor: .systemBackground))
         .overlay(alignment: .top) { Divider() }
-        .accessibilityElement(children: .ignore)
-        .accessibilityLabel("Income \(income.formatted(wholeDollarFormat)), minus fixed expenses \(plan.fixedTotal.formatted(wholeDollarFormat)), minus savings \(savings.formatted(wholeDollarFormat)), leaves \(spendable.formatted(wholeDollarFormat)) across \(plan.daysInMonth()) days, or \(rate).")
     }
 
     private var wholeDollarFormat: Decimal.FormatStyle.Currency {
@@ -1171,7 +1148,9 @@ struct PlanView: View {
                                                 isExpanded: $isExpenseDurationExpanded)
                         }
 
-                        DerivationLine(plan: plan, fixedTotal: previewFixedTotal(replacing: expense))
+                        DerivationBar(plan: plan,
+                                      fixedTotal: previewFixedTotal(replacing: expense),
+                                      showsDetails: false)
                     }
                     .padding(.horizontal, AppSpacing.xl)
                     .padding(.top, AppSpacing.xl)

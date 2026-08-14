@@ -348,7 +348,7 @@ extension MonthPlan {
         savingsAmount(for: incomeTotal)
     }
 
-    // Used by DerivationLine while an income sheet is previewing a draft. All
+    // Used by DerivationBar while an income sheet is previewing a draft. All
     // percent goals resolve against that draft, not the persisted income.
     func savingsAmount(for income: Decimal) -> Decimal {
         if !savingsGoals.isEmpty {

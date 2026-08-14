@@ -82,7 +82,7 @@ Do not reach for "expense."
   expense"; onboarding eyebrow → "RECURRING EXPENSES"; empty state → "No
   recurring expenses added"; zero-budget warning now says "adjust your recurring
   expenses"; amount field accessibility label → "Recurring expense amount"
-- `DerivationLine` — accessibility label "minus fixed expenses" → "minus
+- `DerivationBar` — accessibility label "minus fixed expenses" → "minus
   recurring expenses"
 - `IncomeSheet` — comment reference to the old sheet name
 

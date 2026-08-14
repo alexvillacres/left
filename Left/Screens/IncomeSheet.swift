@@ -77,7 +77,7 @@ struct IncomeSheet: View {
                     VStack(alignment: .leading, spacing: AppSpacing.lg) {
                         header
                         fields
-                        DerivationLine(plan: plan, income: previewIncome)
+                        DerivationBar(plan: plan, income: previewIncome, showsDetails: false)
                     }
                     .padding(.horizontal, AppSpacing.xl)
                     .padding(.top, AppSpacing.xl)
