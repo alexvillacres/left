@@ -16,6 +16,7 @@ struct AddSpendingView: View {
     @State private var digits = ""
     @State private var category: Category = .other
     @State private var note = ""
+    @State private var fixedCanvasHeight: CGFloat?
     @FocusState private var isNoteFocused: Bool
     @ScaledMetric private var amountSize = 64
 
@@ -44,75 +45,95 @@ struct AddSpendingView: View {
     }
 
     var body: some View {
-        NavigationStack {
-            VStack(spacing: 0) {
-                Spacer(minLength: AppSpacing.xl)
+        GeometryReader { geometry in
+            Color.clear
+                .overlay(alignment: .top) {
+                    ZStack(alignment: .top) {
+                Color(uiColor: .systemBackground)
 
-                // Amount, note, and category are one group — the things being
-                // described. The keypad below is the instrument you describe
-                // them with. Keeping the flexible space above this group anchors
-                // the whole entry flow to the bottom of the screen.
-                VStack(spacing: AppSpacing.lg) {
-                    HeroMoneyText(amount: amount, size: amountSize)
-                        .foregroundStyle(digits.isEmpty ? Color.secondary : Color.primary)
-                        .contentTransition(.numericText())
-                        .animation(.spring(duration: 0.2), value: amount)
-                        .padding(.horizontal, AppSpacing.xl)
+                // This is a fixed canvas. The system keyboard is allowed to cover
+                // its lower portion instead of changing the VStack's proposed
+                // height and shifting or removing spending-entry content.
+                VStack(spacing: 0) {
+                    Spacer(minLength: AppSpacing.xl)
 
-                    noteRow
-                        .padding(.horizontal, AppSpacing.xl)
+                    // Amount, note, and category are one group — the things being
+                    // described. The keypad below is the instrument you describe
+                    // them with. Keeping the flexible space above this group anchors
+                    // the whole entry flow to the bottom of the screen.
+                    VStack(spacing: AppSpacing.lg) {
+                        HeroMoneyText(amount: amount, size: amountSize)
+                            .foregroundStyle(digits.isEmpty ? Color.secondary : Color.primary)
+                            .contentTransition(.numericText())
+                            .animation(.spring(duration: 0.2), value: amount)
+                            .padding(.horizontal, AppSpacing.xl)
 
-                    // Owns its own horizontal padding so chips scroll edge to
-                    // edge instead of clipping inside an inset container.
-                    categoryChips
-                }
-                .padding(.bottom, AppSpacing.lg)
+                        noteRow
+                            .padding(.horizontal, AppSpacing.xl)
 
-                // Preserve this space while typing so focus and keyboard-safe-area
-                // changes cannot trigger competing layout passes.
-                VStack(spacing: AppSpacing.md) {
-                    NumpadView(onDigit: appendDigit, onBackspace: backspace)
-                    primaryButton
-                    if isEditing {
-                        deleteButton
+                        // Owns its own horizontal padding so chips scroll edge to
+                        // edge instead of clipping inside an inset container.
+                        categoryChips
                     }
+                    .padding(.bottom, AppSpacing.lg)
+
+                    VStack(spacing: AppSpacing.md) {
+                        NumpadView(onDigit: appendDigit, onBackspace: backspace)
+                        primaryButton
+                        if isEditing {
+                            deleteButton
+                        }
+                    }
+                    .padding(.horizontal, AppSpacing.xl)
+                    .padding(.bottom, AppSpacing.sm)
+                    .allowsHitTesting(!isNoteFocused)
+                    .accessibilityHidden(isNoteFocused)
                 }
-                .padding(.horizontal, AppSpacing.xl)
-                .padding(.bottom, AppSpacing.sm)
-                .opacity(isNoteFocused ? 0 : 1)
-                .allowsHitTesting(!isNoteFocused)
-                .accessibilityHidden(isNoteFocused)
+                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+
+                // Keep navigation chrome on the same fixed, keyboard-ignoring
+                // canvas instead of inserting it into the changing safe area.
+                topBar
+                    }
+                    .frame(
+                        width: geometry.size.width,
+                        height: fixedCanvasHeight ?? geometry.size.height,
+                        alignment: .top
+                    )
+                }
+                .onAppear {
+                    fixedCanvasHeight = geometry.size.height
+                }
+                .onChange(of: geometry.size.height) { _, newHeight in
+                    // Adopt real viewport changes such as rotation only while
+                    // the keyboard is absent. Keyboard-driven reductions must
+                    // never become the fixed canvas size.
+                    guard !isNoteFocused else { return }
+                    fixedCanvasHeight = newHeight
+                }
             }
-            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
-            .background(Color(uiColor: .systemBackground))
-            .ignoresSafeArea(.keyboard, edges: .bottom)
-            .toolbar {
-                // Full-screen presentation has no drag-to-dismiss, so an
-                // explicit close control is required, not decorative.
-                ToolbarItem(placement: .topBarLeading) {
-                    Button {
-                        dismiss()
-                    } label: {
-                        Image(systemName: "xmark")
-                            .font(.dmSans(.subheadline, weight: .medium))
-                    }
-                    .foregroundStyle(.secondary)
-                    .accessibilityLabel("Cancel")
-                }
-
-                if showsDateContext {
-                    ToolbarItem(placement: .principal) {
-                        Text(date, format: .dateTime.weekday(.abbreviated).month(.abbreviated).day())
-                            .font(.dmSans(.subheadline, weight: .medium))
-                            .foregroundStyle(.secondary)
-                            .lineLimit(1)
-                    }
-                }
-            }
-        }
+        .ignoresSafeArea(.keyboard, edges: .bottom)
         .onAppear {
             HapticFeedback.prepareLight()
         }
+    }
+
+    private var topBar: some View {
+        HStack {
+            FlatBackButton(accessibilityLabel: "Cancel")
+
+            Spacer()
+        }
+        .overlay {
+            if showsDateContext {
+                Text(date, format: .dateTime.weekday(.abbreviated).month(.abbreviated).day())
+                    .font(.dmSans(.subheadline, weight: .medium))
+                    .foregroundStyle(.secondary)
+                    .lineLimit(1)
+            }
+        }
+        .padding(.horizontal, AppSpacing.xl)
+        .background(Color(uiColor: .systemBackground))
     }
 
     // MARK: - Note

@@ -290,6 +290,9 @@ struct PlanView: View {
         VStack(spacing: 0) {
             ScrollView {
                 VStack(alignment: .leading, spacing: AppSpacing.lg) {
+                    FlatBackButton(accessibilityLabel: "Back")
+                    .accessibilityHint("Returns to Plan")
+
                     HStack(alignment: .firstTextBaseline, spacing: AppSpacing.md) {
                         Text(title)
                             .font(.dmSans(size: BudgetTypography.headingSize, weight: .bold, relativeTo: .title2))
@@ -317,7 +320,7 @@ struct PlanView: View {
         .background(Color(uiColor: .systemBackground).ignoresSafeArea())
         .navigationTitle("")
         .navigationBarTitleDisplayMode(.inline)
-        .toolbar(.visible, for: .navigationBar)
+        .toolbar(.hidden, for: .navigationBar)
     }
 
     // MARK: - Income
