@@ -10,6 +10,16 @@ import SwiftData
 
 @Model
 final class MonthPlan {
+    // Optional at the storage layer so stores created before stable identities
+    // can lightweight-migrate. PersistentStore backfills it before use.
+    var stableID: UUID?
+    var id: UUID {
+        if let stableID { return stableID }
+        let generated = UUID()
+        stableID = generated
+        return generated
+    }
+
     // First day of the month, normalized to startOfDay. Unique per month.
     @Attribute(.unique) var monthStart: Date
 
@@ -68,7 +78,9 @@ final class MonthPlan {
          savingsGoal: Decimal,
          savingsPercent: Decimal? = nil,
          incomeCadence: IncomeCadence? = nil,
-         createdAt: Date? = .now) {
+         createdAt: Date? = .now,
+         id: UUID = UUID()) {
+        self.stableID = id
         self.monthStart = Calendar.current.leftMonthStart(for: monthStart)
         self.monthlyIncome = monthlyIncome
         self.savingsGoal = savingsGoal
@@ -179,6 +191,13 @@ extension MonthPlan {
 
 @Model
 final class IncomeSource {
+    var stableID: UUID?
+    var id: UUID {
+        if let stableID { return stableID }
+        let generated = UUID()
+        stableID = generated
+        return generated
+    }
     var name: String
     var amount: Decimal
     var cadence: IncomeCadence?
@@ -204,7 +223,9 @@ final class IncomeSource {
          affirmedAt: Date? = nil,
          inherited: Bool = false,
          startsOn: Date? = nil,
-         endsAfter: Date? = nil) {
+         endsAfter: Date? = nil,
+         id: UUID = UUID()) {
+        self.stableID = id
         self.name = name
         self.amount = amount
         self.cadence = cadence
@@ -247,6 +268,13 @@ enum SavingsTarget: Equatable {
 final class SavingsGoal {
     static let maxPercent: Decimal = 100
 
+    var stableID: UUID?
+    var id: UUID {
+        if let stableID { return stableID }
+        let generated = UUID()
+        stableID = generated
+        return generated
+    }
     var name: String
 
     // The flat dollar goal. Like MonthPlan's legacy pair, this preserves the
@@ -255,7 +283,8 @@ final class SavingsGoal {
     var percent: Decimal?
     var plan: MonthPlan?
 
-    init(name: String, amount: Decimal, percent: Decimal? = nil) {
+    init(name: String, amount: Decimal, percent: Decimal? = nil, id: UUID = UUID()) {
+        self.stableID = id
         self.name = name
         self.amount = max(0, amount)
         self.percent = percent.map { min(max(0, $0), Self.maxPercent) }
@@ -299,6 +328,13 @@ final class SavingsGoal {
 // because Left can suggest a transfer but cannot make one for the user.
 @Model
 final class SavingsAllocation {
+    var stableID: UUID?
+    var id: UUID {
+        if let stableID { return stableID }
+        let generated = UUID()
+        stableID = generated
+        return generated
+    }
     var name: String
     var amount: Decimal
     var date: Date
@@ -308,7 +344,9 @@ final class SavingsAllocation {
     init(name: String,
          amount: Decimal,
          date: Date = .now,
-         confirmedAt: Date? = nil) {
+         confirmedAt: Date? = nil,
+         id: UUID = UUID()) {
+        self.stableID = id
         self.name = name
         self.amount = amount
         self.date = date
@@ -383,6 +421,13 @@ extension Decimal {
 
 @Model
 final class FixedExpense {
+    var stableID: UUID?
+    var id: UUID {
+        if let stableID { return stableID }
+        let generated = UUID()
+        stableID = generated
+        return generated
+    }
     var name: String
     var amount: Decimal
     var cadence: ExpenseCadence?
@@ -404,7 +449,9 @@ final class FixedExpense {
          amount: Decimal,
          cadence: ExpenseCadence = .monthly,
          startsOn: Date? = nil,
-         endsAfter: Date? = nil) {
+         endsAfter: Date? = nil,
+         id: UUID = UUID()) {
+        self.stableID = id
         self.name = name
         self.amount = amount
         self.cadence = cadence
@@ -465,13 +512,25 @@ extension FixedExpense {
 
 @Model
 final class Transaction {
+    var stableID: UUID?
+    var id: UUID {
+        if let stableID { return stableID }
+        let generated = UUID()
+        stableID = generated
+        return generated
+    }
     var amount: Decimal
     var date: Date
     var category: Category
     var note: String?
     var plan: MonthPlan?
 
-    init(amount: Decimal, date: Date = .now, category: Category = .other, note: String? = nil) {
+    init(amount: Decimal,
+         date: Date = .now,
+         category: Category = .other,
+         note: String? = nil,
+         id: UUID = UUID()) {
+        self.stableID = id
         self.amount = amount
         self.date = date
         self.category = category

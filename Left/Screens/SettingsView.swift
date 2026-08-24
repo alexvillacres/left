@@ -30,6 +30,35 @@ struct SettingsView: View {
                         linkRow(title: "Support",
                                 subtitle: "Questions and feedback",
                                 url: ExternalLink.support)
+
+#if DEBUG
+                        Divider()
+                            .padding(.horizontal, -AppSpacing.xl)
+
+                        NavigationLink {
+                            DataBackupView()
+                        } label: {
+                            HStack(spacing: AppSpacing.md) {
+                                VStack(alignment: .leading, spacing: AppSpacing.xxs) {
+                                    Text("Data backup")
+                                        .font(.dmSans(.body, weight: .medium))
+                                        .foregroundStyle(.primary)
+                                    Text("Export or import a JSON backup")
+                                        .font(.dmSans(.caption))
+                                        .foregroundStyle(.secondary)
+                                }
+                                Spacer(minLength: AppSpacing.sm)
+                                Image(systemName: "chevron.right")
+                                    .font(.caption.weight(.semibold))
+                                    .foregroundStyle(Color(uiColor: .tertiaryLabel))
+                            }
+                            .frame(maxWidth: .infinity)
+                            .frame(minHeight: 44)
+                            .padding(.vertical, AppSpacing.lg)
+                            .contentShape(Rectangle())
+                        }
+                        .buttonStyle(.plain)
+#endif
                     }
 
                     dataNote

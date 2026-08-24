@@ -27,7 +27,42 @@ enum PersistentStore {
     static let configuration = ModelConfiguration(schema: schema, isStoredInMemoryOnly: false)
 
     static func load() -> Result<ModelContainer, Error> {
-        Result { try ModelContainer(for: schema, configurations: [configuration]) }
+        Result {
+            let container = try ModelContainer(for: schema, configurations: [configuration])
+            try backfillStableIDs(in: container)
+            return container
+        }
+    }
+
+    // Stable IDs were introduced after the first stores shipped. Keeping the
+    // persisted column optional lets Core Data add it without manufacturing
+    // one repeated default value for every existing row. This runs before the
+    // container reaches SwiftUI, assigns each legacy object its own UUID, and
+    // commits that one-time migration immediately.
+    private static func backfillStableIDs(in container: ModelContainer) throws {
+        let context = ModelContext(container)
+        var changed = false
+
+        for object in try context.fetch(FetchDescriptor<MonthPlan>()) where object.stableID == nil {
+            object.stableID = UUID(); changed = true
+        }
+        for object in try context.fetch(FetchDescriptor<IncomeSource>()) where object.stableID == nil {
+            object.stableID = UUID(); changed = true
+        }
+        for object in try context.fetch(FetchDescriptor<SavingsGoal>()) where object.stableID == nil {
+            object.stableID = UUID(); changed = true
+        }
+        for object in try context.fetch(FetchDescriptor<SavingsAllocation>()) where object.stableID == nil {
+            object.stableID = UUID(); changed = true
+        }
+        for object in try context.fetch(FetchDescriptor<FixedExpense>()) where object.stableID == nil {
+            object.stableID = UUID(); changed = true
+        }
+        for object in try context.fetch(FetchDescriptor<Transaction>()) where object.stableID == nil {
+            object.stableID = UUID(); changed = true
+        }
+
+        if changed { try context.save() }
     }
 
     // SQLite keeps its write-ahead log beside the store. Leaving those behind
@@ -150,7 +185,7 @@ struct AppRoot: View {
         case .today: TodayView()
         case .month: MonthView()
         case .plan: planTab
-        case .settings: SettingsView()
+        case .settings: NavigationStack { SettingsView() }
         }
     }
 
