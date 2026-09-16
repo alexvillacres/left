@@ -109,6 +109,7 @@ struct LeftApp: App {
 struct AppRoot: View {
     private static let addActionIDs: Set<String> = [
         "today.add-spending",
+        "history.add-spending",
         "plan.income.add",
         "plan.fixed-expenses.add",
         "plan.savings.add",
@@ -140,7 +141,7 @@ struct AppRoot: View {
         .environment(\.setAddAction) { action in
             assert(
                 action.map { Self.addActionIDs.contains($0.id) } ?? true,
-                "Only Today and the three Plan editors may supply a navigation add action."
+                "Only Today, History, and the three Plan editors may supply a navigation add action."
             )
             addAction = action
         }
@@ -183,7 +184,7 @@ struct AppRoot: View {
     private var currentScreen: some View {
         switch selectedTab {
         case .today: TodayView()
-        case .month: MonthView()
+        case .history: HistoryView()
         case .plan: planTab
         case .settings: NavigationStack { SettingsView() }
         }

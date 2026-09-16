@@ -30,7 +30,6 @@ struct TodayView: View {
     private struct DaySnapshot {
         let dailyRate: Decimal
         let remaining: Decimal
-        let spent: Decimal
         let yesterdayDelta: Decimal?
         let transactions: [Transaction]
     }
@@ -243,10 +242,6 @@ struct TodayView: View {
             if let plan, let snapshot {
                 statusChip(plan, snapshot: snapshot)
                     .padding(.top, AppSpacing.sm)
-
-                momentumStrip(snapshot: snapshot)
-                    .padding(.top, AppSpacing.lg)
-                    .padding(.bottom, AppSpacing.lg)
             }
         }
         .frame(maxWidth: .infinity)
@@ -368,13 +363,6 @@ struct TodayView: View {
             .clipShape(Capsule())
     }
 
-    // The hero includes rollover. This meter isolates the displayed day's
-    // spending pace against that day's daily budget.
-    private func momentumStrip(snapshot: DaySnapshot) -> some View {
-        TodayMeter(spent: snapshot.spent, dailyRate: snapshot.dailyRate)
-            .animation(reduceMotion ? nil : .spring(duration: 0.4), value: snapshot.spent)
-    }
-
     // MARK: - Transactions
 
     private func transactionsSection(_ transactions: [Transaction]) -> some View {
@@ -451,7 +439,6 @@ struct TodayView: View {
         let startOfPreviousDay = calendar.date(byAdding: .day, value: -1, to: startOfDisplayedDay)
 
         var spentAsOfBalance: Decimal = 0
-        var spentOnDisplayedDay: Decimal = 0
         var spentOnPreviousDay: Decimal = 0
         var displayedTransactions: [Transaction] = []
 
@@ -460,7 +447,6 @@ struct TodayView: View {
                 spentAsOfBalance += transaction.amount
             }
             if calendar.isDate(transaction.date, inSameDayAs: displayedDate) {
-                spentOnDisplayedDay += transaction.amount
                 displayedTransactions.append(transaction)
             }
             if let startOfPreviousDay,
@@ -477,7 +463,6 @@ struct TodayView: View {
             remaining: plan.remainingToday(on: balanceDate,
                                            spentAsOf: spentAsOfBalance,
                                            calendar: calendar),
-            spent: spentOnDisplayedDay,
             yesterdayDelta: plan.yesterdayDelta(for: displayedDate,
                                                 spentOnPreviousDay: spentOnPreviousDay,
                                                 calendar: calendar),
