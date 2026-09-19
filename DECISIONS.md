@@ -18,13 +18,15 @@ rule of thumb: if the rationale is only relevant when you are looking at that
 exact file, it is a comment. If it would change what you build in a *different*
 file, it belongs here.
 
-Every entry links to the code so this file can never be the only copy.
+Entries identify the relevant implementation. Superseded entries may reference
+files that no longer exist; those paths are historical, not build instructions.
+Current behavior and vocabulary live in [PRODUCT.md](PRODUCT.md).
 
 ## Template
 
 ```markdown
 ### NNN. Short imperative title
-**Date:** YYYY-MM-DD · **Status:** Active | Superseded by NNN | Deferred
+**Date:** YYYY-MM-DD · **Status:** Active | Amended by NNN | Superseded by NNN | Deferred
 **Where:** `Path/To/File.swift`, `Other.swift`
 
 The decision, in one or two sentences.
@@ -61,7 +63,7 @@ data.
 computed from plan + transactions, question the number, not the rule.
 
 ### 002. Cross-month carry is cached, but only as a migration-safe boundary value
-**Date:** 2026-08-05 · **Status:** Active *(reconstructed)*
+**Date:** 2026-08-05 · **Status:** Amended by 023 and 025 *(reconstructed)*
 **Where:** `Left/BudgetModel.swift` — `carriedGross`, `carriedAllocated`,
 `carryAnnouncedAt`
 
@@ -76,11 +78,11 @@ cannot be derived: only the user can decide that part of an inherited surplus
 belongs in savings, so it survives reconciliation by design. `carryAnnouncedAt`
 exists so the prompt is offered once rather than every launch.
 
-**Constrains:** These three are the *only* stored money state. Adding a fourth
-should feel hard.
+**Original constraint (replaced by 023 and 025):** These three were described
+as the only stored money state. Current persistence rules are in those amendments.
 
 ### 003. Snapshot the plan per month
-**Date:** 2026-07-02 · **Status:** Active
+**Date:** 2026-07-02 · **Status:** Amended by 022
 **Where:** `Left/BudgetModel.swift` — `MonthPlan`, `nextMonth()`
 
 One `MonthPlan` record per calendar month, holding its own copy of income,
@@ -90,9 +92,9 @@ expenses, and savings target. Edits apply to the current month only.
 mutable plan would silently rewrite every previous month's daily rate the moment
 you got a raise.
 
-**Constrains:** `nextMonth()` is the one clone path, used for both adjacent
-months and gaps. Per-source affirmation deliberately does not carry — inherited
-variable income has not been vouched for in the new month.
+**Current constraint (022):** `clone(for:)` is the shared clone path, with
+`nextMonth()` delegating to it. Source amount repetition replaces the original
+per-source affirmation rule; past Plan screens remain read-only.
 
 ### 004. Savings target stores both shapes at once
 **Date:** 2026-07-15 · **Status:** Active
@@ -112,8 +114,8 @@ reversible; discarding the unused half would silently destroy what you typed.
 `savingsGoal` directly.
 
 ### 005. Keep legacy scalar fields rather than migrate the store
-**Date:** 2026-08-05 · **Status:** Active *(reconstructed)*
-**Where:** `Left/BudgetModel.swift` — `income`, plan-level `cadence`,
+**Date:** 2026-08-05 · **Status:** Amended by 025 *(reconstructed)*
+**Where:** `Left/BudgetModel.swift` — `monthlyIncome`, plan-level `incomeCadence`,
 plan-level affirmation timestamp
 
 Income became a collection of `IncomeSource`s, and savings became multiple
@@ -124,27 +126,28 @@ before the change, and migrate lazily.
 cosmetic gain. Lazy migration means an old store opens and works, and the
 current month materializes its legacy scalar as an `IncomeSource` when touched.
 
-**Constrains:** New code reads sources, never the scalars. Any field commented
-"legacy" is read-only and awaiting deletion after the first App Store release.
+**Current constraint (025):** Use resolved totals and sources in new features.
+Legacy fields remain for compatibility; the original proposed deletion after
+the first App Store release is not an approved migration deadline.
 
 ### 006. Do not rename the `@Model` types
 **Date:** 2026-07-31 · **Status:** Active
-**Where:** `Left/BudgetModel.swift`, `NAMING.md`
+**Where:** `Left/BudgetModel.swift`, [PRODUCT.md](PRODUCT.md#vocabulary)
 
 `Transaction` and `FixedExpense` keep their names even though the UI now says
 "spending" and "recurring expense."
 
 **Why:** Renaming a SwiftData model class means a store migration. Neither name
 is ever shown to a user, so the translation cost is one row of a table in
-`NAMING.md`; the migration cost is real.
+[PRODUCT.md](PRODUCT.md#vocabulary); the migration cost is real.
 
 ---
 
 ## Vocabulary
 
 ### 007. "Spending" for daily, "recurring expense" for fixed
-**Date:** 2026-07-31 · **Status:** Active
-**Where:** `NAMING.md` (full rationale), all user-facing strings
+**Date:** 2026-07-31 · **Status:** Amended by 026
+**Where:** [PRODUCT.md](PRODUCT.md#vocabulary), all user-facing strings
 
 The unqualified word "expense" belongs to the recurring side only.
 
@@ -156,14 +159,14 @@ mean exactly one thing (`IncomeCadence.fixed` — income that doesn't vary).
 **Constrains:** "Spending" is a mass noun with no singular, so the daily side
 avoids naming an individual item. Destructive action is "Delete", not "Delete
 expense". If a screen ever needs the singular, solve it then — do not reach for
-"expense". See `NAMING.md` for what deliberately did not change.
+"expense". See PRODUCT.md for current vocabulary and model-name mappings.
 
 ---
 
 ## Visual system
 
 ### 008. The palette exposes intent, never hue
-**Date:** 2026-08-04 · **Status:** Active
+**Date:** 2026-08-04 · **Status:** Amended by 021
 **Where:** `Left/Palette.swift`
 
 Raw neutral and fern ramps are `private`. Only semantic, appearance-aware colors
@@ -214,8 +217,8 @@ the outer glyphs. Discrete steps also keep the digits on a known size, which
 matters for the count-down animation.
 
 ### 012. The "+" glyph is the one thing that does not scale with Dynamic Type
-**Date:** 2026-07-31 · **Status:** Active
-**Where:** `Left/Screens/TodayView.swift`, `NAMING.md`
+**Date:** 2026-07-31 · **Status:** Amended by 026
+**Where:** `Left/Screens/TodayView.swift`, [PRODUCT.md](PRODUCT.md#vocabulary)
 
 Fixed `.system(size: 24, weight: .semibold)` rather than the app's scaling
 `.dmSans`.
@@ -225,7 +228,7 @@ This is the only correct place in the app for a non-scaling size — everywhere
 else, a fixed font size is a bug.
 
 ### 013. The today meter replaced the week strip
-**Date:** 2026-08-03 · **Status:** Active *(reconstructed)*
+**Date:** 2026-08-03 · **Status:** Superseded by 021 *(reconstructed)*
 **Where:** `Left/Components/TodayMeter.swift`
 
 **Why:** The strip showed seven days at once on a screen whose entire job is
@@ -288,7 +291,7 @@ same corrupt state.
 logged — on TestFlight it is the only detail a tester can hand back.
 
 ### 017. Settings exists for App Review, not for preferences
-**Date:** 2026-08-11 · **Status:** Active
+**Date:** 2026-08-11 · **Status:** Amended by 024
 **Where:** `Left/Screens/SettingsView.swift`
 
 Nothing on this screen is configurable. It carries the Privacy and Support links
@@ -346,3 +349,112 @@ solid-surface sheet language.
 
 **Constrains:** New action sheets must provide their own opaque background and
 must not rely on built-in glass navigation chrome for their primary surface.
+
+
+## Current product direction
+
+### 021. Organize around Today, Activity, and Plan
+**Date:** 2026-09-19 · **Status:** Active
+**Where:** `Left/Screens/TodayView.swift`, `Left/Screens/ActivityView.swift`,
+`Left/Screens/PlanView.swift`, `Left/Screens/TodayBalanceSheet.swift`
+
+Today answers what is available, Activity records what happened, and Plan
+explains the allowance's basis. The month calendar and Today meter were removed
+on September 16; monthly plan review and the balance explanation followed.
+
+**Why:** The calendar and meter did not earn their space. A readable spending
+history and an explanation on demand support the user's next action without
+adding persistent visual weight to Today.
+
+**Constrains:** Do not restore the meter or calendar from the original brief.
+008's semantic palette principle remains; its meter-specific constraints are
+historical. Today stays focused on the amount, while a tap reveals allowance,
+carry, logged spending, and the resulting balance.
+
+### 022. Ask whether a monthly income amount repeats
+**Date:** 2026-09-19 · **Status:** Active
+**Where:** `Left/BudgetModel.swift` — `clone(for:)`, `needsMonthlyAmount`,
+`Left/Screens/IncomeSheet.swift`, `Left/Screens/PlanView.swift`
+
+Each source either repeats its amount next month or requires a fresh monthly
+amount. Retire the vague “Still expecting?” affirmation flow. Current-month
+Plan is editable and previous monthly plans are available read-only.
+
+**Why:** Confirming an expectation conflates the amount, payment arrival, and
+continued existence of a source. A monthly budgeting amount has a clear role
+without requiring a separate freelancer product or a receipt ledger.
+
+**Constrains:** Repeating amounts clone forward; non-repeating sources clone as
+placeholders and gate the allowance until filled. Preserve stored cadence raw
+values and compatibility fields. An explicitly entered zero is valid and differs
+from a missing amount. Monthly snapshots do not imply an intra-month edit log.
+This replaces 003's per-source affirmation rationale.
+
+### 023. Catch up with one additional spending total
+**Date:** 2026-09-19 · **Status:** Active
+**Where:** `Left/Screens/TodayView.swift`, `Left/Screens/CatchUpView.swift`,
+`Left/Screens/ActivityView.swift`, `Left/BudgetModel.swift`, `Left/DataTransfer.swift`
+
+Offer catch-up from Today, with a prompt after three uncovered days. Store one
+editable transaction with a covered date range and count it on the range's last
+day. It represents spending not already logged.
+
+**Why:** Manual tracking needs a forgiving return path after missed entries.
+Requiring every purchase to be reconstructed makes resuming harder.
+
+**Constrains:** Never spread or duplicate the amount across the covered dates.
+“Nothing spent” records acknowledgement, not spending. The current close action
+also acknowledges the period; different snooze behavior remains an open question.
+`catchUpAcknowledgedThrough` is persisted interaction state, not a daily balance.
+Update backup handling when changing catch-up data.
+
+### 024. Keep JSON backup a debug utility
+**Date:** 2026-08-24 · **Status:** Active *(reconstructed)*
+**Where:** `Left/DataTransfer.swift`, `Left/Screens/DataBackupView.swift`,
+`Left/Screens/SettingsView.swift`
+
+JSON export/import is compiled only in Debug and reached through Settings.
+Settings otherwise remains a small privacy/support utility destination.
+
+**Why:** Development data portability is useful without committing to a public
+transaction-import experience. It does not settle CSV or natural-language import.
+
+**Constrains:** Do not advertise backup as a release feature. 017's absolute
+claim that nothing leaves the device must account for deliberate debug exports;
+its old exception to “no settings” is replaced by current AGENTS.md guidance.
+
+### 025. Accrue from the first active day and preserve compatibility
+**Date:** 2026-09-19 · **Status:** Active *(documented from current implementation)*
+**Where:** `Left/BudgetModel.swift` — `firstActiveDay`, `earnedDays`,
+`plannedSpend`, `endingSurplus`, `Left/LeftApp.swift` — carry reconciliation
+
+A partial first month keeps the normal monthly daily rate and earns it only
+from the first active day. Remaining money includes reconciled cross-month carry,
+less existing user allocation state, and subtracts logged spending.
+
+**Why:** Starting mid-month should not grant fictitious earlier allowances.
+Later history edits should still flow through derived balances and carry.
+
+**Constrains:** 002's original “only stored money state” wording is historical,
+not a ban on the plan, transaction, allocation, and compatibility fields now in
+the model. Do not persist daily balances. Do not delete legacy scalar fields on
+an assumed release deadline from 005; assess store and backup compatibility
+explicitly. Existing allocation data does not establish a current savings-transfer
+UI or decide the open product question.
+
+### 026. Keep current guidance separate from historical rationale
+**Date:** 2026-09-19 · **Status:** Active
+**Where:** `AGENTS.md`, `PRODUCT.md`, `DECISIONS.md`, `APP_STORE_CHECKLIST.md`
+
+AGENTS holds implementation guidance, PRODUCT describes behavior and open
+questions, DECISIONS preserves rationale, and the checklist tracks release
+readiness. Remove GIT_WORKFLOW and fold useful NAMING vocabulary into PRODUCT.
+
+**Why:** The original scaffold brief and dated task notes were contradicting the
+app. A small set of documents with distinct jobs reduces that drift.
+
+**Constrains:** Preserve decision numbers and mark reversals. The singular
+“entry” is acceptable for spending, superseding 007's instruction to avoid a
+noun. 012's historical fixed glyph dimensions are not a universal typography
+exception: use current components, scalable text, and accessible touch targets.
+Keep CLAUDE.md as a symlink to AGENTS.md.
