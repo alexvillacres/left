@@ -109,6 +109,7 @@ struct LeftApp: App {
 struct AppRoot: View {
     private static let addActionIDs: Set<String> = [
         "today.add-spending",
+        "activity.add-spending",
         "plan.income.add",
         "plan.fixed-expenses.add",
         "plan.savings.add",
@@ -121,6 +122,8 @@ struct AppRoot: View {
     @State private var onboardingPlan: MonthPlan?
     @State private var selectedTab: AppTab = .today
     @State private var addAction: AddAction?
+    @State private var selectedPlanMonth: Date?
+    @State private var opensPlanIncome = false
 
     var body: some View {
         // Deliberately not a TabView. TabView does not propagate a bottom
@@ -140,7 +143,7 @@ struct AppRoot: View {
         .environment(\.setAddAction) { action in
             assert(
                 action.map { Self.addActionIDs.contains($0.id) } ?? true,
-                "Only Today and the three Plan editors may supply a navigation add action."
+                "Only Today, Activity, and the three Plan editors may supply a navigation add action."
             )
             addAction = action
         }
@@ -176,27 +179,44 @@ struct AppRoot: View {
             // first prevents an outgoing tab's closure from leaking into the
             // fixed slot while the next destination is being installed.
             addAction = nil
+            if selectedTab != .plan { opensPlanIncome = false }
         }
     }
 
     @ViewBuilder
     private var currentScreen: some View {
         switch selectedTab {
-        case .today: TodayView()
-        case .month: MonthView()
+        case .today:
+            TodayView {
+                selectedPlanMonth = nil
+                opensPlanIncome = true
+                selectedTab = .plan
+            }
+        case .activity: ActivityView()
         case .plan: planTab
-        case .settings: NavigationStack { SettingsView() }
         }
     }
 
     @ViewBuilder
     private var planTab: some View {
-        if let plan = currentPlan ?? allPlans.last {
-            NavigationStack { PlanView(plan: plan) }
+        if let plan = selectedPlan ?? currentPlan ?? allPlans.last {
+            NavigationStack {
+                PlanView(plan: plan, availablePlans: allPlans, onSelectMonth: { month in
+                    selectedPlanMonth = month == currentMonthStart ? nil : month
+                    opensPlanIncome = false
+                    addAction = nil
+                }, opensIncome: opensPlanIncome)
+            }
+            .id(plan.monthStart)
         } else {
             Text("No plan yet")
                 .foregroundStyle(.secondary)
         }
+    }
+
+    private var selectedPlan: MonthPlan? {
+        guard let selectedPlanMonth else { return nil }
+        return allPlans.first { $0.monthStart == selectedPlanMonth }
     }
 
     private var currentPlan: MonthPlan? {

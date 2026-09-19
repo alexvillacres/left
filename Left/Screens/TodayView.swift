@@ -5,11 +5,12 @@ import UIKit
 struct TodayView: View {
     @Query(sort: \MonthPlan.monthStart, order: .reverse) private var plans: [MonthPlan]
     @State private var activeSpendingSheet: ActiveSpendingSheet?
+    @State private var activeCatchUp: ActiveCatchUp?
+    @State private var didHandleForcedCatchUp = false
+    @State private var isShowingBalance = false
     @State private var pastDate: Date? = nil
-    @State private var activeIncomeSheet: ActiveIncomeSheet?
-    @State private var recalcNote: String?
+    var onSetUpIncome: () -> Void = {}
     @Environment(\.modelContext) private var modelContext
-    @Environment(\.scenePhase) private var scenePhase
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.setAddAction) private var setAddAction
     @Environment(\.clearAddAction) private var clearAddAction
@@ -22,15 +23,19 @@ struct TodayView: View {
         var transaction: Transaction?
     }
 
-    private struct ActiveIncomeSheet: Identifiable {
+    private struct ActiveCatchUp: Identifiable {
         let id = UUID()
-        let source: IncomeSource
+        let period: ClosedRange<Date>
+        let transaction: Transaction?
+        let isForcedPrompt: Bool
     }
 
     private struct DaySnapshot {
+        let date: Date
         let dailyRate: Decimal
-        let remaining: Decimal
+        let allowance: Decimal
         let spent: Decimal
+        let remaining: Decimal
         let yesterdayDelta: Decimal?
         let transactions: [Transaction]
     }
@@ -64,6 +69,9 @@ struct TodayView: View {
         NavigationStack {
             VStack(spacing: 0) {
                 heroSection(plan: plan, snapshot: snapshot)
+                if let plan, isToday {
+                    catchUpCard(for: plan)
+                }
                 transactionsSection(snapshot?.transactions ?? [])
             }
             .contentShape(Rectangle())
@@ -81,19 +89,24 @@ struct TodayView: View {
                 AddSpendingView(plan: plan, date: transactionDate, transaction: sheet.transaction)
             }
         }
-        .sheet(item: $activeIncomeSheet) { sheet in
+        .fullScreenCover(item: $activeCatchUp) { catchUp in
             if let plan {
-                IncomeSheet(plan: plan, source: sheet.source) { change in
-                    if change.delta != 0 {
-                        noteRecalculation(change)
+                CatchUpView(plan: plan,
+                            period: catchUp.period,
+                            transaction: catchUp.transaction) {
+                    if catchUp.isForcedPrompt {
+                        didHandleForcedCatchUp = true
                     }
                 }
             }
         }
-        .onChange(of: scenePhase) { _, newPhase in
-            guard newPhase == .active else { return }
-            // Session-scoped: the explanation is for the jump you just watched.
-            recalcNote = nil
+        .sheet(isPresented: $isShowingBalance) {
+            if let snapshot, plan?.needsIncomeSetup == false {
+                TodayBalanceSheet(date: snapshot.date,
+                                  allowance: snapshot.allowance,
+                                  spent: snapshot.spent,
+                                  remaining: snapshot.remaining)
+            }
         }
         .onAppear {
             setAddAction(
@@ -131,6 +144,23 @@ struct TodayView: View {
             }
 
             Spacer()
+
+            if isToday, let plan, let context = catchUpPeriod(for: plan) {
+                Button {
+                    activeCatchUp = ActiveCatchUp(period: context.range,
+                                                   transaction: context.transaction,
+                                                   isForcedPrompt: context.isForcedPrompt)
+                } label: {
+                    Image(systemName: "arrow.uturn.backward.circle")
+                        .font(.dmSans(.subheadline, weight: .medium))
+                        .frame(width: 44, height: 44)
+                        .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .foregroundStyle(.secondary)
+                .accessibilityLabel("Catch up spending")
+                .accessibilityHint("Add one total for spending not already logged")
+            }
 
             dayNavigationButton(systemName: "chevron.left", delta: -1, label: "Previous day")
             dayNavigationButton(systemName: "chevron.right", delta: 1, label: "Next day")
@@ -238,15 +268,15 @@ struct TodayView: View {
                 .frame(minHeight: 44, alignment: .leading)
                 .padding(.bottom, AppSpacing.sm)
 
-            heroAmount(snapshot: snapshot)
+            if let plan, plan.needsIncomeSetup {
+                incomeSetup(plan)
+            } else {
+                heroAmount(snapshot: snapshot)
 
-            if let plan, let snapshot {
-                statusChip(plan, snapshot: snapshot)
-                    .padding(.top, AppSpacing.sm)
-
-                momentumStrip(snapshot: snapshot)
-                    .padding(.top, AppSpacing.lg)
-                    .padding(.bottom, AppSpacing.lg)
+                if let snapshot {
+                    statusChip(snapshot: snapshot)
+                        .padding(.top, AppSpacing.sm)
+                }
             }
         }
         .frame(maxWidth: .infinity)
@@ -258,10 +288,25 @@ struct TodayView: View {
     @ViewBuilder
     private func heroAmount(snapshot: DaySnapshot?) -> some View {
         if let snapshot {
-            HeroMoneyText(amount: snapshot.remaining, size: heroSize, suffix: "left")
-                .foregroundStyle(.primary)
-                .contentTransition(.numericText())
-                .animation(reduceMotion ? nil : .spring(duration: 0.4), value: snapshot.remaining)
+            Button {
+                isShowingBalance = true
+            } label: {
+                HStack(alignment: .firstTextBaseline, spacing: AppSpacing.sm) {
+                    HeroMoneyText(amount: snapshot.remaining, size: heroSize, suffix: "left")
+                        .foregroundStyle(.primary)
+                        .contentTransition(.numericText())
+                        .animation(reduceMotion ? nil : .spring(duration: 0.4), value: snapshot.remaining)
+                    Image(systemName: "info.circle")
+                        .font(.dmSans(.subheadline))
+                        .foregroundStyle(.secondary)
+                        .accessibilityHidden(true)
+                }
+                .frame(maxWidth: .infinity, minHeight: 44, alignment: .leading)
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel("\(snapshot.remaining.formatted(.currency(code: "USD"))) left\(isToday ? " to spend today" : " on " + snapshot.date.formatted(.dateTime.month(.wide).day()))")
+            .accessibilityHint("Shows the allowance, carried-forward balance, and logged spending behind this amount")
         } else {
             Text("$– left")
                 .font(.dmSans(size: heroSize, weight: .semibold, relativeTo: .largeTitle))
@@ -275,13 +320,8 @@ struct TodayView: View {
     // rather than the cumulative carryover (the hero already bakes that in).
     // Day 1 (and a perfectly on-budget yesterday) falls back to the daily rate.
     @ViewBuilder
-    private func statusChip(_ plan: MonthPlan, snapshot: DaySnapshot) -> some View {
-        if isToday, let recalcNote {
-            chip(recalcNote, textColor: .secondary, backgroundColor: .leftNeutralFill)
-        } else if isToday,
-                  let source = plan.unconfirmedIncomeSources(on: displayedDate).first {
-            incomeConfirmRow(source)
-        } else if let delta = snapshot.yesterdayDelta, delta > 0 {
+    private func statusChip(snapshot: DaySnapshot) -> some View {
+        if let delta = snapshot.yesterdayDelta, delta > 0 {
             chip(
                 "+\(delta.formatted(.currency(code: "USD"))) left from yesterday",
                 textColor: .leftPositive,
@@ -302,59 +342,30 @@ struct TodayView: View {
         }
     }
 
-    // MARK: - Income confirmation
-
-    // Rides in the status chip's slot, so it costs no new vertical space. Both
-    // halves are capsules because the chip is this screen's established
-    // "tappable pill" idiom — the question opens the editor, "Yes" accepts the
-    // number the source inherited. Sources are ordered largest first; affirming
-    // one naturally advances this same slot to the next variable source.
-    private func incomeConfirmRow(_ source: IncomeSource) -> some View {
-        let money = Decimal.FormatStyle.Currency(code: "USD").precision(.fractionLength(0))
-        let amount = source.amount.formatted(money)
-
-        let question = Button {
-            activeIncomeSheet = ActiveIncomeSheet(source: source)
-        } label: {
-            chip("Still expecting \(amount) from \(source.name)?",
-                 textColor: .secondary,
-                 backgroundColor: .leftNeutralFill)
-                .frame(minHeight: 44)
-                .contentShape(Rectangle())
-        }
-        .buttonStyle(.plain)
-        .accessibilityLabel("Change \(source.name) income, currently \(amount)")
-
-        let confirm = Button {
-            withAnimation(reduceMotion ? nil : .spring(duration: 0.4)) {
-                source.affirmedAt = .now
-            }
-            HapticFeedback.lightImpact()
-        } label: {
-            chip("Yes", textColor: .leftPositive, backgroundColor: .leftPositiveFill)
-                .frame(minHeight: 44)
-                .contentShape(Rectangle())
-        }
-        .buttonStyle(.plain)
-        .accessibilityLabel("Keep \(amount) expected from \(source.name)")
-
-        return ViewThatFits(in: .horizontal) {
-            HStack(spacing: AppSpacing.sm) {
-                question
-                confirm
-            }
-            VStack(alignment: .leading, spacing: AppSpacing.xs) {
-                question
-                confirm
+    private func incomeSetup(_ plan: MonthPlan) -> some View {
+        let month = plan.monthStart.formatted(.dateTime.month(.wide))
+        return VStack(alignment: .leading, spacing: AppSpacing.md) {
+            Text(isToday ? "Set up \(month)" : "Income wasn’t set")
+                .font(.dmSans(.title, weight: .semibold))
+            Text(isToday
+                 ? "Add this month’s income to see your daily allowance. You can still log spending."
+                 : "There’s no daily allowance for this month. Your logged spending is below.")
+                .font(.dmSans(.subheadline))
+                .foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+            if isToday {
+                Button(action: onSetUpIncome) {
+                    Text("Set \(month) income")
+                        .font(.dmSans(.subheadline, weight: .semibold))
+                        .foregroundStyle(Color(uiColor: .systemBackground))
+                        .padding(.horizontal, AppSpacing.md)
+                        .frame(minHeight: 44)
+                        .background(Color.primary, in: Capsule())
+                }
+                .buttonStyle(.plain)
             }
         }
-    }
-
-    // Name the source and direction behind the hero's numeric transition.
-    private func noteRecalculation(_ change: IncomeChange) {
-        let money = Decimal.FormatStyle.Currency(code: "USD").precision(.fractionLength(0))
-        let sign = change.delta > 0 ? "+" : "−"
-        recalcNote = "\(sign)\(abs(change.delta).formatted(money)) \(change.sourceName) · budget updated"
+        .padding(.bottom, AppSpacing.lg)
     }
 
     private func chip(_ text: String, textColor: Color, backgroundColor: Color) -> some View {
@@ -368,11 +379,131 @@ struct TodayView: View {
             .clipShape(Capsule())
     }
 
-    // The hero includes rollover. This meter isolates the displayed day's
-    // spending pace against that day's daily budget.
-    private func momentumStrip(snapshot: DaySnapshot) -> some View {
-        TodayMeter(spent: snapshot.spent, dailyRate: snapshot.dailyRate)
-            .animation(reduceMotion ? nil : .spring(duration: 0.4), value: snapshot.spent)
+    // MARK: - Catch up
+
+    private struct CatchUpPeriod {
+        let range: ClosedRange<Date>
+        let shouldPrompt: Bool
+        let transaction: Transaction?
+        let isForcedPrompt: Bool
+    }
+
+    private func catchUpPeriod(for plan: MonthPlan) -> CatchUpPeriod? {
+        let calendar = Calendar.current
+        let today = calendar.startOfDay(for: .now)
+        let yesterday = calendar.date(byAdding: .day, value: -1, to: today)!
+
+        if forcesCatchUpPrompt && !didHandleForcedCatchUp {
+            let start = calendar.date(byAdding: .day, value: -2, to: yesterday)!
+            let range = start...yesterday
+            let catchUp = plan.transactions.first {
+                $0.isCatchUp && $0.catchUpStartDate.map(calendar.startOfDay) == range.lowerBound &&
+                $0.catchUpEndDate.map(calendar.startOfDay) == range.upperBound
+            }
+            return CatchUpPeriod(range: range,
+                                 shouldPrompt: true,
+                                 transaction: catchUp,
+                                 isForcedPrompt: true)
+        }
+
+        let planStart = max(calendar.startOfDay(for: plan.effectiveCreatedAt), plan.monthStart)
+        guard planStart <= yesterday else { return nil }
+
+        let latestLoggedDay = plan.transactions.compactMap { transaction -> Date? in
+            if transaction.isCatchUp, let end = transaction.catchUpEndDate {
+                return min(calendar.startOfDay(for: end), yesterday)
+            }
+            guard transaction.date < today else { return nil }
+            return calendar.startOfDay(for: transaction.date)
+        }.max()
+        let acknowledged = plan.catchUpAcknowledgedThrough.map { calendar.startOfDay(for: $0) }
+        let coveredThrough = [latestLoggedDay, acknowledged].compactMap { $0 }.max()
+        let firstUncovered = coveredThrough.flatMap {
+            calendar.date(byAdding: .day, value: 1, to: $0)
+        } ?? planStart
+        // When every prior day is already covered, the permanent action still
+        // opens a useful one-day flow for an extra amount the user remembers.
+        let rangeStart = min(max(firstUncovered, planStart), yesterday)
+        let missedDays = max(0, calendar.dateComponents([.day], from: rangeStart, to: yesterday).day ?? 0) + 1
+        let range = rangeStart...yesterday
+        let catchUp = plan.transactions.first {
+            $0.isCatchUp && $0.catchUpStartDate.map(calendar.startOfDay) == range.lowerBound &&
+            $0.catchUpEndDate.map(calendar.startOfDay) == range.upperBound
+        }
+        return CatchUpPeriod(range: range,
+                             shouldPrompt: firstUncovered <= yesterday && missedDays >= 3,
+                             transaction: catchUp,
+                             isForcedPrompt: false)
+    }
+
+    private var forcesCatchUpPrompt: Bool {
+#if DEBUG
+        ProcessInfo.processInfo.arguments.contains("-showCatchUpPrompt")
+#else
+        false
+#endif
+    }
+
+    @ViewBuilder
+    private func catchUpCard(for plan: MonthPlan) -> some View {
+        if let context = catchUpPeriod(for: plan), context.shouldPrompt {
+            VStack(alignment: .leading, spacing: AppSpacing.md) {
+                HStack(alignment: .top, spacing: AppSpacing.md) {
+                    Image(systemName: "arrow.uturn.backward.circle")
+                        .font(.dmSans(.title3)).foregroundStyle(.secondary)
+                    VStack(alignment: .leading, spacing: AppSpacing.xxs) {
+                        Text("Anything to catch up on?")
+                            .font(.dmSans(.subheadline, weight: .semibold))
+                        Text("No spending logged since \(context.range.lowerBound.formatted(.dateTime.weekday(.wide).month(.abbreviated).day())).")
+                            .font(.dmSans(.footnote)).foregroundStyle(.secondary)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                    Spacer(minLength: 0)
+                    Button {
+                        acknowledge(context.range, in: plan)
+                    } label: {
+                        Image(systemName: "xmark")
+                            .font(.dmSans(.caption, weight: .semibold))
+                            .frame(width: 32, height: 32)
+                    }
+                    .buttonStyle(.plain)
+                    .foregroundStyle(.secondary)
+                    .accessibilityLabel("Dismiss catch-up prompt")
+                }
+                HStack(spacing: AppSpacing.lg) {
+                    Button {
+                        activeCatchUp = ActiveCatchUp(period: context.range,
+                                                      transaction: context.transaction,
+                                                      isForcedPrompt: context.isForcedPrompt)
+                    } label: {
+                        Text(context.transaction == nil ? "Add a total" : "Edit total")
+                            .font(.dmSans(.subheadline, weight: .semibold))
+                    }
+                    .buttonStyle(.plain).foregroundStyle(Color.primary)
+                    Button { acknowledge(context.range, in: plan) } label: {
+                        Text("Nothing spent").font(.dmSans(.subheadline, weight: .medium))
+                    }
+                    .buttonStyle(.plain).foregroundStyle(.secondary)
+                    .accessibilityHint("Marks the period as having no spending")
+                }
+            }
+            .padding(AppSpacing.lg)
+            .background(Color.leftNeutralFill, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+            .padding(.horizontal, AppSpacing.xl).padding(.bottom, AppSpacing.md)
+            .transition(.move(edge: .top).combined(with: .opacity))
+        }
+    }
+
+    private func acknowledge(_ period: ClosedRange<Date>, in plan: MonthPlan) {
+        withAnimation(reduceMotion ? nil : .spring(duration: 0.3)) {
+            if forcesCatchUpPrompt {
+                didHandleForcedCatchUp = true
+            }
+            plan.catchUpAcknowledgedThrough = max(plan.catchUpAcknowledgedThrough ?? .distantPast,
+                                                  period.upperBound)
+        }
+        try? modelContext.save()
+        HapticFeedback.lightImpact()
     }
 
     // MARK: - Transactions
@@ -381,7 +512,13 @@ struct TodayView: View {
         List {
             ForEach(transactions) { tx in
                 Button {
-                    activeSpendingSheet = ActiveSpendingSheet(transaction: tx)
+                    if tx.isCatchUp, let start = tx.catchUpStartDate, let end = tx.catchUpEndDate {
+                        activeCatchUp = ActiveCatchUp(period: start...end,
+                                                      transaction: tx,
+                                                      isForcedPrompt: false)
+                    } else {
+                        activeSpendingSheet = ActiveSpendingSheet(transaction: tx)
+                    }
                 } label: {
                     transactionRow(tx)
                 }
@@ -412,11 +549,14 @@ struct TodayView: View {
 
     private func transactionRow(_ tx: Transaction) -> some View {
         HStack(spacing: AppSpacing.md) {
-            Image(systemName: tx.category.symbol)
+            Image(systemName: tx.isCatchUp ? "arrow.uturn.backward.circle" : tx.category.symbol)
                 .font(.dmSans(.body))
                 .foregroundStyle(.secondary)
                 .frame(width: 28)
-            if let note = tx.note, !note.isEmpty {
+            if tx.isCatchUp, let start = tx.catchUpStartDate, let end = tx.catchUpEndDate {
+                Text("Catch-up · \(catchUpLabel(start: start, end: end))")
+                    .font(.dmSans(.body, weight: .medium))
+            } else if let note = tx.note, !note.isEmpty {
                 Text(note)
                     .font(.dmSans(.body, weight: .medium))
                     .lineLimit(2)
@@ -436,6 +576,12 @@ struct TodayView: View {
         .contentShape(Rectangle())
     }
 
+    private func catchUpLabel(start: Date, end: Date) -> String {
+        let startText = start.formatted(.dateTime.month(.abbreviated).day())
+        let endText = end.formatted(.dateTime.month(.abbreviated).day())
+        return startText == endText ? startText : "\(startText)–\(endText)"
+    }
+
     private func delete(_ transaction: Transaction) {
         modelContext.delete(transaction)
         HapticFeedback.lightImpact()
@@ -447,7 +593,8 @@ struct TodayView: View {
     private func makeSnapshot(for plan: MonthPlan) -> DaySnapshot {
         let calendar = Calendar.current
         let rate = plan.dailyRate
-        let startOfDisplayedDay = calendar.startOfDay(for: displayedDate)
+        let asOf = balanceDate
+        let startOfDisplayedDay = calendar.startOfDay(for: asOf)
         let startOfPreviousDay = calendar.date(byAdding: .day, value: -1, to: startOfDisplayedDay)
 
         var spentAsOfBalance: Decimal = 0
@@ -456,11 +603,13 @@ struct TodayView: View {
         var displayedTransactions: [Transaction] = []
 
         for transaction in plan.transactions {
-            if transaction.date <= balanceDate {
+            if transaction.date <= asOf {
                 spentAsOfBalance += transaction.amount
+                if transaction.date >= startOfDisplayedDay {
+                    spentOnDisplayedDay += transaction.amount
+                }
             }
-            if calendar.isDate(transaction.date, inSameDayAs: displayedDate) {
-                spentOnDisplayedDay += transaction.amount
+            if calendar.isDate(transaction.date, inSameDayAs: asOf) {
                 displayedTransactions.append(transaction)
             }
             if let startOfPreviousDay,
@@ -473,12 +622,14 @@ struct TodayView: View {
         displayedTransactions.sort { $0.date > $1.date }
 
         return DaySnapshot(
+            date: asOf,
             dailyRate: rate,
-            remaining: plan.remainingToday(on: balanceDate,
+            allowance: plan.earnedDays(through: asOf, calendar: calendar) > 0 ? rate : 0,
+            spent: spentOnDisplayedDay,
+            remaining: plan.remainingToday(on: asOf,
                                            spentAsOf: spentAsOfBalance,
                                            calendar: calendar),
-            spent: spentOnDisplayedDay,
-            yesterdayDelta: plan.yesterdayDelta(for: displayedDate,
+            yesterdayDelta: plan.yesterdayDelta(for: asOf,
                                                 spentOnPreviousDay: spentOnPreviousDay,
                                                 calendar: calendar),
             transactions: displayedTransactions

@@ -6,7 +6,8 @@ import UIKit
 // numpad; focusing the inline note temporarily trades it for the system keyboard.
 struct AddSpendingView: View {
     let plan: MonthPlan
-    private let date: Date
+    @State private var date: Date
+    private let dateRange: ClosedRange<Date>?
     private let transaction: Transaction?
 
     @Environment(\.modelContext) private var modelContext
@@ -20,10 +21,12 @@ struct AddSpendingView: View {
     @FocusState private var isNoteFocused: Bool
     @ScaledMetric private var amountSize = 64
 
-    init(plan: MonthPlan, date: Date = .now, transaction: Transaction? = nil) {
+    init(plan: MonthPlan, date: Date = .now, transaction: Transaction? = nil,
+         dateRange: ClosedRange<Date>? = nil) {
         self.plan = plan
         self.transaction = transaction
-        self.date = transaction?.date ?? date
+        _date = State(initialValue: transaction?.date ?? date)
+        self.dateRange = dateRange
 
         if let transaction {
             _digits = State(initialValue: Self.digits(for: transaction.amount))
@@ -123,9 +126,12 @@ struct AddSpendingView: View {
             FlatBackButton(accessibilityLabel: "Cancel")
 
             Spacer()
-        }
-        .overlay {
-            if showsDateContext {
+
+            if let dateRange {
+                DatePicker("Spending date", selection: $date, in: dateRange, displayedComponents: .date)
+                    .labelsHidden()
+                    .datePickerStyle(.compact)
+            } else if showsDateContext {
                 Text(date, format: .dateTime.weekday(.abbreviated).month(.abbreviated).day())
                     .font(.dmSans(.subheadline, weight: .medium))
                     .foregroundStyle(.secondary)
@@ -231,11 +237,14 @@ struct AddSpendingView: View {
         let trimmed = note.trimmingCharacters(in: .whitespacesAndNewlines)
         if let transaction {
             transaction.amount = amount
+            // History edits stay inside the selected monthly plan. Clamp the
+            // retained time to now when moving an older entry onto today.
+            if dateRange != nil { transaction.date = min(date, .now) }
             transaction.category = category
             transaction.note = trimmed.isEmpty ? nil : trimmed
         } else {
             let tx = Transaction(amount: amount,
-                                 date: date,
+                                 date: dateRange == nil ? date : min(date, .now),
                                  category: category,
                                  note: trimmed.isEmpty ? nil : trimmed)
             modelContext.insert(tx)

@@ -21,6 +21,7 @@ struct IncomeSheet: View {
     @Environment(\.dismiss) private var dismiss
     @State private var draftName: String
     @State private var draftAmount: Decimal
+    @State private var carriesAmountForward: Bool
     @State private var draftStartsOn: Date?
     @State private var draftEndsAfter: Date?
     @State private var isDurationExpanded = false
@@ -35,6 +36,7 @@ struct IncomeSheet: View {
         self.onSave = onSave
         _draftName = State(initialValue: source?.name ?? "")
         _draftAmount = State(initialValue: source?.amount ?? 0)
+        _carriesAmountForward = State(initialValue: source?.carriesAmountForward ?? true)
         _draftStartsOn = State(initialValue: source?.startsOn)
         _draftEndsAfter = State(initialValue: source?.endsAfter)
     }
@@ -56,18 +58,11 @@ struct IncomeSheet: View {
     }
 
     private var canSave: Bool {
-        !trimmedName.isEmpty && draftAmount > 0
+        !trimmedName.isEmpty && draftAmount >= 0
     }
 
     private var monthName: String {
         plan.monthStart.formatted(.dateTime.month(.wide))
-    }
-
-    private var inheritedFrom: String? {
-        guard source?.isUnconfirmed == true,
-              let previous = Calendar.current.date(byAdding: .month, value: -1, to: plan.monthStart)
-        else { return nil }
-        return previous.formatted(.dateTime.month(.wide))
     }
 
     var body: some View {
@@ -77,7 +72,11 @@ struct IncomeSheet: View {
                     VStack(alignment: .leading, spacing: AppSpacing.lg) {
                         header
                         fields
-                        DerivationBar(plan: plan, income: previewIncome, showsDetails: false)
+                        if !plan.activeIncomeSources.contains(where: {
+                            $0.persistentModelID != source?.persistentModelID && $0.needsMonthlyAmount
+                        }) {
+                            DerivationBar(plan: plan, income: previewIncome, showsDetails: false)
+                        }
                     }
                     .padding(.horizontal, AppSpacing.xl)
                     .padding(.top, AppSpacing.xl)
@@ -110,9 +109,8 @@ struct IncomeSheet: View {
 
     private var header: some View {
         PlanSheetHeader(
-            title: source == nil ? "Add income" : "Edit income",
-            subtitle: inheritedFrom.map { "Using \($0)'s \(source?.name ?? "income") amount until you confirm" }
-                ?? "Money expected in \(monthName)"
+            title: "\(monthName) income",
+            subtitle: "Take-home income you’re budgeting with in \(plan.monthStart.formatted(.dateTime.month(.wide).year())). Earlier months stay unchanged."
         )
     }
 
@@ -130,9 +128,31 @@ struct IncomeSheet: View {
                            unit: .currency,
                            prominence: .inline,
                            alignment: .leading,
-                           accessibilityLabel: "Amount expected from \(trimmedName.isEmpty ? "this source" : trimmedName)",
+                           accessibilityLabel: "\(monthName) income from \(trimmedName.isEmpty ? "this source" : trimmedName)",
                            focus: $isAmountFocused)
             }
+
+            VStack(alignment: .leading, spacing: AppSpacing.sm) {
+                Toggle("Use this amount next month too", isOn: $carriesAmountForward)
+                    .font(.dmSans(.body, weight: .medium))
+                    .tint(.leftPositive)
+                    .frame(minHeight: 44)
+
+                Text(carriesAmountForward
+                     ? "Repeats while this source is in your plan. You can update it anytime."
+                     : "Enter a new amount each month. This source stays in your plan.")
+                    .font(.dmSans(.caption))
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+
+                if source?.needsMonthlyAmount == true {
+                    Text("Enter zero if you’re not budgeting any income from this source in \(monthName).")
+                        .font(.dmSans(.caption))
+                        .foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+            }
+            .padding(.vertical, AppSpacing.lg)
 
             MonthDurationPicker(startsOn: $draftStartsOn,
                                 endsAfter: $draftEndsAfter,
@@ -141,7 +161,7 @@ struct IncomeSheet: View {
     }
 
     private var actions: some View {
-        PlanSheetActions(primaryTitle: source == nil ? "Add income" : "Save",
+        PlanSheetActions(primaryTitle: "Update \(monthName)",
                          isEnabled: canSave,
                          save: save,
                          cancel: { dismiss() })
@@ -163,22 +183,18 @@ struct IncomeSheet: View {
         }
 
         if let source {
-            let amountChanged = max(0, draftAmount) != source.amount
             source.name = trimmedName
             source.startsOn = draftStartsOn
             source.endsAfter = draftEndsAfter
-            if source.inherited && amountChanged {
-                source.cadence = .variable
-            }
-            if source.effectiveCadence == .variable {
-                source.affirm(amount: draftAmount)
-            } else {
-                source.amount = max(0, draftAmount)
-            }
+            source.cadence = carriesAmountForward ? .fixed : .variable
+            source.amount = max(0, draftAmount)
+            source.affirmedAt = .now
         } else {
             plan.incomeSources.append(
                 IncomeSource(name: trimmedName,
                              amount: draftAmount,
+                             cadence: carriesAmountForward ? .fixed : .variable,
+                             affirmedAt: .now,
                              startsOn: draftStartsOn,
                              endsAfter: draftEndsAfter)
             )

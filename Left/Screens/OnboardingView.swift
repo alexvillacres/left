@@ -11,7 +11,12 @@ struct OnboardingView: View {
     var body: some View {
         Group {
             if isSettingUpMonth {
-                PlanView(plan: plan, isOnboarding: true, onComplete: onComplete)
+                PlanView(
+                    plan: plan,
+                    isOnboarding: true,
+                    onBack: showIntro,
+                    onComplete: onComplete
+                )
                     .transition(.opacity)
             } else {
                 intro
@@ -21,6 +26,12 @@ struct OnboardingView: View {
         .background(Color(uiColor: .systemBackground).ignoresSafeArea())
         .interactiveDismissDisabled()
         .toolbar(.hidden, for: .navigationBar)
+    }
+
+    private func showIntro() {
+        withAnimation(reduceMotion ? nil : .easeInOut(duration: 0.22)) {
+            isSettingUpMonth = false
+        }
     }
 
     private var intro: some View {

@@ -1,6 +1,6 @@
 # Left — App Store Launch Checklist
 
-_Last audited against the working tree on 2026-08-11 (branch `main`, uncommitted
+_Last audited against the working tree on 2026-08-24 (branch `main`, uncommitted
 changes present). Notes marked **Status** record what the code actually does
 today; unchecked boxes with a status note mean the code is in place but the
 item still needs a decision or a real-device test._
@@ -31,6 +31,13 @@ item still needs a decision or a real-device test._
 
 ## Onboarding and plan validation
 
+- [ ] Redesign onboarding so setup is less rigid and the app can be explored
+      before committing to a complete plan.
+      **Status:** onboarding currently requires a positive income and positive
+      monthly spendable amount, cannot be dismissed, and offers no skip,
+      preview, or “set up later” path. Decide what Today, Month, and Plan should
+      show in an unconfigured state, and ensure returning to setup remains easy
+      and explicit.
 - [x] Keep presenting onboarding until setup has actually been completed.
       **Status:** `AppRoot` gates on a `hasCompletedOnboarding` `@AppStorage`
       flag, set only when the savings step finishes, and
@@ -47,6 +54,12 @@ item still needs a decision or a real-device test._
 
 ## Core product readiness
 
+- [ ] Bring the debug Data backup screen into the app's visual system.
+      **Status:** `DataBackupView` currently uses a stock `List`, whose
+      grouped background does not match Left's semantic screen background, and
+      its section labels, rows, footer copy, and navigation title do not follow
+      the app's established DM Sans type sizes and spacing treatments. Audit
+      Light/Dark Mode while restyling it; keep the screen inside `#if DEBUG`.
 - [ ] Add the always-visible Plan derivation:
       `income − fixed expenses − savings = spendable ÷ days = daily rate`.
       **Status:** `DerivationBar` exists and is fully built (including a

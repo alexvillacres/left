@@ -33,18 +33,16 @@ extension EnvironmentValues {
 
 enum AppTab: String, CaseIterable, Identifiable {
     case today
-    case month
+    case activity
     case plan
-    case settings
 
     var id: String { rawValue }
 
     var systemImage: String {
         switch self {
         case .today: "sun.max"
-        case .month: "calendar"
+        case .activity: "clock.arrow.circlepath"
         case .plan: "slider.horizontal.3"
-        case .settings: "gearshape"
         }
     }
 
@@ -52,9 +50,8 @@ enum AppTab: String, CaseIterable, Identifiable {
     var title: String {
         switch self {
         case .today: "Today"
-        case .month: "Month"
+        case .activity: "Activity"
         case .plan: "Plan"
-        case .settings: "Settings"
         }
     }
 }
