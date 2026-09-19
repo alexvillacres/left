@@ -1,7 +1,7 @@
 import SwiftUI
 import SwiftData
 
-struct HistoryView: View {
+struct ActivityView: View {
     @Query(sort: \MonthPlan.monthStart, order: .reverse) private var plans: [MonthPlan]
     @State private var selectedMonthStart: Date?
     @State private var activeSpendingSheet: ActiveSpendingSheet?
@@ -41,7 +41,7 @@ struct HistoryView: View {
     var body: some View {
         NavigationStack {
             VStack(alignment: .leading, spacing: AppSpacing.lg) {
-                Text("History")
+                Text("Activity")
                     .font(.dmSans(size: heroSize, weight: .semibold, relativeTo: .largeTitle))
                     .padding(.horizontal, AppSpacing.xl)
                     .padding(.top, AppSpacing.xxl)
@@ -83,7 +83,7 @@ struct HistoryView: View {
         }
         .onAppear { updateAddAction() }
         .onChange(of: plan?.persistentModelID) { updateAddAction() }
-        .onDisappear { clearAddAction("history.add-spending") }
+        .onDisappear { clearAddAction("activity.add-spending") }
     }
 
     private func monthHeader(_ plan: MonthPlan, total: Decimal) -> some View {
@@ -264,10 +264,10 @@ struct HistoryView: View {
 
     private func updateAddAction() {
         guard let plan, plan.monthStart <= Date.now else {
-            clearAddAction("history.add-spending")
+            clearAddAction("activity.add-spending")
             return
         }
-        setAddAction(AddAction(id: "history.add-spending", accessibilityLabel: "Add spending") {
+        setAddAction(AddAction(id: "activity.add-spending", accessibilityLabel: "Add spending") {
             activeSpendingSheet = ActiveSpendingSheet(plan: plan)
         })
     }
@@ -290,6 +290,6 @@ struct HistoryView: View {
     plan.transactions.append(Transaction(amount: 14.50, category: .food, note: "Lunch"))
     plan.transactions.append(Transaction(amount: 62, date: cal.date(byAdding: .day, value: 2, to: start)!, category: .shopping))
     plan.transactions.append(Transaction(amount: 41, date: cal.date(byAdding: .day, value: 3, to: start)!, category: .bar))
-    return HistoryView()
+    return ActivityView()
         .modelContainer(container)
 }

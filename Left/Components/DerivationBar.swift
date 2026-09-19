@@ -22,6 +22,7 @@ struct DerivationBar: View {
     private var spendable: Decimal { effectiveIncome - effectiveFixedTotal - savings }
     private var days: Int { plan.daysInMonth() }
     private var dailyRate: Decimal { spendable / Decimal(days) }
+    private var needsIncomeSetup: Bool { income == nil && plan.needsIncomeSetup }
 
     private var wholeDollars: Decimal.FormatStyle.Currency {
         .init(code: "USD").precision(.fractionLength(0))
@@ -33,7 +34,12 @@ struct DerivationBar: View {
 
     var body: some View {
         Group {
-            if showsDetails {
+            if needsIncomeSetup {
+                Text("Set \(plan.monthStart.formatted(.dateTime.month(.wide))) income to calculate your daily allowance.")
+                    .font(.dmSans(.subheadline))
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            } else if showsDetails {
                 Button {
                     isShowingDetails = true
                 } label: {
@@ -45,8 +51,8 @@ struct DerivationBar: View {
             }
         }
         .accessibilityElement(children: .ignore)
-        .accessibilityLabel(accessibilitySummary)
-        .accessibilityAddTraits(showsDetails ? .isButton : [])
+        .accessibilityLabel(needsIncomeSetup ? "Set monthly income to calculate your daily allowance" : accessibilitySummary)
+        .accessibilityAddTraits(showsDetails && !needsIncomeSetup ? .isButton : [])
         .sheet(isPresented: $isShowingDetails) {
             derivationDetails
                 .presentationDetents([.medium])
@@ -139,7 +145,7 @@ struct DerivationBar: View {
         VStack(alignment: .leading, spacing: AppSpacing.xl) {
             PlanSheetHeader(
                 title: "Your daily amount",
-                subtitle: "How this month's income is divided"
+                subtitle: "How \(plan.monthStart.formatted(.dateTime.month(.wide).year())) income is divided"
             )
 
             VStack(alignment: .leading, spacing: AppSpacing.lg) {

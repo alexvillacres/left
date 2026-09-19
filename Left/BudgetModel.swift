@@ -94,10 +94,9 @@ final class MonthPlan {
         self.createdAt = createdAt
     }
 
-    // The one clone path for both adjacent months and gaps. Per-source
-    // affirmation deliberately does not carry: inherited variable income has
-    // not been vouched for in the new month. All three carry fields also stay
-    // at their defaults because carry is a boundary fact, not template data.
+    // Each month owns its amounts. Sources that do not repeat keep their name
+    // and duration, but need a new amount before the next allowance is shown.
+    // The stored cadence values remain unchanged for existing stores/backups.
     func clone(for monthStart: Date) -> MonthPlan {
         let hasLegacyIncomeOnly = incomeSources.isEmpty
         let plan = MonthPlan(monthStart: monthStart,
@@ -106,10 +105,15 @@ final class MonthPlan {
                              savingsPercent: savingsPercent,
                              incomeCadence: hasLegacyIncomeOnly ? incomeCadence : nil)
         let targetMonth = Calendar.current.leftMonthStart(for: monthStart)
-        plan.incomeSources = incomeSources.compactMap {
+        let sources = hasLegacyIncomeOnly && monthlyIncome > 0
+            ? [IncomeSource(name: "Income", amount: monthlyIncome,
+                            cadence: incomeCadence ?? .fixed)]
+            : incomeSources
+        plan.monthlyIncome = 0
+        plan.incomeSources = sources.compactMap {
             guard $0.covers(month: targetMonth) else { return nil }
             return IncomeSource(name: $0.name,
-                                amount: $0.amount,
+                                amount: $0.carriesAmountForward ? $0.amount : 0,
                                 cadence: $0.effectiveCadence,
                                 inherited: true,
                                 startsOn: $0.startsOn,
@@ -136,7 +140,8 @@ final class MonthPlan {
 }
 
 // MARK: - Income cadence
-// Stored per source: one plan can mix a steady salary with variable invoices.
+// Legacy raw values now express whether the amount repeats in the next plan.
+// Keep the stored cases so existing SwiftData stores and backups stay readable.
 
 enum IncomeCadence: String, Codable, CaseIterable, Identifiable {
     case fixed, variable
@@ -145,50 +150,21 @@ enum IncomeCadence: String, Codable, CaseIterable, Identifiable {
 
     var label: String {
         switch self {
-        case .fixed: "About the same"
-        case .variable: "It varies"
+        case .fixed: "Amount repeats"
+        case .variable: "New amount each month"
         }
     }
 
 }
 
 extension MonthPlan {
-    // How long a freshly inherited income stays open for confirmation.
-    static let incomeConfirmWindowDays = 7
-
     var effectiveCreatedAt: Date {
         createdAt ?? monthStart
     }
 
-    func daysSinceCreated(on date: Date = .now, calendar: Calendar = .current) -> Int {
-        let from = calendar.startOfDay(for: effectiveCreatedAt)
-        let to = calendar.startOfDay(for: date)
-        return calendar.dateComponents([.day], from: from, to: to).day ?? 0
-    }
-
-    // The Today prompt exists only during a plan's first week. Plan keeps the
-    // permanent recovery note for any variable source that was never affirmed.
-    func unconfirmedIncomeSources(on date: Date = .now,
-                                  calendar: Calendar = .current,
-                                  withinWindow: Bool = true) -> [IncomeSource] {
-        if withinWindow {
-            let elapsed = daysSinceCreated(on: date, calendar: calendar)
-            guard elapsed >= 0 && elapsed < Self.incomeConfirmWindowDays else { return [] }
-        }
-
-        return incomeSources
-            .filter(\.isUnconfirmed)
-            .sorted {
-                if $0.amount == $1.amount { return $0.name.localizedCaseInsensitiveCompare($1.name) == .orderedAscending }
-                return $0.amount > $1.amount
-            }
-    }
-
-    func needsIncomeConfirmation(on date: Date = .now, calendar: Calendar = .current) -> Bool {
-        let elapsed = daysSinceCreated(on: date, calendar: calendar)
-        return elapsed >= 0
-            && elapsed < Self.incomeConfirmWindowDays
-            && incomeSources.contains(where: \.isUnconfirmed)
+    var needsIncomeSetup: Bool {
+        activeIncomeSources.contains(where: \.needsMonthlyAmount)
+            || (activeIncomeSources.isEmpty && incomeTotal <= 0)
     }
 }
 
@@ -244,18 +220,14 @@ final class IncomeSource {
         cadence ?? .fixed
     }
 
-    var isUnconfirmed: Bool {
-        effectiveCadence == .variable && affirmedAt == nil && amount > 0
+    var carriesAmountForward: Bool {
+        effectiveCadence == .fixed
     }
 
-    @discardableResult
-    func affirm(amount newValue: Decimal? = nil, on date: Date = .now) -> Bool {
-        let changed = newValue.map { max(0, $0) != amount } ?? false
-        if let newValue {
-            amount = max(0, newValue)
-        }
-        affirmedAt = date
-        return changed
+    var needsMonthlyAmount: Bool {
+        // Previously entered amounts remain valid when upgrading. Only the
+        // empty placeholders created at a new boundary need an amount.
+        inherited && !carriesAmountForward && amount == 0 && affirmedAt == nil
     }
 }
 
@@ -643,6 +615,7 @@ extension MonthPlan {
     // A partial first month keeps the normal daily rate but grants it only for
     // days when the plan existed, instead of inflating it across fewer days.
     var plannedSpend: Decimal {
+        guard !needsIncomeSetup else { return 0 }
         if firstActiveDay == 1 { return monthlySpendable }
         let calendar = Calendar.current
         let nextMonth = calendar.date(byAdding: .month, value: 1, to: monthStart)!
@@ -677,7 +650,7 @@ extension MonthPlan {
     }
 
     var dailyRate: Decimal {
-        monthlySpendable / Decimal(daysInMonth())
+        needsIncomeSetup ? 0 : monthlySpendable / Decimal(daysInMonth())
     }
 
     func spent(asOf date: Date = .now) -> Decimal {
