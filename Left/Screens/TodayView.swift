@@ -5,6 +5,8 @@ import UIKit
 struct TodayView: View {
     @Query(sort: \MonthPlan.monthStart, order: .reverse) private var plans: [MonthPlan]
     @State private var activeSpendingSheet: ActiveSpendingSheet?
+    @State private var activeCatchUp: ActiveCatchUp?
+    @State private var didHandleForcedCatchUp = false
     @State private var pastDate: Date? = nil
     @State private var activeIncomeSheet: ActiveIncomeSheet?
     @State private var recalcNote: String?
@@ -25,6 +27,13 @@ struct TodayView: View {
     private struct ActiveIncomeSheet: Identifiable {
         let id = UUID()
         let source: IncomeSource
+    }
+
+    private struct ActiveCatchUp: Identifiable {
+        let id = UUID()
+        let period: ClosedRange<Date>
+        let transaction: Transaction?
+        let isForcedPrompt: Bool
     }
 
     private struct DaySnapshot {
@@ -63,6 +72,9 @@ struct TodayView: View {
         NavigationStack {
             VStack(spacing: 0) {
                 heroSection(plan: plan, snapshot: snapshot)
+                if let plan, isToday {
+                    catchUpCard(for: plan)
+                }
                 transactionsSection(snapshot?.transactions ?? [])
             }
             .contentShape(Rectangle())
@@ -78,6 +90,17 @@ struct TodayView: View {
         .fullScreenCover(item: $activeSpendingSheet) { sheet in
             if let plan {
                 AddSpendingView(plan: plan, date: transactionDate, transaction: sheet.transaction)
+            }
+        }
+        .fullScreenCover(item: $activeCatchUp) { catchUp in
+            if let plan {
+                CatchUpView(plan: plan,
+                            period: catchUp.period,
+                            transaction: catchUp.transaction) {
+                    if catchUp.isForcedPrompt {
+                        didHandleForcedCatchUp = true
+                    }
+                }
             }
         }
         .sheet(item: $activeIncomeSheet) { sheet in
@@ -130,6 +153,23 @@ struct TodayView: View {
             }
 
             Spacer()
+
+            if isToday, let plan, let context = catchUpPeriod(for: plan) {
+                Button {
+                    activeCatchUp = ActiveCatchUp(period: context.range,
+                                                   transaction: context.transaction,
+                                                   isForcedPrompt: context.isForcedPrompt)
+                } label: {
+                    Image(systemName: "arrow.uturn.backward.circle")
+                        .font(.dmSans(.subheadline, weight: .medium))
+                        .frame(width: 44, height: 44)
+                        .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .foregroundStyle(.secondary)
+                .accessibilityLabel("Catch up spending")
+                .accessibilityHint("Add one total for spending not already logged")
+            }
 
             dayNavigationButton(systemName: "chevron.left", delta: -1, label: "Previous day")
             dayNavigationButton(systemName: "chevron.right", delta: 1, label: "Next day")
@@ -363,13 +403,146 @@ struct TodayView: View {
             .clipShape(Capsule())
     }
 
+    // MARK: - Catch up
+
+    private struct CatchUpPeriod {
+        let range: ClosedRange<Date>
+        let shouldPrompt: Bool
+        let transaction: Transaction?
+        let isForcedPrompt: Bool
+    }
+
+    private func catchUpPeriod(for plan: MonthPlan) -> CatchUpPeriod? {
+        let calendar = Calendar.current
+        let today = calendar.startOfDay(for: .now)
+        let yesterday = calendar.date(byAdding: .day, value: -1, to: today)!
+
+        if forcesCatchUpPrompt && !didHandleForcedCatchUp {
+            let start = calendar.date(byAdding: .day, value: -2, to: yesterday)!
+            let range = start...yesterday
+            let catchUp = plan.transactions.first {
+                $0.isCatchUp && $0.catchUpStartDate.map(calendar.startOfDay) == range.lowerBound &&
+                $0.catchUpEndDate.map(calendar.startOfDay) == range.upperBound
+            }
+            return CatchUpPeriod(range: range,
+                                 shouldPrompt: true,
+                                 transaction: catchUp,
+                                 isForcedPrompt: true)
+        }
+
+        let planStart = max(calendar.startOfDay(for: plan.effectiveCreatedAt), plan.monthStart)
+        guard planStart <= yesterday else { return nil }
+
+        let latestLoggedDay = plan.transactions.compactMap { transaction -> Date? in
+            if transaction.isCatchUp, let end = transaction.catchUpEndDate {
+                return min(calendar.startOfDay(for: end), yesterday)
+            }
+            guard transaction.date < today else { return nil }
+            return calendar.startOfDay(for: transaction.date)
+        }.max()
+        let acknowledged = plan.catchUpAcknowledgedThrough.map { calendar.startOfDay(for: $0) }
+        let coveredThrough = [latestLoggedDay, acknowledged].compactMap { $0 }.max()
+        let firstUncovered = coveredThrough.flatMap {
+            calendar.date(byAdding: .day, value: 1, to: $0)
+        } ?? planStart
+        // When every prior day is already covered, the permanent action still
+        // opens a useful one-day flow for an extra amount the user remembers.
+        let rangeStart = min(max(firstUncovered, planStart), yesterday)
+        let missedDays = max(0, calendar.dateComponents([.day], from: rangeStart, to: yesterday).day ?? 0) + 1
+        let range = rangeStart...yesterday
+        let catchUp = plan.transactions.first {
+            $0.isCatchUp && $0.catchUpStartDate.map(calendar.startOfDay) == range.lowerBound &&
+            $0.catchUpEndDate.map(calendar.startOfDay) == range.upperBound
+        }
+        return CatchUpPeriod(range: range,
+                             shouldPrompt: firstUncovered <= yesterday && missedDays >= 3,
+                             transaction: catchUp,
+                             isForcedPrompt: false)
+    }
+
+    private var forcesCatchUpPrompt: Bool {
+#if DEBUG
+        ProcessInfo.processInfo.arguments.contains("-showCatchUpPrompt")
+#else
+        false
+#endif
+    }
+
+    @ViewBuilder
+    private func catchUpCard(for plan: MonthPlan) -> some View {
+        if let context = catchUpPeriod(for: plan), context.shouldPrompt {
+            VStack(alignment: .leading, spacing: AppSpacing.md) {
+                HStack(alignment: .top, spacing: AppSpacing.md) {
+                    Image(systemName: "arrow.uturn.backward.circle")
+                        .font(.dmSans(.title3)).foregroundStyle(.secondary)
+                    VStack(alignment: .leading, spacing: AppSpacing.xxs) {
+                        Text("Anything to catch up on?")
+                            .font(.dmSans(.subheadline, weight: .semibold))
+                        Text("No spending logged since \(context.range.lowerBound.formatted(.dateTime.weekday(.wide).month(.abbreviated).day())).")
+                            .font(.dmSans(.footnote)).foregroundStyle(.secondary)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                    Spacer(minLength: 0)
+                    Button {
+                        acknowledge(context.range, in: plan)
+                    } label: {
+                        Image(systemName: "xmark")
+                            .font(.dmSans(.caption, weight: .semibold))
+                            .frame(width: 32, height: 32)
+                    }
+                    .buttonStyle(.plain)
+                    .foregroundStyle(.secondary)
+                    .accessibilityLabel("Dismiss catch-up prompt")
+                }
+                HStack(spacing: AppSpacing.lg) {
+                    Button {
+                        activeCatchUp = ActiveCatchUp(period: context.range,
+                                                      transaction: context.transaction,
+                                                      isForcedPrompt: context.isForcedPrompt)
+                    } label: {
+                        Text(context.transaction == nil ? "Add a total" : "Edit total")
+                            .font(.dmSans(.subheadline, weight: .semibold))
+                    }
+                    .buttonStyle(.plain).foregroundStyle(Color.primary)
+                    Button { acknowledge(context.range, in: plan) } label: {
+                        Text("Nothing spent").font(.dmSans(.subheadline, weight: .medium))
+                    }
+                    .buttonStyle(.plain).foregroundStyle(.secondary)
+                    .accessibilityHint("Marks the period as having no spending")
+                }
+            }
+            .padding(AppSpacing.lg)
+            .background(Color.leftNeutralFill, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+            .padding(.horizontal, AppSpacing.xl).padding(.bottom, AppSpacing.md)
+            .transition(.move(edge: .top).combined(with: .opacity))
+        }
+    }
+
+    private func acknowledge(_ period: ClosedRange<Date>, in plan: MonthPlan) {
+        withAnimation(reduceMotion ? nil : .spring(duration: 0.3)) {
+            if forcesCatchUpPrompt {
+                didHandleForcedCatchUp = true
+            }
+            plan.catchUpAcknowledgedThrough = max(plan.catchUpAcknowledgedThrough ?? .distantPast,
+                                                  period.upperBound)
+        }
+        try? modelContext.save()
+        HapticFeedback.lightImpact()
+    }
+
     // MARK: - Transactions
 
     private func transactionsSection(_ transactions: [Transaction]) -> some View {
         List {
             ForEach(transactions) { tx in
                 Button {
-                    activeSpendingSheet = ActiveSpendingSheet(transaction: tx)
+                    if tx.isCatchUp, let start = tx.catchUpStartDate, let end = tx.catchUpEndDate {
+                        activeCatchUp = ActiveCatchUp(period: start...end,
+                                                      transaction: tx,
+                                                      isForcedPrompt: false)
+                    } else {
+                        activeSpendingSheet = ActiveSpendingSheet(transaction: tx)
+                    }
                 } label: {
                     transactionRow(tx)
                 }
@@ -400,11 +573,14 @@ struct TodayView: View {
 
     private func transactionRow(_ tx: Transaction) -> some View {
         HStack(spacing: AppSpacing.md) {
-            Image(systemName: tx.category.symbol)
+            Image(systemName: tx.isCatchUp ? "arrow.uturn.backward.circle" : tx.category.symbol)
                 .font(.dmSans(.body))
                 .foregroundStyle(.secondary)
                 .frame(width: 28)
-            if let note = tx.note, !note.isEmpty {
+            if tx.isCatchUp, let start = tx.catchUpStartDate, let end = tx.catchUpEndDate {
+                Text("Catch-up · \(catchUpLabel(start: start, end: end))")
+                    .font(.dmSans(.body, weight: .medium))
+            } else if let note = tx.note, !note.isEmpty {
                 Text(note)
                     .font(.dmSans(.body, weight: .medium))
                     .lineLimit(2)
@@ -422,6 +598,12 @@ struct TodayView: View {
         .padding(.vertical, AppSpacing.md)
         .frame(maxWidth: .infinity, alignment: .leading)
         .contentShape(Rectangle())
+    }
+
+    private func catchUpLabel(start: Date, end: Date) -> String {
+        let startText = start.formatted(.dateTime.month(.abbreviated).day())
+        let endText = end.formatted(.dateTime.month(.abbreviated).day())
+        return startText == endText ? startText : "\(startText)–\(endText)"
     }
 
     private func delete(_ transaction: Transaction) {

@@ -40,6 +40,7 @@ struct MonthPlanDTO: Codable {
     let carriedGross: String?
     let carriedAllocated: String
     let carryAnnouncedAt: Date?
+    let catchUpAcknowledgedThrough: Date?
     let incomeSourceIDs: [UUID]
     let savingsGoalIDs: [UUID]
     let savingsAllocationIDs: [UUID]
@@ -92,6 +93,9 @@ struct TransactionDTO: Codable {
     let date: Date
     let category: String
     let note: String?
+    let isCatchUp: Bool?
+    let catchUpStartDate: Date?
+    let catchUpEndDate: Date?
     let planID: UUID?
 }
 
@@ -195,6 +199,7 @@ enum LeftDataTransfer {
                              carriedGross: $0.carriedGross.map(decimalString),
                              carriedAllocated: decimalString($0.carriedAllocated),
                              carryAnnouncedAt: $0.carryAnnouncedAt,
+                             catchUpAcknowledgedThrough: $0.catchUpAcknowledgedThrough,
                              incomeSourceIDs: $0.incomeSources.map(\.id).sorted(by: uuidOrder),
                              savingsGoalIDs: $0.savingsGoals.map(\.id).sorted(by: uuidOrder),
                              savingsAllocationIDs: $0.savingsAllocations.map(\.id).sorted(by: uuidOrder),
@@ -222,7 +227,11 @@ enum LeftDataTransfer {
             },
             transactions: transactions.map {
                 TransactionDTO(id: $0.id, amount: decimalString($0.amount), date: $0.date,
-                               category: $0.category.rawValue, note: $0.note, planID: $0.plan?.id)
+                               category: $0.category.rawValue, note: $0.note,
+                               isCatchUp: $0.isCatchUp,
+                               catchUpStartDate: $0.catchUpStartDate,
+                               catchUpEndDate: $0.catchUpEndDate,
+                               planID: $0.plan?.id)
             })
         return LeftExportEnvelope(schemaVersion: LeftExportEnvelope.currentSchemaVersion,
                                   exportedAt: exportedAt,
@@ -312,6 +321,7 @@ enum LeftDataTransfer {
                 plan.carriedGross = try optionalDecimal(dto.carriedGross, field: "carriedGross", id: dto.id)
                 plan.carriedAllocated = try decimal(dto.carriedAllocated, field: "carriedAllocated", id: dto.id)
                 plan.carryAnnouncedAt = dto.carryAnnouncedAt
+                plan.catchUpAcknowledgedThrough = dto.catchUpAcknowledgedThrough
             }
 
             for dto in records.incomeSources {
@@ -349,6 +359,9 @@ enum LeftDataTransfer {
                 if transactions[dto.id] == nil { context.insert(object); transactions[dto.id] = object }
                 object.amount = try decimal(dto.amount, field: "amount", id: dto.id)
                 object.date = dto.date; object.category = category; object.note = dto.note
+                object.isCatchUp = dto.isCatchUp ?? false
+                object.catchUpStartDate = dto.catchUpStartDate
+                object.catchUpEndDate = dto.catchUpEndDate
             }
 
             // Pass two: relationship arrays are authoritative and set both sides through SwiftData inverses.

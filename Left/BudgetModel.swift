@@ -58,6 +58,11 @@ final class MonthPlan {
     // Optional keeps stores from before the month-open summary migratable.
     var carryAnnouncedAt: Date?
 
+    // Prevents a dismissed "nothing spent" catch-up prompt from returning
+    // for the same quiet period. It is only an acknowledgement; spending
+    // remains represented by transactions.
+    var catchUpAcknowledgedThrough: Date?
+
     @Relationship(deleteRule: .cascade, inverse: \IncomeSource.plan)
     var incomeSources: [IncomeSource] = []
 
@@ -523,18 +528,27 @@ final class Transaction {
     var date: Date
     var category: Category
     var note: String?
+    var isCatchUp: Bool = false
+    var catchUpStartDate: Date?
+    var catchUpEndDate: Date?
     var plan: MonthPlan?
 
     init(amount: Decimal,
          date: Date = .now,
          category: Category = .other,
          note: String? = nil,
+         isCatchUp: Bool = false,
+         catchUpStartDate: Date? = nil,
+         catchUpEndDate: Date? = nil,
          id: UUID = UUID()) {
         self.stableID = id
         self.amount = amount
         self.date = date
         self.category = category
         self.note = note
+        self.isCatchUp = isCatchUp
+        self.catchUpStartDate = catchUpStartDate
+        self.catchUpEndDate = catchUpEndDate
     }
 }
 

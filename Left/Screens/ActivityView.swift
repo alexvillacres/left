@@ -5,6 +5,7 @@ struct HistoryView: View {
     @Query(sort: \MonthPlan.monthStart, order: .reverse) private var plans: [MonthPlan]
     @State private var selectedMonthStart: Date?
     @State private var activeSpendingSheet: ActiveSpendingSheet?
+    @State private var activeCatchUpSheet: ActiveCatchUpSheet?
     @Environment(\.modelContext) private var modelContext
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.setAddAction) private var setAddAction
@@ -15,6 +16,13 @@ struct HistoryView: View {
         let id = UUID()
         let plan: MonthPlan
         var transaction: Transaction?
+    }
+
+    private struct ActiveCatchUpSheet: Identifiable {
+        let id = UUID()
+        let plan: MonthPlan
+        let period: ClosedRange<Date>
+        let transaction: Transaction
     }
 
     private struct SpendingDay: Identifiable {
@@ -68,6 +76,11 @@ struct HistoryView: View {
                             transaction: sheet.transaction,
                             dateRange: dates)
         }
+        .fullScreenCover(item: $activeCatchUpSheet) { sheet in
+            CatchUpView(plan: sheet.plan,
+                        period: sheet.period,
+                        transaction: sheet.transaction)
+        }
         .onAppear { updateAddAction() }
         .onChange(of: plan?.persistentModelID) { updateAddAction() }
         .onDisappear { clearAddAction("history.add-spending") }
@@ -99,7 +112,7 @@ struct HistoryView: View {
                 Section {
                     ForEach(day.transactions) { transaction in
                         Button {
-                            activeSpendingSheet = ActiveSpendingSheet(plan: plan, transaction: transaction)
+                            edit(transaction, in: plan)
                         } label: {
                             transactionRow(transaction)
                         }
@@ -150,13 +163,21 @@ struct HistoryView: View {
 
     private func transactionRow(_ transaction: Transaction) -> some View {
         HStack(spacing: AppSpacing.md) {
-            Image(systemName: transaction.category.symbol)
+            Image(systemName: transaction.isCatchUp ? "arrow.uturn.backward.circle" : transaction.category.symbol)
                 .font(.dmSans(.body))
                 .foregroundStyle(.secondary)
                 .frame(width: 28)
                 .accessibilityHidden(true)
             VStack(alignment: .leading, spacing: AppSpacing.xxs) {
-                if let note = transaction.note, !note.isEmpty {
+                if transaction.isCatchUp,
+                   let start = transaction.catchUpStartDate,
+                   let end = transaction.catchUpEndDate {
+                    Text("Catch-up")
+                        .font(.dmSans(.body, weight: .medium))
+                    Text(catchUpLabel(start: start, end: end))
+                        .font(.dmSans(.caption))
+                        .foregroundStyle(.secondary)
+                } else if let note = transaction.note, !note.isEmpty {
                     Text(note)
                         .font(.dmSans(.body, weight: .medium))
                         .lineLimit(2)
@@ -175,6 +196,24 @@ struct HistoryView: View {
         .padding(.vertical, AppSpacing.md)
         .frame(maxWidth: .infinity, minHeight: 44, alignment: .leading)
         .contentShape(Rectangle())
+    }
+
+    private func edit(_ transaction: Transaction, in plan: MonthPlan) {
+        if transaction.isCatchUp,
+           let start = transaction.catchUpStartDate,
+           let end = transaction.catchUpEndDate {
+            activeCatchUpSheet = ActiveCatchUpSheet(plan: plan,
+                                                     period: start...end,
+                                                     transaction: transaction)
+        } else {
+            activeSpendingSheet = ActiveSpendingSheet(plan: plan, transaction: transaction)
+        }
+    }
+
+    private func catchUpLabel(start: Date, end: Date) -> String {
+        let startText = start.formatted(.dateTime.month(.abbreviated).day())
+        let endText = end.formatted(.dateTime.month(.abbreviated).day())
+        return startText == endText ? startText : "\(startText)–\(endText)"
     }
 
     private func spendingDays(in plan: MonthPlan) -> [SpendingDay] {
