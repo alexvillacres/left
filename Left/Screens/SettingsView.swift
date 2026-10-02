@@ -5,6 +5,9 @@ import SwiftUI
 // and because the one thing worth saying about this app's data is that it never
 // leaves the device. Resist letting it grow into a preferences panel.
 struct SettingsView: View {
+    var onResetDemo: (() throws -> Void)?
+    @State private var isConfirmingDemoReset = false
+    @State private var demoResetError: String?
 
     // Both pages must resolve publicly before the first submission: App Review
     // opens them, and a dead link is a rejection.
@@ -61,6 +64,20 @@ struct SettingsView: View {
 #endif
                     }
 
+#if DEBUG
+                    if onResetDemo != nil {
+                        Button {
+                            isConfirmingDemoReset = true
+                        } label: {
+                            Text("Reset Left Demo")
+                                .font(.dmSans(.body, weight: .medium))
+                                .foregroundStyle(Color.leftFeedbackNegative)
+                                .frame(maxWidth: .infinity, minHeight: 52)
+                        }
+                        .buttonStyle(.plain)
+                    }
+#endif
+
                     dataNote
                 }
                 .padding(.horizontal, AppSpacing.xl)
@@ -72,7 +89,31 @@ struct SettingsView: View {
                 .padding(.horizontal, AppSpacing.xl)
                 .padding(.vertical, AppSpacing.sm)
         }
-        .background(Color(uiColor: .systemBackground).ignoresSafeArea())
+        .background(Color.leftBackground.ignoresSafeArea())
+#if DEBUG
+        .confirmationDialog("Reset Left Demo?",
+                            isPresented: $isConfirmingDemoReset,
+                            titleVisibility: .visible) {
+            Button("Erase demo data and start over", role: .destructive) {
+                do {
+                    try onResetDemo?()
+                } catch {
+                    demoResetError = error.localizedDescription
+                }
+            }
+            Button("Cancel", role: .cancel) {}
+        } message: {
+            Text("This removes all plans and spending in Left Demo and opens onboarding. Your regular Left app is unaffected.")
+        }
+        .alert("Couldn’t reset Left Demo", isPresented: Binding(
+            get: { demoResetError != nil },
+            set: { if !$0 { demoResetError = nil } }
+        )) {
+            Button("OK") { demoResetError = nil }
+        } message: {
+            Text(demoResetError ?? "")
+        }
+#endif
     }
 
     // MARK: - Rows
@@ -138,11 +179,7 @@ struct SettingsView: View {
 
     // Matches PlanView's heading treatment so the two tabs read as one app.
     private func screenTitle(_ title: String) -> some View {
-        Text(title)
-            .font(.dmSans(size: BudgetTypography.headingSize, weight: .bold, relativeTo: .title2))
-            .tracking(BudgetTypography.headingTracking)
-            .foregroundStyle(.primary)
-            .frame(maxWidth: .infinity, minHeight: 44, alignment: .leading)
+        ScreenTitleRow(title: title)
     }
 }
 

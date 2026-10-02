@@ -62,7 +62,7 @@ struct PlanSheetRow<Content: View>: View {
         .padding(.vertical, AppSpacing.lg)
         .overlay(alignment: .bottom) {
             Rectangle()
-                .fill(Color.leftDurationDivider)
+                .fill(Color.leftDivider)
                 .frame(height: 0.5)
                 .padding(.horizontal, -AppSpacing.xl)
         }
@@ -80,7 +80,7 @@ struct PlanSheetActions: View {
             Button(action: save) {
                 Text(primaryTitle)
                     .font(.dmSans(.body, weight: .semibold))
-                    .foregroundStyle(Color(uiColor: .systemBackground))
+                    .foregroundStyle(Color.leftBackground)
                     .frame(maxWidth: .infinity)
                     .frame(minHeight: 52)
                     .background(Color.primary)

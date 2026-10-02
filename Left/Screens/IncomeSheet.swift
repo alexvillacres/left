@@ -87,9 +87,9 @@ struct IncomeSheet: View {
                 actions
                     .padding(.horizontal, AppSpacing.xl)
                     .padding(.bottom, AppSpacing.lg)
-                    .background(Color(uiColor: .systemBackground))
+                    .background(Color.leftBackground)
             }
-            .background(Color(uiColor: .systemBackground).ignoresSafeArea())
+            .background(Color.leftBackground.ignoresSafeArea())
             .toolbar {
                 if isNameFocused || isAmountFocused {
                     ToolbarItemGroup(placement: .keyboard) {
@@ -135,7 +135,7 @@ struct IncomeSheet: View {
             VStack(alignment: .leading, spacing: AppSpacing.sm) {
                 Toggle("Use this amount next month too", isOn: $carriesAmountForward)
                     .font(.dmSans(.body, weight: .medium))
-                    .tint(.leftPositive)
+                    .tint(.leftAccent)
                     .frame(minHeight: 44)
 
                 Text(carriesAmountForward
@@ -222,7 +222,7 @@ struct IncomeSheet: View {
     plan.savingsGoals.append(SavingsGoal(name: "Roth IRA", amount: 500))
     plan.savingsGoals.append(SavingsGoal(name: "Emergency fund", amount: 0, percent: 10))
     plan.fixedExpenses.append(FixedExpense(name: "Rent", amount: 1800))
-    return Color(uiColor: .systemBackground)
+    return Color.leftBackground
         .sheet(isPresented: .constant(true)) {
             IncomeSheet(plan: plan, source: source)
         }

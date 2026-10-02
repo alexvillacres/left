@@ -107,57 +107,56 @@ struct LeftApp: App {
 }
 
 struct AppRoot: View {
-    private static let addActionIDs: Set<String> = [
-        "today.add-spending",
-        "activity.add-spending",
-        "plan.income.add",
-        "plan.fixed-expenses.add",
-        "plan.savings.add",
-    ]
-
     @Environment(\.modelContext) private var modelContext
     @Environment(\.scenePhase) private var scenePhase
     @Query(sort: \MonthPlan.monthStart) private var allPlans: [MonthPlan]
     @AppStorage("hasCompletedOnboarding") private var hasCompletedOnboarding = false
+    // Start of the most recent week whose report was shown or skipped.
+    @AppStorage("weeklyReportWeekStart") private var reportedWeekStart: Double = 0
     @State private var onboardingPlan: MonthPlan?
+    @State private var weeklyReport: WeeklyReport?
     @State private var selectedTab: AppTab = .today
-    @State private var addAction: AddAction?
-    @State private var selectedPlanMonth: Date?
+    @State private var todayVisitID = UUID()
+    @State private var animateTodayAddButtonOnEntry = false
+    @State private var tabDirection: CGFloat = 1
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    // Activity and Plan show the same granularity, so they browse one month
+    // together: stepping back in Activity and switching to Plan lands on that
+    // month rather than snapping to the current one. nil means the current month.
+    @State private var browsedMonth: Date?
     @State private var opensPlanIncome = false
 
     var body: some View {
-        // Deliberately not a TabView. TabView does not propagate a bottom
-        // safeAreaInset into its children, so the capsule drew on top of list
-        // content. Stacking the chrome under the screen makes the clearance a
-        // plain layout fact. The cost is that a
-        // tab switch resets that screen's navigation path — acceptable here,
+        // Deliberately not a TabView. Stacking the bar under the screen keeps
+        // its custom styling and makes the clearance a plain layout fact. The
+        // cost is that a tab switch resets that screen's navigation path — acceptable here,
         // where the screens are one level deep and Today is where you live.
         VStack(spacing: 0) {
-            currentScreen
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
+            ZStack {
+                currentScreen
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    .id(selectedTab)
+                    .transition(tabTransition)
+            }
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .clipped()
 
-            FloatingTabBar(selection: $selectedTab, addAction: addAction)
-                .padding(.top, AppSpacing.sm)
-                .padding(.bottom, AppSpacing.xs)
+            AppTabBar(selection: Binding(
+                get: { selectedTab },
+                set: { selectTab($0) }
+            ))
         }
-        .environment(\.setAddAction) { action in
-            assert(
-                action.map { Self.addActionIDs.contains($0.id) } ?? true,
-                "Only Today, Activity, and the three Plan editors may supply a navigation add action."
-            )
-            addAction = action
-        }
-        .environment(\.clearAddAction) { id in
-            // An outgoing destination can disappear after the incoming one
-            // has appeared. Only let it clear the action it installed.
-            if addAction?.id == id {
-                addAction = nil
+        .overlay {
+            if let weeklyReport {
+                WeeklyReportView(report: weeklyReport) {
+                    self.weeklyReport = nil
+                }
             }
         }
         .environment(\.font, .dmSans(.body))
         .tracking(BudgetTypography.appTracking)
         .tint(.leftAccent)
-        .background(Color(uiColor: .systemBackground).ignoresSafeArea())
+        .background(Color.leftBackground.ignoresSafeArea())
         .fullScreenCover(item: $onboardingPlan) { plan in
             NavigationStack {
                 OnboardingView(plan: plan) {
@@ -170,29 +169,59 @@ struct AppRoot: View {
         .task {
             HapticFeedback.prepareLight()
             ensurePlan()
+            presentWeeklyReportIfDue()
         }
         .onChange(of: scenePhase) { _, phase in
-            if phase == .active { ensurePlan() }
+            guard phase == .active else { return }
+            ensurePlan()
+            presentWeeklyReportIfDue()
         }
         .onChange(of: selectedTab) {
-            // A destination installs its own action on appearance. Clearing
-            // first prevents an outgoing tab's closure from leaking into the
-            // fixed slot while the next destination is being installed.
-            addAction = nil
             if selectedTab != .plan { opensPlanIncome = false }
         }
+    }
+
+    private var tabTransition: AnyTransition {
+        guard !reduceMotion else { return .identity }
+        let motion = Animation.smooth(duration: 0.20)
+        return .asymmetric(
+            insertion: .offset(x: -28 * tabDirection)
+                .combined(with: .opacity)
+                .animation(motion),
+            removal: .offset(x: tabRemovalOffset)
+                .combined(with: .opacity)
+                .animation(motion)
+        )
+    }
+
+    private var tabRemovalOffset: CGFloat { 28 * tabDirection }
+
+    private func selectTab(_ tab: AppTab) {
+        guard tab != selectedTab else { return }
+        let tabs = AppTab.allCases
+        // Earlier tabs are to the left, so the outgoing screen slides right.
+        tabDirection = (tabs.firstIndex(of: tab) ?? 0) < (tabs.firstIndex(of: selectedTab) ?? 0) ? 1 : -1
+        #if DEBUG
+        print("Tab \(selectedTab.title) → \(tab.title): removal x = \(tabRemovalOffset)")
+        #endif
+        if tab == .today {
+            todayVisitID = UUID()
+            animateTodayAddButtonOnEntry = true
+        }
+        selectedTab = tab
     }
 
     @ViewBuilder
     private var currentScreen: some View {
         switch selectedTab {
         case .today:
-            TodayView {
-                selectedPlanMonth = nil
+            TodayView(visitID: todayVisitID,
+                      animateAddButtonEntrance: animateTodayAddButtonOnEntry) {
+                browsedMonth = nil
                 opensPlanIncome = true
-                selectedTab = .plan
+                selectTab(.plan)
             }
-        case .activity: ActivityView()
+        case .activity: ActivityView(browsedMonth: $browsedMonth)
         case .plan: planTab
         }
     }
@@ -202,10 +231,9 @@ struct AppRoot: View {
         if let plan = selectedPlan ?? currentPlan ?? allPlans.last {
             NavigationStack {
                 PlanView(plan: plan, availablePlans: allPlans, onSelectMonth: { month in
-                    selectedPlanMonth = month == currentMonthStart ? nil : month
+                    browsedMonth = month == currentMonthStart ? nil : month
                     opensPlanIncome = false
-                    addAction = nil
-                }, opensIncome: opensPlanIncome)
+                }, opensIncome: opensPlanIncome, onResetDemo: demoResetAction)
             }
             .id(plan.monthStart)
         } else {
@@ -215,8 +243,8 @@ struct AppRoot: View {
     }
 
     private var selectedPlan: MonthPlan? {
-        guard let selectedPlanMonth else { return nil }
-        return allPlans.first { $0.monthStart == selectedPlanMonth }
+        guard let browsedMonth else { return nil }
+        return allPlans.first { $0.monthStart == browsedMonth }
     }
 
     private var currentPlan: MonthPlan? {
@@ -225,6 +253,88 @@ struct AppRoot: View {
 
     private var currentMonthStart: Date {
         Calendar.current.leftMonthStart(for: .now)
+    }
+
+    private var demoResetAction: (() throws -> Void)? {
+#if DEBUG
+        guard Bundle.main.bundleIdentifier == "com.villacres.left.demo" else { return nil }
+        return { try resetDemo() }
+#else
+        return nil
+#endif
+    }
+
+#if DEBUG
+    private func resetDemo() throws {
+        guard Bundle.main.bundleIdentifier == "com.villacres.left.demo" else { return }
+
+        do {
+            for transaction in try modelContext.fetch(FetchDescriptor<Transaction>()) {
+                modelContext.delete(transaction)
+            }
+            for expense in try modelContext.fetch(FetchDescriptor<FixedExpense>()) {
+                modelContext.delete(expense)
+            }
+            for allocation in try modelContext.fetch(FetchDescriptor<SavingsAllocation>()) {
+                modelContext.delete(allocation)
+            }
+            for goal in try modelContext.fetch(FetchDescriptor<SavingsGoal>()) {
+                modelContext.delete(goal)
+            }
+            for source in try modelContext.fetch(FetchDescriptor<IncomeSource>()) {
+                modelContext.delete(source)
+            }
+            for plan in try modelContext.fetch(FetchDescriptor<MonthPlan>()) {
+                modelContext.delete(plan)
+            }
+
+            let plan = MonthPlan(monthStart: currentMonthStart, monthlyIncome: 0, savingsGoal: 0)
+            modelContext.insert(plan)
+            try modelContext.save()
+
+            hasCompletedOnboarding = false
+            browsedMonth = nil
+            opensPlanIncome = false
+            selectedTab = .today
+            onboardingPlan = plan
+        } catch {
+            modelContext.rollback()
+            throw error
+        }
+    }
+#endif
+
+    // The first open of a new week shows last week's report once, whichever
+    // day that is. Skipped weeks don't pile up: only the latest one counts.
+    private func presentWeeklyReportIfDue(now: Date = .now) {
+        guard hasCompletedOnboarding, onboardingPlan == nil, weeklyReport == nil else { return }
+        let thisWeek = WeeklyReport.weekStart(containing: now)
+        let lastWeek = WeeklyReport.calendar.date(byAdding: .day, value: -7, to: thisWeek)!
+
+#if DEBUG
+        // Launch with `-WeeklyReportPreview 58` to see any ticket on demand.
+        if let preview = UserDefaults.standard.string(forKey: "WeeklyReportPreview"),
+           let left = Decimal(string: preview) {
+            weeklyReport = WeeklyReport(weekStart: lastWeek, allowance: left, spent: 0)
+            return
+        }
+#endif
+
+        guard lastWeek.timeIntervalSinceReferenceDate > reportedWeekStart else { return }
+
+        // While Today is asking to catch up on days from last week, the total
+        // is still incomplete. Wait until the gap is logged or acknowledged.
+        if let currentPlan,
+           let period = CatchUpPeriod.current(for: currentPlan, now: now),
+           period.hasThreeQuietDays,
+           period.range.lowerBound < thisWeek {
+            return
+        }
+
+        reportedWeekStart = lastWeek.timeIntervalSinceReferenceDate
+        guard let report = WeeklyReport.make(weekStart: lastWeek, plans: allPlans),
+              WeeklyReportView.hasTicket(for: report) else { return }
+        weeklyReport = report
     }
 
     private func ensurePlan() {

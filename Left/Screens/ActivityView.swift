@@ -3,14 +3,13 @@ import SwiftData
 
 struct ActivityView: View {
     @Query(sort: \MonthPlan.monthStart, order: .reverse) private var plans: [MonthPlan]
-    @State private var selectedMonthStart: Date?
+    // Owned by AppRoot so Plan stays on the same month. nil is the current month.
+    @Binding var browsedMonth: Date?
     @State private var activeSpendingSheet: ActiveSpendingSheet?
     @State private var activeCatchUpSheet: ActiveCatchUpSheet?
     @Environment(\.modelContext) private var modelContext
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
-    @Environment(\.setAddAction) private var setAddAction
-    @Environment(\.clearAddAction) private var clearAddAction
-    @ScaledMetric private var heroSize = 42
+    @ScaledMetric private var heroSize = 44
 
     private struct ActiveSpendingSheet: Identifiable {
         let id = UUID()
@@ -33,40 +32,45 @@ struct ActivityView: View {
     }
 
     private var plan: MonthPlan? {
-        let target = selectedMonthStart ?? Calendar.current.leftMonthStart(for: .now)
+        let target = browsedMonth ?? Calendar.current.leftMonthStart(for: .now)
         return plans.first { Calendar.current.isDate($0.monthStart, equalTo: target, toGranularity: .month) }
             ?? plans.first
     }
 
     var body: some View {
         NavigationStack {
-            VStack(alignment: .leading, spacing: AppSpacing.lg) {
-                Text("Activity")
-                    .font(.dmSans(size: heroSize, weight: .semibold, relativeTo: .largeTitle))
-                    .padding(.horizontal, AppSpacing.xl)
-                    .padding(.top, AppSpacing.xxl)
+            let days = plan.map(spendingDays) ?? []
 
-                if let plan {
-                    let days = spendingDays(in: plan)
-                    monthHeader(plan, total: days.reduce(0) { $0 + $1.total })
-                        .padding(.horizontal, AppSpacing.xl)
+            VStack(alignment: .leading, spacing: 0) {
+                ScreenGroundHeader(ground: .activity) {
+                    header(plan)
 
-                    if days.isEmpty {
-                        Text("No spending this month")
-                            .font(.dmSans(.body))
+                    if plan != nil {
+                        monthTotal(total: days.reduce(0) { $0 + $1.total })
+                            .padding(.top, AppSpacing.sm)
+                    }
+                }
+
+                Group {
+                    if let plan {
+                        if days.isEmpty {
+                            Text("No spending this month")
+                                .font(.dmSans(.body))
+                                .foregroundStyle(.secondary)
+                                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                        } else {
+                            historyList(days, plan: plan)
+                        }
+                    } else {
+                        Text("No plan yet")
                             .foregroundStyle(.secondary)
                             .frame(maxWidth: .infinity, maxHeight: .infinity)
-                    } else {
-                        historyList(days, plan: plan)
                     }
-                } else {
-                    Text("No plan yet")
-                        .foregroundStyle(.secondary)
-                        .frame(maxWidth: .infinity, maxHeight: .infinity)
                 }
+                .screenSheet()
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-            .background(Color(uiColor: .systemBackground).ignoresSafeArea())
+            .background(Color.leftBackground.ignoresSafeArea())
             .toolbar(.hidden, for: .navigationBar)
         }
         .fullScreenCover(item: $activeSpendingSheet) { sheet in
@@ -81,29 +85,52 @@ struct ActivityView: View {
                         period: sheet.period,
                         transaction: sheet.transaction)
         }
-        .onAppear { updateAddAction() }
-        .onChange(of: plan?.persistentModelID) { updateAddAction() }
-        .onDisappear { clearAddAction("activity.add-spending") }
     }
 
-    private func monthHeader(_ plan: MonthPlan, total: Decimal) -> some View {
-        VStack(alignment: .leading, spacing: AppSpacing.sm) {
-            HStack(spacing: AppSpacing.xs) {
-                Text(plan.monthStart, format: .dateTime.month(.wide).year())
-                    .font(.dmSans(.title3, weight: .medium))
-                    .fixedSize(horizontal: false, vertical: true)
-                Spacer(minLength: AppSpacing.sm)
-                monthNavigationButton(systemName: "chevron.left", delta: -1, label: "Previous month")
-                monthNavigationButton(systemName: "chevron.right", delta: 1, label: "Next month")
-            }
-            HStack(alignment: .firstTextBaseline, spacing: AppSpacing.xs) {
-                MoneyText(amount: total)
-                    .font(.dmSans(.title2, weight: .semibold))
-                Text("spent")
-                    .font(.dmSans(.subheadline))
-                    .foregroundStyle(.secondary)
+    // The month names what the total and the list below are describing.
+    @ViewBuilder
+    private func header(_ plan: MonthPlan?) -> some View {
+        VStack(alignment: .leading, spacing: 0) {
+            if let plan {
+                PeriodRow {
+                    PeriodPill(
+                        label: plan.monthStart.formatted(.dateTime.month(.wide).year()),
+                        isEnabled: plans.count > 1,
+                        accessibilityLabel: "Month, \(plan.monthStart.formatted(.dateTime.month(.wide).year()))",
+                        accessibilityHint: "Choose another month"
+                    ) {
+                        ForEach(plans) { candidate in
+                            Button {
+                                select(candidate)
+                            } label: {
+                                if candidate.monthStart == plan.monthStart {
+                                    Label(candidate.monthStart.formatted(.dateTime.month(.wide).year()),
+                                          systemImage: "checkmark")
+                                } else {
+                                    Text(candidate.monthStart, format: .dateTime.month(.wide).year())
+                                }
+                            }
+                        }
+                    }
+                } trailing: {
+                    PeriodStepper(previousLabel: "Previous month",
+                                  nextLabel: "Next month",
+                                  canGoPrevious: month(atOffset: -1) != nil,
+                                  canGoNext: month(atOffset: 1) != nil,
+                                  onPrevious: { shiftMonth(-1) },
+                                  onNext: { shiftMonth(1) })
+                }
             }
         }
+    }
+
+    private func monthTotal(total: Decimal) -> some View {
+        HeroMoneyText(amount: total, size: heroSize, suffix: "spent")
+            .foregroundStyle(.primary)
+            .contentTransition(.numericText())
+            .animation(reduceMotion ? nil : .spring(duration: 0.4), value: total)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .accessibilityElement(children: .combine)
     }
 
     private func historyList(_ days: [SpendingDay], plan: MonthPlan) -> some View {
@@ -119,7 +146,7 @@ struct ActivityView: View {
                         .buttonStyle(.plain)
                         .listRowInsets(EdgeInsets(top: 0, leading: AppSpacing.xl,
                                                   bottom: 0, trailing: AppSpacing.xl))
-                        .listRowBackground(Color(uiColor: .systemBackground))
+                        .listRowBackground(Color.leftBackground)
                         .accessibilityHint("Edit spending")
                         .swipeActions(edge: .trailing) {
                             Button(role: .destructive) {
@@ -146,12 +173,16 @@ struct ActivityView: View {
                     .foregroundStyle(.secondary)
                     .textCase(nil)
                     .padding(.vertical, AppSpacing.sm)
+                    .listRowInsets(EdgeInsets(top: 0, leading: AppSpacing.xl,
+                                              bottom: 0, trailing: AppSpacing.xl))
                     .accessibilityElement(children: .combine)
                     .accessibilityLabel("\(day.date.formatted(.dateTime.weekday(.wide).month(.wide).day())), total \(day.total.formatted(.currency(code: "USD")))")
                 }
+                .listSectionSeparator(.hidden)
             }
         }
         .listStyle(.plain)
+        .listRowSeparator(.hidden)
         .scrollContentBackground(.hidden)
     }
 
@@ -163,7 +194,7 @@ struct ActivityView: View {
 
     private func transactionRow(_ transaction: Transaction) -> some View {
         HStack(spacing: AppSpacing.md) {
-            Image(systemName: transaction.isCatchUp ? "arrow.uturn.backward.circle" : transaction.category.symbol)
+            CategoryIcon(category: transaction.category, isCatchUp: transaction.isCatchUp)
                 .font(.dmSans(.body))
                 .foregroundStyle(.secondary)
                 .frame(width: 28)
@@ -226,24 +257,18 @@ struct ActivityView: View {
             .sorted { $0.date > $1.date }
     }
 
-    private func monthNavigationButton(systemName: String, delta: Int, label: String) -> some View {
-        Button {
-            guard let target = month(atOffset: delta) else { return }
-            withAnimation(reduceMotion ? nil : .spring(duration: 0.4)) {
-                selectedMonthStart = Calendar.current.isDate(target.monthStart, equalTo: .now, toGranularity: .month)
-                    ? nil : target.monthStart
-            }
-            HapticFeedback.lightImpact()
-        } label: {
-            Image(systemName: systemName)
-                .font(.dmSans(.subheadline, weight: .medium))
-                .frame(width: 44, height: 44)
-                .contentShape(Rectangle())
+    private func shiftMonth(_ delta: Int) {
+        guard let target = month(atOffset: delta) else { return }
+        select(target)
+    }
+
+    private func select(_ target: MonthPlan) {
+        guard target.monthStart != plan?.monthStart else { return }
+        withAnimation(reduceMotion ? nil : .spring(duration: 0.4)) {
+            browsedMonth = Calendar.current.isDate(target.monthStart, equalTo: .now, toGranularity: .month)
+                ? nil : target.monthStart
         }
-        .buttonStyle(.plain)
-        .foregroundStyle(.secondary)
-        .disabled(month(atOffset: delta) == nil)
-        .accessibilityLabel(label)
+        HapticFeedback.lightImpact()
     }
 
     private func month(atOffset delta: Int) -> MonthPlan? {
@@ -260,16 +285,6 @@ struct ActivityView: View {
         let nextMonth = Calendar.current.date(byAdding: .month, value: 1, to: plan.monthStart)!
         let lastDate = min(Date.now, nextMonth.addingTimeInterval(-1))
         return plan.monthStart...max(plan.monthStart, lastDate)
-    }
-
-    private func updateAddAction() {
-        guard let plan, plan.monthStart <= Date.now else {
-            clearAddAction("activity.add-spending")
-            return
-        }
-        setAddAction(AddAction(id: "activity.add-spending", accessibilityLabel: "Add spending") {
-            activeSpendingSheet = ActiveSpendingSheet(plan: plan)
-        })
     }
 }
 
@@ -290,6 +305,6 @@ struct ActivityView: View {
     plan.transactions.append(Transaction(amount: 14.50, category: .food, note: "Lunch"))
     plan.transactions.append(Transaction(amount: 62, date: cal.date(byAdding: .day, value: 2, to: start)!, category: .shopping))
     plan.transactions.append(Transaction(amount: 41, date: cal.date(byAdding: .day, value: 3, to: start)!, category: .bar))
-    return ActivityView()
+    return ActivityView(browsedMonth: .constant(nil))
         .modelContainer(container)
 }

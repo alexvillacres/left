@@ -1,21 +1,26 @@
 import SwiftUI
 
 // 3×4 keypad: 1–9, blank, 0, backspace. Cents-first entry upstream
-// means no "." key is needed.
+// means no "." key is needed; whole-dollar entry passes `onDecimal` and the
+// blank becomes one.
 struct NumpadView: View {
     let onDigit: (Int) -> Void
     let onBackspace: () -> Void
+    var onDecimal: (() -> Void)? = nil
     @ScaledMetric private var keyHeight = 56
 
-    private let rows: [[Key]] = [
-        [.digit(1), .digit(2), .digit(3)],
-        [.digit(4), .digit(5), .digit(6)],
-        [.digit(7), .digit(8), .digit(9)],
-        [.blank, .digit(0), .backspace],
-    ]
+    private var rows: [[Key]] {
+        [
+            [.digit(1), .digit(2), .digit(3)],
+            [.digit(4), .digit(5), .digit(6)],
+            [.digit(7), .digit(8), .digit(9)],
+            [onDecimal == nil ? .blank : .decimal, .digit(0), .backspace],
+        ]
+    }
 
     private enum Key: Hashable {
         case digit(Int)
+        case decimal
         case blank
         case backspace
     }
@@ -40,6 +45,11 @@ struct NumpadView: View {
             keyButton { onDigit(n) } label: {
                 Text("\(n)")
             }
+        case .decimal:
+            keyButton { onDecimal?() } label: {
+                Text(Locale.current.decimalSeparator ?? ".")
+            }
+            .accessibilityLabel("Decimal point")
         case .backspace:
             keyButton { onBackspace() } label: {
                 Image(systemName: "delete.backward")

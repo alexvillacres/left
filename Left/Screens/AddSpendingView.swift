@@ -52,7 +52,7 @@ struct AddSpendingView: View {
             Color.clear
                 .overlay(alignment: .top) {
                     ZStack(alignment: .top) {
-                Color(uiColor: .systemBackground)
+                Color.leftEntryBackground
 
                 // This is a fixed canvas. The system keyboard is allowed to cover
                 // its lower portion instead of changing the VStack's proposed
@@ -116,6 +116,12 @@ struct AddSpendingView: View {
                 }
             }
         .ignoresSafeArea(.keyboard, edges: .bottom)
+        // Paint the home-indicator area beyond the fixed content canvas.
+        .background(Color.leftEntryBackground.ignoresSafeArea())
+        // Always dark, so every control and dynamic palette token resolves
+        // against the dark ground regardless of the system appearance.
+        .environment(\.colorScheme, .dark)
+        .preferredColorScheme(.dark)
         .onAppear {
             HapticFeedback.prepareLight()
         }
@@ -139,7 +145,7 @@ struct AddSpendingView: View {
             }
         }
         .padding(.horizontal, AppSpacing.xl)
-        .background(Color(uiColor: .systemBackground))
+        .background(Color.leftEntryBackground)
     }
 
     // MARK: - Note
@@ -175,9 +181,13 @@ struct AddSpendingView: View {
         return Button {
             category = cat
         } label: {
-            Label(cat.label, systemImage: cat.symbol)
+            Label {
+                Text(cat.label)
+            } icon: {
+                CategoryIcon(category: cat)
+            }
                 .font(.dmSans(.subheadline, weight: .medium))
-                .foregroundStyle(selected ? Color(uiColor: .systemBackground) : Color.primary)
+                .foregroundStyle(selected ? Color.leftBackground : Color.primary)
                 .lineLimit(1)
                 .padding(.horizontal, AppSpacing.md)
                 .padding(.vertical, AppSpacing.sm)
@@ -197,7 +207,7 @@ struct AddSpendingView: View {
         return Button(action: save) {
             Text(isEditing ? "Save" : "Log it")
                 .font(.dmSans(.headline, weight: .medium))
-                .foregroundStyle(isActive ? Color(uiColor: .systemBackground) : Color.secondary)
+                .foregroundStyle(isActive ? Color.leftBackground : Color.secondary)
                 .frame(maxWidth: .infinity)
                 .frame(minHeight: 52)
                 .background(isActive ? Color.primary : Color(uiColor: .secondarySystemFill))
@@ -217,7 +227,7 @@ struct AddSpendingView: View {
                 .frame(minHeight: 44)
         }
         .buttonStyle(.plain)
-        .foregroundStyle(Color.leftNegative)
+        .foregroundStyle(Color.leftFeedbackNegative)
     }
 
     // MARK: - Entry

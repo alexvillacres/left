@@ -23,7 +23,7 @@ struct SegmentedControl<Option: Hashable>: View {
                 .background {
                     if isSelected {
                         RoundedRectangle(cornerRadius: 8, style: .continuous)
-                            .fill(Color(uiColor: .systemBackground))
+                            .fill(Color.leftBackground)
                             .shadow(color: .black.opacity(0.12), radius: 1, y: 1)
                     }
                 }

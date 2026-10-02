@@ -41,6 +41,7 @@ struct MonthPlanDTO: Codable {
     let carriedAllocated: String
     let carryAnnouncedAt: Date?
     let catchUpAcknowledgedThrough: Date?
+    let catchUpPromptShownAt: Date?
     let incomeSourceIDs: [UUID]
     let savingsGoalIDs: [UUID]
     let savingsAllocationIDs: [UUID]
@@ -200,6 +201,7 @@ enum LeftDataTransfer {
                              carriedAllocated: decimalString($0.carriedAllocated),
                              carryAnnouncedAt: $0.carryAnnouncedAt,
                              catchUpAcknowledgedThrough: $0.catchUpAcknowledgedThrough,
+                             catchUpPromptShownAt: $0.catchUpPromptShownAt,
                              incomeSourceIDs: $0.incomeSources.map(\.id).sorted(by: uuidOrder),
                              savingsGoalIDs: $0.savingsGoals.map(\.id).sorted(by: uuidOrder),
                              savingsAllocationIDs: $0.savingsAllocations.map(\.id).sorted(by: uuidOrder),
@@ -322,6 +324,7 @@ enum LeftDataTransfer {
                 plan.carriedAllocated = try decimal(dto.carriedAllocated, field: "carriedAllocated", id: dto.id)
                 plan.carryAnnouncedAt = dto.carryAnnouncedAt
                 plan.catchUpAcknowledgedThrough = dto.catchUpAcknowledgedThrough
+                plan.catchUpPromptShownAt = dto.catchUpPromptShownAt
             }
 
             for dto in records.incomeSources {

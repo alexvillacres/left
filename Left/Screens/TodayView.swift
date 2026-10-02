@@ -6,17 +6,22 @@ struct TodayView: View {
     @Query(sort: \MonthPlan.monthStart, order: .reverse) private var plans: [MonthPlan]
     @State private var activeSpendingSheet: ActiveSpendingSheet?
     @State private var activeCatchUp: ActiveCatchUp?
-    @State private var didHandleForcedCatchUp = false
     @State private var isShowingBalance = false
+    @State private var balanceBreakdownHeight: CGFloat = 0
     @State private var pastDate: Date? = nil
+    @State private var hasStartedAddButtonEntrance = false
+    @State private var isAddButtonExpanded = false
+    @State private var isAddButtonOpaque = false
+    @Namespace private var addSpendingMorph
+    private static let addSpendingMorphID = "add-spending"
+    var visitID: UUID = UUID()
+    var animateAddButtonEntrance = false
     var onSetUpIncome: () -> Void = {}
     @Environment(\.modelContext) private var modelContext
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
-    @Environment(\.setAddAction) private var setAddAction
-    @Environment(\.clearAddAction) private var clearAddAction
-    @ScaledMetric private var heroSize = 44
-    // Scales so the block grows with the type inside it instead of clipping.
-    @ScaledMetric private var heroBlockHeight: CGFloat = 220
+    private static let addButtonSize: CGFloat = 56
+    // HeroMoneyText's font already scales with Dynamic Type.
+    private let heroSize: CGFloat = 44
 
     private struct ActiveSpendingSheet: Identifiable {
         let id = UUID()
@@ -27,16 +32,13 @@ struct TodayView: View {
         let id = UUID()
         let period: ClosedRange<Date>
         let transaction: Transaction?
-        let isForcedPrompt: Bool
     }
 
     private struct DaySnapshot {
         let date: Date
-        let dailyRate: Decimal
         let allowance: Decimal
         let spent: Decimal
         let remaining: Decimal
-        let yesterdayDelta: Decimal?
         let transactions: [Transaction]
     }
 
@@ -67,12 +69,26 @@ struct TodayView: View {
         let snapshot = plan.map(makeSnapshot)
 
         NavigationStack {
-            VStack(spacing: 0) {
-                heroSection(plan: plan, snapshot: snapshot)
-                if let plan, isToday {
-                    catchUpCard(for: plan)
+            GeometryReader { geometry in
+                VStack(spacing: 0) {
+                    heroSection(plan: plan, snapshot: snapshot,
+                                maxBreakdownHeight: geometry.size.height * 0.45)
+                    VStack(spacing: 0) {
+                        if let plan, isToday {
+                            CatchUpCard(plan: plan, visitID: visitID) { period in
+                                openCatchUp(period)
+                            }
+                            .padding(.top, AppSpacing.sm)
+                        }
+                        if let snapshot, snapshot.transactions.isEmpty {
+                            emptySpendingState(needsIncomeSetup: plan?.needsIncomeSetup ?? false)
+                        } else {
+                            transactionsSection(snapshot?.transactions ?? [])
+                        }
+                    }
+                    .screenSheet(showsOutline: false)
                 }
-                transactionsSection(snapshot?.transactions ?? [])
+                .frame(width: geometry.size.width, height: geometry.size.height, alignment: .top)
             }
             .contentShape(Rectangle())
             .simultaneousGesture(daySwipeGesture)
@@ -82,43 +98,28 @@ struct TodayView: View {
             .accessibilityAction(named: "Next day") {
                 shiftDay(1)
             }
-            .background(Color(uiColor: .systemBackground).ignoresSafeArea())
+            .overlay(alignment: .bottomTrailing) {
+                if plan != nil {
+                    addSpendingButton
+                }
+            }
+            .background(Color.leftBackground.ignoresSafeArea())
         }
         .fullScreenCover(item: $activeSpendingSheet) { sheet in
             if let plan {
                 AddSpendingView(plan: plan, date: transactionDate, transaction: sheet.transaction)
+                // Editing opens from a list row, which is not the morph source.
+                .morphDestination(id: Self.addSpendingMorphID,
+                                  in: addSpendingMorph,
+                                  active: sheet.transaction == nil && !reduceMotion)
             }
         }
         .fullScreenCover(item: $activeCatchUp) { catchUp in
             if let plan {
                 CatchUpView(plan: plan,
                             period: catchUp.period,
-                            transaction: catchUp.transaction) {
-                    if catchUp.isForcedPrompt {
-                        didHandleForcedCatchUp = true
-                    }
-                }
+                            transaction: catchUp.transaction)
             }
-        }
-        .sheet(isPresented: $isShowingBalance) {
-            if let snapshot, plan?.needsIncomeSetup == false {
-                TodayBalanceSheet(date: snapshot.date,
-                                  allowance: snapshot.allowance,
-                                  spent: snapshot.spent,
-                                  remaining: snapshot.remaining)
-            }
-        }
-        .onAppear {
-            setAddAction(
-                AddAction(
-                    id: "today.add-spending",
-                    accessibilityLabel: "Add spending",
-                    perform: { activeSpendingSheet = ActiveSpendingSheet() }
-                )
-            )
-        }
-        .onDisappear {
-            clearAddAction("today.add-spending")
         }
     }
 
@@ -133,71 +134,77 @@ struct TodayView: View {
     // MARK: - Date
 
     @ViewBuilder
-    private var dateContext: some View {
-        HStack(spacing: AppSpacing.xs) {
-            if isToday {
-                Text("Today")
-                    .font(.dmSans(.subheadline))
-                    .foregroundStyle(.secondary)
-            } else {
-                pastDateButton
-            }
-
-            Spacer()
-
-            if isToday, let plan, let context = catchUpPeriod(for: plan) {
-                Button {
-                    activeCatchUp = ActiveCatchUp(period: context.range,
-                                                   transaction: context.transaction,
-                                                   isForcedPrompt: context.isForcedPrompt)
-                } label: {
-                    Image(systemName: "arrow.uturn.backward.circle")
-                        .font(.dmSans(.subheadline, weight: .medium))
-                        .frame(width: 44, height: 44)
-                        .contentShape(Rectangle())
+    private var periodRow: some View {
+        PeriodRow {
+            PeriodPill(
+                label: dayLabel(displayedDate),
+                isEnabled: selectableDays.count > 1,
+                accessibilityLabel: isToday
+                    ? "Today, \(displayedDate.formatted(.dateTime.weekday(.wide).month(.wide).day()))"
+                    : displayedDate.formatted(.dateTime.weekday(.wide).month(.wide).day()),
+                accessibilityHint: "Choose another day this month"
+            ) {
+                ForEach(selectableDays, id: \.self) { day in
+                    Button {
+                        selectDay(day)
+                    } label: {
+                        if Calendar.current.isDate(day, inSameDayAs: displayedDate) {
+                            Label(dayLabel(day), systemImage: "checkmark")
+                        } else {
+                            Text(dayLabel(day))
+                        }
+                    }
                 }
-                .buttonStyle(.plain)
-                .foregroundStyle(.secondary)
-                .accessibilityLabel("Catch up spending")
-                .accessibilityHint("Add one total for spending not already logged")
             }
 
-            dayNavigationButton(systemName: "chevron.left", delta: -1, label: "Previous day")
-            dayNavigationButton(systemName: "chevron.right", delta: 1, label: "Next day")
+            if !isToday {
+                PeriodResetButton(title: "Today") {
+                    withAnimation(reduceMotion ? nil : .spring(duration: 0.4)) {
+                        pastDate = nil
+                    }
+                }
+                .environment(\.colorScheme, .light)
+            }
+        } trailing: {
+            PeriodStepper(previousLabel: "Previous day",
+                          nextLabel: "Next day",
+                          canGoPrevious: navigationTarget(for: -1) != nil,
+                          canGoNext: navigationTarget(for: 1) != nil,
+                          onPrevious: { shiftDay(-1) },
+                          onNext: { shiftDay(1) })
         }
     }
 
-    private var pastDateButton: some View {
-        Button {
-            withAnimation(reduceMotion ? nil : .spring(duration: 0.4)) {
-                pastDate = nil
-            }
-        } label: {
-            HStack(spacing: AppSpacing.xs) {
-                Text(displayedDate, format: .dateTime.weekday(.abbreviated).month(.abbreviated).day())
-                Image(systemName: "arrow.uturn.forward")
-                    .font(.dmSans(.caption2))
-            }
-            .font(.dmSans(.subheadline))
-            .foregroundStyle(.secondary)
-        }
-        .buttonStyle(.plain)
-        .accessibilityLabel("Return to today")
+    private func dayLabel(_ date: Date) -> String {
+        date.formatted(.dateTime.weekday(.abbreviated).month(.abbreviated).day())
     }
 
-    private func dayNavigationButton(systemName: String, delta: Int, label: String) -> some View {
-        Button {
-            shiftDay(delta)
-        } label: {
-            Image(systemName: systemName)
-                .font(.dmSans(.subheadline, weight: .medium))
-                .frame(width: 44, height: 44)
-                .contentShape(Rectangle())
+    // The days the pill can reach: this plan's month up to today, newest first.
+    private var selectableDays: [Date] {
+        guard let plan else { return [] }
+        let calendar = Calendar.current
+        let todayStart = calendar.startOfDay(for: .now)
+        guard let range = calendar.range(of: .day, in: .month, for: plan.monthStart) else { return [] }
+
+        return range.compactMap { offset -> Date? in
+            guard let day = calendar.date(byAdding: .day, value: offset - 1, to: plan.monthStart) else {
+                return nil
+            }
+            let start = calendar.startOfDay(for: day)
+            return start <= todayStart ? start : nil
         }
-        .buttonStyle(.plain)
-        .foregroundStyle(.secondary)
-        .disabled(navigationTarget(for: delta) == nil)
-        .accessibilityLabel(label)
+        .reversed()
+    }
+
+    private func selectDay(_ day: Date) {
+        let calendar = Calendar.current
+        guard !calendar.isDate(day, inSameDayAs: displayedDate) else { return }
+        let todayStart = calendar.startOfDay(for: .now)
+
+        withAnimation(reduceMotion ? nil : .spring(duration: 0.4)) {
+            pastDate = day >= todayStart ? nil : day
+        }
+        HapticFeedback.lightImpact()
     }
 
     private func shiftDay(_ delta: Int) {
@@ -262,43 +269,80 @@ struct TodayView: View {
 
     // MARK: - Hero
 
-    private func heroSection(plan: MonthPlan?, snapshot: DaySnapshot?) -> some View {
-        VStack(alignment: .leading, spacing: 0) {
-            dateContext
-                .frame(minHeight: 44, alignment: .leading)
-                .padding(.bottom, AppSpacing.sm)
+    private func heroSection(plan: MonthPlan?, snapshot: DaySnapshot?,
+                             maxBreakdownHeight: CGFloat) -> some View {
+        ScreenGroundHeader(ground: .today) {
+            periodRow
 
             if let plan, plan.needsIncomeSetup {
                 incomeSetup(plan)
+                    .padding(.top, AppSpacing.sm)
+                    .environment(\.colorScheme, .light)
             } else {
                 heroAmount(snapshot: snapshot)
+                    .padding(.top, AppSpacing.sm)
 
                 if let snapshot {
-                    statusChip(snapshot: snapshot)
-                        .padding(.top, AppSpacing.sm)
+                    // Grow the ground to move spending down. At larger text
+                    // sizes, scroll the explanation so spending stays reachable.
+                    ScrollView {
+                        balanceBreakdown(snapshot)
+                            .fixedSize(horizontal: false, vertical: true)
+                            .background {
+                                GeometryReader { geometry in
+                                    Color.clear.preference(key: BalanceBreakdownHeightKey.self,
+                                                           value: geometry.size.height)
+                                }
+                            }
+                    }
+                    .scrollBounceBehavior(.basedOnSize)
+                    .frame(height: isShowingBalance ? min(balanceBreakdownHeight, maxBreakdownHeight) : 0)
+                    .opacity(isShowingBalance ? 1 : 0)
+                    .accessibilityHidden(!isShowingBalance)
+                    .padding(.top, isShowingBalance ? AppSpacing.xl : 0)
+                    .padding(.bottom, isShowingBalance ? AppSpacing.sm : 0)
+                    .onPreferenceChange(BalanceBreakdownHeightKey.self) { height in
+                        balanceBreakdownHeight = height
+                    }
                 }
             }
         }
-        .frame(maxWidth: .infinity)
-        .frame(minHeight: heroBlockHeight, alignment: .topLeading)
-        .padding(.horizontal, AppSpacing.xl)
-        .padding(.top, AppSpacing.lg)
+    }
+
+    private func balanceBreakdown(_ snapshot: DaySnapshot) -> some View {
+        TodayBalanceSheet(date: snapshot.date,
+                          allowance: snapshot.allowance,
+                          spent: snapshot.spent,
+                          remaining: snapshot.remaining,
+                          entryCount: snapshot.transactions.count)
     }
 
     @ViewBuilder
     private func heroAmount(snapshot: DaySnapshot?) -> some View {
         if let snapshot {
             Button {
-                isShowingBalance = true
+                withAnimation(reduceMotion ? nil : .spring(duration: 0.4, bounce: 0.12)) {
+                    isShowingBalance.toggle()
+                }
             } label: {
-                HStack(alignment: .firstTextBaseline, spacing: AppSpacing.sm) {
+                // "left" names the number now that there is no screen title;
+                // the hero steps down a size before it would wrap.
+                HStack(alignment: .top, spacing: AppSpacing.xxs) {
+                    // The amount alone carries state now that the status line
+                    // is gone: below zero it takes the negative color, resolved
+                    // light because it sits on the ground. The minus sign keeps
+                    // it from relying on color alone.
                     HeroMoneyText(amount: snapshot.remaining, size: heroSize, suffix: "left")
-                        .foregroundStyle(.primary)
+                        .foregroundStyle(snapshot.remaining < 0
+                                         ? AnyShapeStyle(Color.leftFeedbackNegative)
+                                         : AnyShapeStyle(.primary))
+                        .environment(\.colorScheme, .light)
                         .contentTransition(.numericText())
                         .animation(reduceMotion ? nil : .spring(duration: 0.4), value: snapshot.remaining)
                     Image(systemName: "info.circle")
-                        .font(.dmSans(.subheadline))
+                        .font(.system(size: ScreenHeaderMetrics.iconSize))
                         .foregroundStyle(.secondary)
+                        .padding(.top, AppSpacing.sm)
                         .accessibilityHidden(true)
                 }
                 .frame(maxWidth: .infinity, minHeight: 44, alignment: .leading)
@@ -306,39 +350,14 @@ struct TodayView: View {
             }
             .buttonStyle(.plain)
             .accessibilityLabel("\(snapshot.remaining.formatted(.currency(code: "USD"))) left\(isToday ? " to spend today" : " on " + snapshot.date.formatted(.dateTime.month(.wide).day()))")
-            .accessibilityHint("Shows the allowance, carried-forward balance, and logged spending behind this amount")
+            .accessibilityValue(isShowingBalance ? "Expanded" : "Collapsed")
+            .accessibilityHint(isShowingBalance
+                               ? "Hides the balance breakdown"
+                               : "Shows the allowance, carried-forward balance, and logged spending based on your plan")
         } else {
-            Text("$– left")
+            Text("$–")
                 .font(.dmSans(size: heroSize, weight: .semibold, relativeTo: .largeTitle))
                 .foregroundStyle(.secondary)
-        }
-    }
-
-    // MARK: - Status chip
-
-    // The chip reports yesterday's outcome — a fresh, daily-scale number
-    // rather than the cumulative carryover (the hero already bakes that in).
-    // Day 1 (and a perfectly on-budget yesterday) falls back to the daily rate.
-    @ViewBuilder
-    private func statusChip(snapshot: DaySnapshot) -> some View {
-        if let delta = snapshot.yesterdayDelta, delta > 0 {
-            chip(
-                "+\(delta.formatted(.currency(code: "USD"))) left from yesterday",
-                textColor: .leftPositive,
-                backgroundColor: .leftPositiveFill
-            )
-        } else if let delta = snapshot.yesterdayDelta, delta < 0 {
-            chip(
-                "\(delta.formatted(.currency(code: "USD"))) over yesterday",
-                textColor: .leftNegative,
-                backgroundColor: .leftNegativeFill
-            )
-        } else {
-            chip(
-                "\(snapshot.dailyRate.formatted(.currency(code: "USD"))) \(isToday ? "budget today" : "daily budget")",
-                textColor: .secondary,
-                backgroundColor: .leftNeutralFill
-            )
         }
     }
 
@@ -357,7 +376,7 @@ struct TodayView: View {
                 Button(action: onSetUpIncome) {
                     Text("Set \(month) income")
                         .font(.dmSans(.subheadline, weight: .semibold))
-                        .foregroundStyle(Color(uiColor: .systemBackground))
+                        .foregroundStyle(Color.leftBackground)
                         .padding(.horizontal, AppSpacing.md)
                         .frame(minHeight: 44)
                         .background(Color.primary, in: Capsule())
@@ -365,157 +384,108 @@ struct TodayView: View {
                 .buttonStyle(.plain)
             }
         }
-        .padding(.bottom, AppSpacing.lg)
-    }
-
-    private func chip(_ text: String, textColor: Color, backgroundColor: Color) -> some View {
-        Text(text)
-            .font(.dmSans(.subheadline, weight: .medium))
-            .monospacedDigit()
-            .foregroundStyle(textColor)
-            .padding(.horizontal, AppSpacing.md)
-            .padding(.vertical, AppSpacing.xs)
-            .background(backgroundColor)
-            .clipShape(Capsule())
     }
 
     // MARK: - Catch up
 
-    private struct CatchUpPeriod {
-        let range: ClosedRange<Date>
-        let shouldPrompt: Bool
-        let transaction: Transaction?
-        let isForcedPrompt: Bool
-    }
-
-    private func catchUpPeriod(for plan: MonthPlan) -> CatchUpPeriod? {
-        let calendar = Calendar.current
-        let today = calendar.startOfDay(for: .now)
-        let yesterday = calendar.date(byAdding: .day, value: -1, to: today)!
-
-        if forcesCatchUpPrompt && !didHandleForcedCatchUp {
-            let start = calendar.date(byAdding: .day, value: -2, to: yesterday)!
-            let range = start...yesterday
-            let catchUp = plan.transactions.first {
-                $0.isCatchUp && $0.catchUpStartDate.map(calendar.startOfDay) == range.lowerBound &&
-                $0.catchUpEndDate.map(calendar.startOfDay) == range.upperBound
-            }
-            return CatchUpPeriod(range: range,
-                                 shouldPrompt: true,
-                                 transaction: catchUp,
-                                 isForcedPrompt: true)
-        }
-
-        let planStart = max(calendar.startOfDay(for: plan.effectiveCreatedAt), plan.monthStart)
-        guard planStart <= yesterday else { return nil }
-
-        let latestLoggedDay = plan.transactions.compactMap { transaction -> Date? in
-            if transaction.isCatchUp, let end = transaction.catchUpEndDate {
-                return min(calendar.startOfDay(for: end), yesterday)
-            }
-            guard transaction.date < today else { return nil }
-            return calendar.startOfDay(for: transaction.date)
-        }.max()
-        let acknowledged = plan.catchUpAcknowledgedThrough.map { calendar.startOfDay(for: $0) }
-        let coveredThrough = [latestLoggedDay, acknowledged].compactMap { $0 }.max()
-        let firstUncovered = coveredThrough.flatMap {
-            calendar.date(byAdding: .day, value: 1, to: $0)
-        } ?? planStart
-        // When every prior day is already covered, the permanent action still
-        // opens a useful one-day flow for an extra amount the user remembers.
-        let rangeStart = min(max(firstUncovered, planStart), yesterday)
-        let missedDays = max(0, calendar.dateComponents([.day], from: rangeStart, to: yesterday).day ?? 0) + 1
-        let range = rangeStart...yesterday
-        let catchUp = plan.transactions.first {
-            $0.isCatchUp && $0.catchUpStartDate.map(calendar.startOfDay) == range.lowerBound &&
-            $0.catchUpEndDate.map(calendar.startOfDay) == range.upperBound
-        }
-        return CatchUpPeriod(range: range,
-                             shouldPrompt: firstUncovered <= yesterday && missedDays >= 3,
-                             transaction: catchUp,
-                             isForcedPrompt: false)
-    }
-
-    private var forcesCatchUpPrompt: Bool {
-#if DEBUG
-        ProcessInfo.processInfo.arguments.contains("-showCatchUpPrompt")
-#else
-        false
-#endif
-    }
-
-    @ViewBuilder
-    private func catchUpCard(for plan: MonthPlan) -> some View {
-        if let context = catchUpPeriod(for: plan), context.shouldPrompt {
-            VStack(alignment: .leading, spacing: AppSpacing.md) {
-                HStack(alignment: .top, spacing: AppSpacing.md) {
-                    Image(systemName: "arrow.uturn.backward.circle")
-                        .font(.dmSans(.title3)).foregroundStyle(.secondary)
-                    VStack(alignment: .leading, spacing: AppSpacing.xxs) {
-                        Text("Anything to catch up on?")
-                            .font(.dmSans(.subheadline, weight: .semibold))
-                        Text("No spending logged since \(context.range.lowerBound.formatted(.dateTime.weekday(.wide).month(.abbreviated).day())).")
-                            .font(.dmSans(.footnote)).foregroundStyle(.secondary)
-                            .fixedSize(horizontal: false, vertical: true)
-                    }
-                    Spacer(minLength: 0)
-                    Button {
-                        acknowledge(context.range, in: plan)
-                    } label: {
-                        Image(systemName: "xmark")
-                            .font(.dmSans(.caption, weight: .semibold))
-                            .frame(width: 32, height: 32)
-                    }
-                    .buttonStyle(.plain)
-                    .foregroundStyle(.secondary)
-                    .accessibilityLabel("Dismiss catch-up prompt")
-                }
-                HStack(spacing: AppSpacing.lg) {
-                    Button {
-                        activeCatchUp = ActiveCatchUp(period: context.range,
-                                                      transaction: context.transaction,
-                                                      isForcedPrompt: context.isForcedPrompt)
-                    } label: {
-                        Text(context.transaction == nil ? "Add a total" : "Edit total")
-                            .font(.dmSans(.subheadline, weight: .semibold))
-                    }
-                    .buttonStyle(.plain).foregroundStyle(Color.primary)
-                    Button { acknowledge(context.range, in: plan) } label: {
-                        Text("Nothing spent").font(.dmSans(.subheadline, weight: .medium))
-                    }
-                    .buttonStyle(.plain).foregroundStyle(.secondary)
-                    .accessibilityHint("Marks the period as having no spending")
-                }
-            }
-            .padding(AppSpacing.lg)
-            .background(Color.leftNeutralFill, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
-            .padding(.horizontal, AppSpacing.xl).padding(.bottom, AppSpacing.md)
-            .transition(.move(edge: .top).combined(with: .opacity))
-        }
-    }
-
-    private func acknowledge(_ period: ClosedRange<Date>, in plan: MonthPlan) {
-        withAnimation(reduceMotion ? nil : .spring(duration: 0.3)) {
-            if forcesCatchUpPrompt {
-                didHandleForcedCatchUp = true
-            }
-            plan.catchUpAcknowledgedThrough = max(plan.catchUpAcknowledgedThrough ?? .distantPast,
-                                                  period.upperBound)
-        }
-        try? modelContext.save()
-        HapticFeedback.lightImpact()
+    private func openCatchUp(_ period: CatchUpPeriod) {
+        activeCatchUp = ActiveCatchUp(period: period.range,
+                                      transaction: period.transaction)
     }
 
     // MARK: - Transactions
 
+    private func emptySpendingState(needsIncomeSetup: Bool) -> some View {
+        ScrollView {
+            VStack(spacing: AppSpacing.sm) {
+                Image("TodayEmptyState")
+                    .resizable()
+                    .scaledToFit()
+                    .foregroundStyle(Color.leftAccent)
+                    .frame(maxWidth: 288)
+                    .accessibilityHidden(true)
+
+                Text("No spending today")
+                    .font(.dmSans(size: 16, weight: .semibold, relativeTo: .headline))
+                    .foregroundStyle(.primary)
+
+                Text(isToday
+                     ? (needsIncomeSetup
+                        ? "Tap + to log spending."
+                        : "Tap + to log spending. Unused allowance carries forward.")
+                     : "There are no entries for this day.")
+                    .font(.dmSans(.subheadline, weight: .medium))
+                    .foregroundStyle(.secondary)
+                    .multilineTextAlignment(.center)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .frame(maxWidth: 250)
+            }
+            .padding(.horizontal, AppSpacing.xl)
+            .padding(.top, AppSpacing.xxl * 2)
+            .padding(.bottom, Self.addButtonSize + AppSpacing.xl * 2)
+            .frame(maxWidth: .infinity)
+        }
+        .scrollIndicators(.hidden)
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+    }
+
+    // Today's one add action; it always means logging spending.
+    private var addSpendingButton: some View {
+        Button {
+            activeSpendingSheet = ActiveSpendingSheet()
+        } label: {
+            Image(systemName: "plus")
+                .font(.system(size: 20, weight: .semibold))
+                .foregroundStyle(Color.leftTextOnAccent)
+                .frame(width: Self.addButtonSize, height: Self.addButtonSize)
+                .background(Circle().fill(Color.leftAccent))
+                .contentShape(Circle())
+        }
+        .buttonStyle(.plain)
+        .morphSource(id: Self.addSpendingMorphID,
+                     in: addSpendingMorph,
+                     cornerRadius: Self.addButtonSize / 2,
+                     active: !reduceMotion)
+        .scaleEffect(addButtonVisibleImmediately || isAddButtonExpanded ? 1 : 0, anchor: .center)
+        .opacity(addButtonVisibleImmediately || isAddButtonOpaque ? 1 : 0)
+        .padding(AppSpacing.xl)
+        .accessibilityLabel("Add spending")
+        .onAppear {
+            guard animateAddButtonEntrance, !reduceMotion,
+                  !hasStartedAddButtonEntrance else { return }
+            hasStartedAddButtonEntrance = true
+            withAnimation(.smooth(duration: 0.14).delay(0.02)) {
+                isAddButtonOpaque = true
+            }
+            withAnimation(.spring(response: 0.30, dampingFraction: 0.82).delay(0.04)) {
+                isAddButtonExpanded = true
+            }
+        }
+    }
+
+    private var addButtonVisibleImmediately: Bool {
+        !animateAddButtonEntrance || reduceMotion
+    }
+
     private func transactionsSection(_ transactions: [Transaction]) -> some View {
+        VStack(alignment: .leading, spacing: AppSpacing.sm) {
+            Text("Spending")
+                .font(.dmSans(.headline, weight: .semibold))
+                .accessibilityAddTraits(.isHeader)
+                .padding(.horizontal, AppSpacing.xl)
+
+            transactionList(transactions)
+        }
+        .padding(.top, AppSpacing.xl)
+    }
+
+    private func transactionList(_ transactions: [Transaction]) -> some View {
         List {
             ForEach(transactions) { tx in
                 Button {
                     if tx.isCatchUp, let start = tx.catchUpStartDate, let end = tx.catchUpEndDate {
                         activeCatchUp = ActiveCatchUp(period: start...end,
-                                                      transaction: tx,
-                                                      isForcedPrompt: false)
+                                                      transaction: tx)
                     } else {
                         activeSpendingSheet = ActiveSpendingSheet(transaction: tx)
                     }
@@ -524,7 +494,7 @@ struct TodayView: View {
                 }
                 .buttonStyle(.plain)
                 .listRowInsets(EdgeInsets())
-                .listRowBackground(Color(uiColor: .systemBackground))
+                .listRowBackground(Color.leftBackground)
                 .alignmentGuide(.listRowSeparatorLeading) { _ in
                     0
                 }
@@ -541,15 +511,17 @@ struct TodayView: View {
             }
         }
         .listStyle(.plain)
+        // The last row scrolls clear of the add button.
+        .contentMargins(.bottom, Self.addButtonSize + AppSpacing.xl * 2, for: .scrollContent)
         .scrollIndicators(.hidden)
         .scrollContentBackground(.hidden)
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
-        .background(Color(uiColor: .systemBackground))
+        .background(Color.leftBackground)
     }
 
     private func transactionRow(_ tx: Transaction) -> some View {
         HStack(spacing: AppSpacing.md) {
-            Image(systemName: tx.isCatchUp ? "arrow.uturn.backward.circle" : tx.category.symbol)
+            CategoryIcon(category: tx.category, isCatchUp: tx.isCatchUp)
                 .font(.dmSans(.body))
                 .foregroundStyle(.secondary)
                 .frame(width: 28)
@@ -595,11 +567,9 @@ struct TodayView: View {
         let rate = plan.dailyRate
         let asOf = balanceDate
         let startOfDisplayedDay = calendar.startOfDay(for: asOf)
-        let startOfPreviousDay = calendar.date(byAdding: .day, value: -1, to: startOfDisplayedDay)
 
         var spentAsOfBalance: Decimal = 0
         var spentOnDisplayedDay: Decimal = 0
-        var spentOnPreviousDay: Decimal = 0
         var displayedTransactions: [Transaction] = []
 
         for transaction in plan.transactions {
@@ -612,28 +582,27 @@ struct TodayView: View {
             if calendar.isDate(transaction.date, inSameDayAs: asOf) {
                 displayedTransactions.append(transaction)
             }
-            if let startOfPreviousDay,
-               transaction.date >= startOfPreviousDay,
-               transaction.date < startOfDisplayedDay {
-                spentOnPreviousDay += transaction.amount
-            }
         }
 
         displayedTransactions.sort { $0.date > $1.date }
 
         return DaySnapshot(
             date: asOf,
-            dailyRate: rate,
             allowance: plan.earnedDays(through: asOf, calendar: calendar) > 0 ? rate : 0,
             spent: spentOnDisplayedDay,
             remaining: plan.remainingToday(on: asOf,
                                            spentAsOf: spentAsOfBalance,
                                            calendar: calendar),
-            yesterdayDelta: plan.yesterdayDelta(for: asOf,
-                                                spentOnPreviousDay: spentOnPreviousDay,
-                                                calendar: calendar),
             transactions: displayedTransactions
         )
+    }
+}
+
+private struct BalanceBreakdownHeightKey: PreferenceKey {
+    static let defaultValue: CGFloat = 0
+
+    static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) {
+        value = max(value, nextValue())
     }
 }
 

@@ -31,6 +31,7 @@ struct HeroMoneyText: View {
     let amount: Decimal
     var size: CGFloat = 56
     var suffix: String? = nil
+    var showsCents = true
 
     private static let scales: [CGFloat] = [1, 0.85, 0.7, 0.55]
 
@@ -52,9 +53,12 @@ struct HeroMoneyText: View {
     }
 
     private var label: Text {
+        let format = showsCents
+            ? Decimal.FormatStyle.Currency(code: "USD")
+            : Decimal.FormatStyle.Currency(code: "USD").precision(.fractionLength(0))
         guard let suffix else {
-            return Text(amount, format: .currency(code: "USD"))
+            return Text(amount, format: format)
         }
-        return Text("\(amount, format: .currency(code: "USD")) \(suffix)")
+        return Text("\(amount, format: format) \(suffix)")
     }
 }

@@ -20,8 +20,6 @@ struct PlanView: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(\.modelContext) private var modelContext
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
-    @Environment(\.setAddAction) private var setAddAction
-    @Environment(\.clearAddAction) private var clearAddAction
     @Bindable var plan: MonthPlan
     var isOnboarding: Bool = false
     var onBack: (() -> Void)?
@@ -29,21 +27,18 @@ struct PlanView: View {
     var availablePlans: [MonthPlan] = []
     var onSelectMonth: ((Date) -> Void)?
     var opensIncome: Bool = false
+    var onResetDemo: (() throws -> Void)?
 
     @State private var activeExpenseSheet: ActiveExpenseSheet?
     @State private var activeIncomeSheet: ActiveIncomeSheet?
     @State private var activeSavingsSheet: ActiveSavingsSheet?
-    @State private var newExpenseName = ""
-    @State private var newExpenseAmount: Decimal = 0
-    @State private var newExpenseCadence: ExpenseCadence = .monthly
-    @State private var newExpenseStartsOn: Date?
-    @State private var newExpenseEndsAfter: Date?
-    @State private var isExpenseDurationExpanded = false
     @State private var expenseBasis: ExpenseBasis = .monthly
     @State private var onboardingStep: OnboardingStep = .income
     @State private var isIncomePresented = false
+    @State private var isSettingsPresented = false
     @State private var incomeUpdateNote: String?
     @FocusState private var isMoneyFieldFocused: Bool
+    @ScaledMetric private var planTotalSize: CGFloat = 44
 
     private var monthName: String { plan.monthStart.formatted(.dateTime.month(.wide)) }
     private var canEditPlan: Bool {
@@ -63,7 +58,7 @@ struct PlanView: View {
                 planEditor
             }
         }
-        .background(Color(uiColor: .systemBackground).ignoresSafeArea())
+        .background(Color.leftBackground.ignoresSafeArea())
         .toolbar {
             if isMoneyFieldFocused {
                 ToolbarItemGroup(placement: .keyboard) {
@@ -76,7 +71,7 @@ struct PlanView: View {
             }
         }
         .sheet(item: $activeExpenseSheet) { sheet in
-            recurringExpenseSheet(expense: sheet.expense)
+            RecurringExpenseSheet(plan: plan, expense: sheet.expense)
         }
         .sheet(item: $activeIncomeSheet) { sheet in
             IncomeSheet(plan: plan, source: sheet.source) { change in
@@ -99,9 +94,11 @@ struct PlanView: View {
 
     private var planEditor: some View {
         VStack(spacing: 0) {
+            planHeader
+
             ScrollView {
                 VStack(alignment: .leading, spacing: AppSpacing.lg) {
-                    planHeader
+                    planDerivation
 
                     VStack(spacing: 0) {
                         Button {
@@ -111,13 +108,11 @@ struct PlanView: View {
                                 title: "Income",
                                 subtitle: incomeSummary,
                                 amount: plan.incomeTotal,
+                                indicatorColor: .leftNeutralFill,
                                 subtractsFromPlan: false,
                                 isPending: plan.needsIncomeSetup
                             )
                         }
-
-                        Divider()
-                            .padding(.horizontal, -AppSpacing.xl)
 
                         NavigationLink {
                             fixedExpensesEditor
@@ -126,12 +121,10 @@ struct PlanView: View {
                                 title: "Fixed expenses",
                                 subtitle: itemCount(plan.fixedExpenses.count, singular: "expense"),
                                 amount: plan.fixedTotal,
+                                indicatorColor: .leftPlanExpenses,
                                 subtractsFromPlan: true
                             )
                         }
-
-                        Divider()
-                            .padding(.horizontal, -AppSpacing.xl)
 
                         NavigationLink {
                             savingsEditor
@@ -140,6 +133,7 @@ struct PlanView: View {
                                 title: "Savings",
                                 subtitle: savingsSummary,
                                 amount: plan.savingsAmount,
+                                indicatorColor: .leftPlanSavings,
                                 subtractsFromPlan: true
                             )
                         }
@@ -147,95 +141,108 @@ struct PlanView: View {
                     .buttonStyle(.plain)
                 }
                 .padding(.horizontal, AppSpacing.xl)
-                .padding(.top, AppSpacing.sm)
+                .padding(.top, AppSpacing.xl)
                 .padding(.bottom, AppSpacing.xl)
             }
-
-            planDerivationBarFooter
+            .screenSheet()
+        }
+        .navigationDestination(isPresented: $isSettingsPresented) {
+            SettingsView(onResetDemo: onResetDemo)
+                .toolbar(.visible, for: .navigationBar)
+                .navigationBarTitleDisplayMode(.inline)
         }
         .navigationTitle("\(monthName) plan")
         .navigationBarTitleDisplayMode(.inline)
         .toolbar(.hidden, for: .navigationBar)
-        .onAppear {
-            // Defensive cleanup for the NavigationStack pop path. The editor
-            // also clears on disappearance, so either lifecycle ordering leaves
-            // the Plan root with its reserved empty slot.
-            setAddAction(nil)
-        }
     }
 
     private var planHeader: some View {
-        VStack(alignment: .leading, spacing: AppSpacing.sm) {
-            HStack {
-                screenTitle("Plan")
-                NavigationLink {
-                    SettingsView()
-                        .toolbar(.visible, for: .navigationBar)
-                        .navigationBarTitleDisplayMode(.inline)
-                } label: {
-                    Image(systemName: "gearshape")
-                        .font(.dmSans(.body))
-                        .foregroundStyle(.secondary)
-                        .frame(width: 44, height: 44)
-                        .contentShape(Rectangle())
-                }
-                .buttonStyle(.plain)
-                .accessibilityLabel("Settings")
-            }
-
-            HStack(spacing: AppSpacing.xs) {
-                Menu {
+        ScreenGroundHeader(ground: .plan) {
+            PeriodRow {
+                PeriodPill(
+                    label: plan.monthStart.formatted(.dateTime.month(.wide).year()),
+                    isEnabled: orderedPlans.count > 1,
+                    accessibilityLabel: "Plan month, \(plan.monthStart.formatted(.dateTime.month(.wide).year()))",
+                    accessibilityHint: "Choose a previous month's plan"
+                ) {
                     ForEach(orderedPlans.reversed()) { candidate in
                         Button {
                             selectMonth(candidate.monthStart)
                         } label: {
                             if candidate.monthStart == plan.monthStart {
-                                Label(candidate.monthStart.formatted(.dateTime.month(.wide).year()), systemImage: "checkmark")
+                                Label(candidate.monthStart.formatted(.dateTime.month(.wide).year()),
+                                      systemImage: "checkmark")
                             } else {
                                 Text(candidate.monthStart, format: .dateTime.month(.wide).year())
                             }
                         }
                     }
-                } label: {
-                    HStack(spacing: AppSpacing.sm) {
-                        Text(plan.monthStart, format: .dateTime.month(.wide).year())
-                            .font(.dmSans(.title3, weight: .medium))
-                        Image(systemName: "chevron.down")
-                            .font(.caption.weight(.semibold))
-                    }
-                    .foregroundStyle(.primary)
-                    .frame(minHeight: 44)
-                    .contentShape(Rectangle())
                 }
-                .disabled(orderedPlans.count < 2)
-                .accessibilityLabel("Plan month, \(plan.monthStart.formatted(.dateTime.month(.wide).year()))")
-                .accessibilityHint("Choose a previous month's plan")
-
-                Spacer(minLength: 0)
-                monthButton(delta: -1, symbol: "chevron.left", label: "Previous plan")
-                monthButton(delta: 1, symbol: "chevron.right", label: "Next plan")
+            } trailing: {
+                PeriodStepper(previousLabel: "Previous plan",
+                              nextLabel: "Next plan",
+                              canGoPrevious: adjacentPlan(-1) != nil,
+                              canGoNext: adjacentPlan(1) != nil,
+                              onPrevious: { stepMonth(-1) },
+                              onNext: { stepMonth(1) })
             }
 
-            Text(canEditPlan ? "Your allowance is based on this month’s plan." : "Past plan · Read only")
-                .font(.dmSans(.subheadline))
-                .foregroundStyle(.secondary)
-                .fixedSize(horizontal: false, vertical: true)
+            HStack(alignment: .top, spacing: AppSpacing.xs) {
+                planTotal
+                settingsLink
+            }
+            .padding(.top, AppSpacing.sm)
         }
     }
 
-    private func monthButton(delta: Int, symbol: String, label: String) -> some View {
+    // The tab bar names the screen, so Settings sits beside the headline.
+    private var settingsLink: some View {
         Button {
-            if let target = adjacentPlan(delta) { selectMonth(target.monthStart) }
+            isSettingsPresented = true
         } label: {
-            Image(systemName: symbol)
-                .font(.dmSans(.subheadline, weight: .medium))
-                .frame(width: 44, height: 44)
+            AppIcon(asset: "IconSettings", size: 22)
+                .foregroundStyle(.secondary)
+                .frame(width: ScreenHeaderMetrics.rowHeight,
+                       height: ScreenHeaderMetrics.rowHeight)
                 .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
-        .foregroundStyle(.secondary)
-        .disabled(adjacentPlan(delta) == nil)
-        .accessibilityLabel(label)
+        .accessibilityLabel("Settings")
+    }
+
+    // The same slot Today and Activity fill with their headline number: what
+    // this month's plan leaves to spend. The daily rate lives in the bar below.
+    private var planTotal: some View {
+        VStack(alignment: .leading, spacing: AppSpacing.xxs) {
+            // Whole dollars like every other plan amount: it is income minus
+            // whole-dollar fixed expenses and savings. The daily rate below
+            // keeps its cents because Today builds from it.
+            HeroMoneyText(amount: plan.monthlySpendable, size: planTotalSize,
+                          suffix: "to spend", showsCents: false)
+                .foregroundStyle(.primary)
+                .contentTransition(.numericText())
+                .animation(reduceMotion ? nil : .spring(duration: 0.4), value: plan.monthlySpendable)
+
+            if let planTotalCaption {
+                Text(planTotalCaption)
+                    .font(.dmSans(.subheadline))
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .accessibilityElement(children: .combine)
+    }
+
+    // Shown only when the headline needs a caveat; a normal month has none.
+    private var planTotalCaption: String? {
+        guard canEditPlan else { return "Past plan · Read only" }
+        guard !plan.needsIncomeSetup else { return "Add income to see your allowance" }
+        return nil
+    }
+
+    private func stepMonth(_ delta: Int) {
+        if let target = adjacentPlan(delta) { selectMonth(target.monthStart) }
     }
 
     private func adjacentPlan(_ delta: Int) -> MonthPlan? {
@@ -254,10 +261,16 @@ struct PlanView: View {
         title: String,
         subtitle: String,
         amount: Decimal,
+        indicatorColor: Color,
         subtractsFromPlan: Bool,
         isPending: Bool = false
     ) -> some View {
-        HStack(spacing: AppSpacing.md) {
+        HStack(spacing: AppSpacing.lg) {
+            Capsule()
+                .fill(indicatorColor)
+                .frame(width: 8, height: 36)
+                .accessibilityHidden(true)
+
             VStack(alignment: .leading, spacing: AppSpacing.xxs) {
                 Text(title)
                     .font(.dmSans(.body, weight: .medium))
@@ -281,7 +294,7 @@ struct PlanView: View {
                 .foregroundStyle(Color(uiColor: .tertiaryLabel))
         }
         .frame(maxWidth: .infinity)
-        .padding(.vertical, AppSpacing.lg)
+        .frame(minHeight: 64)
         .contentShape(Rectangle())
         .accessibilityElement(children: .ignore)
         .accessibilityLabel("\(title), \(subtitle), \(isPending ? "Amount needed" : summaryAmount(amount, subtractsFromPlan: subtractsFromPlan))")
@@ -340,19 +353,6 @@ struct PlanView: View {
                 }
             }
         }
-        .onAppear {
-            guard canEditPlan else { setAddAction(nil); return }
-            setAddAction(
-                AddAction(
-                    id: "plan.income.add",
-                    accessibilityLabel: "Add income source",
-                    perform: { activeIncomeSheet = ActiveIncomeSheet() }
-                )
-            )
-        }
-        .onDisappear {
-            clearAddAction("plan.income.add")
-        }
     }
 
     private var fixedExpensesEditor: some View {
@@ -392,19 +392,6 @@ struct PlanView: View {
                 }
             }
         }
-        .onAppear {
-            guard canEditPlan else { setAddAction(nil); return }
-            setAddAction(
-                AddAction(
-                    id: "plan.fixed-expenses.add",
-                    accessibilityLabel: "Add expense",
-                    perform: { presentExpenseEditor() }
-                )
-            )
-        }
-        .onDisappear {
-            clearAddAction("plan.fixed-expenses.add")
-        }
     }
 
     private var savingsEditor: some View {
@@ -430,19 +417,6 @@ struct PlanView: View {
                     }
                 }
             }
-        }
-        .onAppear {
-            guard canEditPlan else { setAddAction(nil); return }
-            setAddAction(
-                AddAction(
-                    id: "plan.savings.add",
-                    accessibilityLabel: "Add savings goal",
-                    perform: { activeSavingsSheet = ActiveSavingsSheet() }
-                )
-            )
-        }
-        .onDisappear {
-            clearAddAction("plan.savings.add")
         }
     }
 
@@ -495,7 +469,7 @@ struct PlanView: View {
 
             planDerivationBarFooter
         }
-        .background(Color(uiColor: .systemBackground).ignoresSafeArea())
+        .background(Color.leftBackground.ignoresSafeArea())
         .navigationTitle("")
         .navigationBarTitleDisplayMode(.inline)
         .toolbar(.hidden, for: .navigationBar)
@@ -677,7 +651,7 @@ struct PlanView: View {
                 .monospacedDigit()
         }
         .padding(AppSpacing.md)
-        .background(Color(uiColor: .secondarySystemBackground))
+        .background(Color.leftSurface)
         .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
         .contextMenu {
             Button("Delete \(goal.name)", systemImage: "trash", role: .destructive) {
@@ -810,6 +784,14 @@ struct PlanView: View {
     // MARK: - Derivation
 
     private var planDerivationBarFooter: some View {
+        planDerivation
+            .padding(.horizontal, AppSpacing.xl)
+            .padding(.vertical, AppSpacing.md)
+            .background(Color.leftBackground)
+            .overlay(alignment: .top) { Divider() }
+    }
+
+    private var planDerivation: some View {
         Group {
             if plan.needsIncomeSetup {
                 Text(canEditPlan ? "Your daily allowance will appear once \(monthName)’s income is set." : "Income wasn’t completed for this month.")
@@ -821,10 +803,6 @@ struct PlanView: View {
                 DerivationBar(plan: plan)
             }
         }
-        .padding(.horizontal, AppSpacing.xl)
-        .padding(.vertical, AppSpacing.md)
-        .background(Color(uiColor: .systemBackground))
-        .overlay(alignment: .top) { Divider() }
     }
 
     private var wholeDollarFormat: Decimal.FormatStyle.Currency {
@@ -902,7 +880,7 @@ struct PlanView: View {
         Button(action: action) {
             Text(title)
                 .font(.dmSans(.body, weight: .medium))
-                .foregroundStyle(Color.leftPositive)
+                .foregroundStyle(Color.leftAccent)
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .padding(.vertical, AppSpacing.lg)
                 .contentShape(Rectangle())
@@ -933,7 +911,7 @@ struct PlanView: View {
                 .padding(.horizontal, AppSpacing.xl)
                 .padding(.top, AppSpacing.md)
                 .padding(.bottom, AppSpacing.lg)
-                .background(Color(uiColor: .systemBackground))
+                .background(Color.leftBackground)
         }
         .accessibilityElement(children: .contain)
         .toolbar(.hidden, for: .navigationBar)
@@ -944,7 +922,7 @@ struct PlanView: View {
             ForEach(OnboardingStep.allCases) { step in
                 Capsule()
                     .fill(step.rawValue <= onboardingStep.rawValue
-                          ? Color.leftPositive
+                          ? Color.leftAccent
                           : Color(uiColor: .tertiarySystemFill))
                     .frame(maxWidth: .infinity)
                     .frame(height: 4)
@@ -993,7 +971,7 @@ struct PlanView: View {
                 }
             }
             .padding(.horizontal, AppSpacing.lg)
-            .background(Color(uiColor: .secondarySystemBackground))
+            .background(Color.leftSurface)
             .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
 
             Button {
@@ -1098,7 +1076,7 @@ struct PlanView: View {
                 }
             }
             .padding(.horizontal, AppSpacing.lg)
-            .background(Color(uiColor: .secondarySystemBackground))
+            .background(Color.leftSurface)
             .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
 
             Button {
@@ -1151,13 +1129,13 @@ struct PlanView: View {
                     Text("\(plan.dailyRate.formatted(.currency(code: "USD"))) per day")
                         .font(.dmSans(.title2, weight: .semibold))
                         .monospacedDigit()
-                        .foregroundStyle(Color.leftPositive)
+                        .foregroundStyle(Color.leftPlanSpendableText)
                 }
                 .accessibilityElement(children: .combine)
             } else {
                 Text("This plan leaves no money for daily spending. Lower your goal or go back and adjust your recurring expenses.")
                     .font(.dmSans(.subheadline))
-                    .foregroundStyle(Color.leftNegative)
+                    .foregroundStyle(Color.leftFeedbackNegative)
                     .multilineTextAlignment(.center)
                     .frame(maxWidth: 300)
                     .accessibilityLabel("Plan needs adjustment. This plan leaves no money for daily spending.")
@@ -1177,7 +1155,7 @@ struct PlanView: View {
         VStack(spacing: AppSpacing.md) {
             Text(eyebrow)
                 .font(.dmSans(.caption2, weight: .medium))
-                .foregroundStyle(Color.leftPositive)
+                .foregroundStyle(Color.secondary)
 
             Text(title)
                 .font(.dmSans(size: BudgetTypography.headingSize, weight: .bold, relativeTo: .title2))
@@ -1267,7 +1245,7 @@ struct PlanView: View {
             Button(action: continueOnboarding) {
                 Text(onboardingStep == .savings ? "See today's budget" : "Continue")
                     .font(.dmSans(.body, weight: .semibold))
-                    .foregroundStyle(Color(uiColor: .systemBackground))
+                    .foregroundStyle(Color.leftBackground)
                     .frame(maxWidth: .infinity)
                     .frame(minHeight: 52)
                     .background(Color.primary)
@@ -1327,83 +1305,8 @@ struct PlanView: View {
         }
     }
 
-    private func recurringExpenseSheet(expense: FixedExpense?) -> some View {
-        NavigationStack {
-            VStack(spacing: 0) {
-                ScrollView {
-                    VStack(alignment: .leading, spacing: AppSpacing.lg) {
-                        PlanSheetHeader(
-                            title: expense == nil ? "Add recurring expense" : "Edit recurring expense",
-                            subtitle: "Recurring cost in \(plan.monthStart.formatted(.dateTime.month(.wide)))"
-                        )
-
-                        VStack(spacing: 0) {
-                            PlanSheetRow("Name") {
-                                TextField("Expense name", text: $newExpenseName)
-                                    .multilineTextAlignment(.leading)
-                                    .neutralControl()
-                            }
-
-                            PlanSheetRow("Amount") {
-                                moneyField(value: $newExpenseAmount, accessibilityLabel: "Recurring expense amount")
-                            }
-
-                            PlanSheetRow("Repeats") {
-                                Picker("Repeats", selection: $newExpenseCadence) {
-                                    ForEach(ExpenseCadence.allCases) { cadence in
-                                        Text(cadence.label).tag(cadence)
-                                    }
-                                }
-                                .pickerStyle(.menu)
-                                .tint(Color.leftAccent)
-                            }
-
-                            MonthDurationPicker(startsOn: $newExpenseStartsOn,
-                                                endsAfter: $newExpenseEndsAfter,
-                                                isExpanded: $isExpenseDurationExpanded)
-                        }
-
-                        DerivationBar(plan: plan,
-                                      fixedTotal: previewFixedTotal(replacing: expense),
-                                      showsDetails: false)
-                    }
-                    .padding(.horizontal, AppSpacing.xl)
-                    .padding(.top, AppSpacing.xl)
-                    .padding(.bottom, AppSpacing.lg)
-                }
-                .scrollDismissesKeyboard(.interactively)
-
-                PlanSheetActions(primaryTitle: expense == nil ? "Add expense" : "Save",
-                                 isEnabled: canSaveExpense,
-                                 save: { saveExpense(expense) },
-                                 cancel: { activeExpenseSheet = nil })
-                .padding(.horizontal, AppSpacing.xl)
-                .padding(.bottom, AppSpacing.lg)
-                .background(Color(uiColor: .systemBackground))
-            }
-            .background(Color(uiColor: .systemBackground).ignoresSafeArea())
-            .toolbar {
-                if isMoneyFieldFocused {
-                    ToolbarItemGroup(placement: .keyboard) {
-                        Spacer()
-                        Button("Done") {
-                            isMoneyFieldFocused = false
-                        }
-                        .font(.dmSans(.subheadline, weight: .medium))
-                    }
-                }
-            }
-        }
-        .presentationDetents([.large])
-        .presentationDragIndicator(.visible)
-    }
-
     private func screenTitle(_ title: String) -> some View {
-        Text(title)
-            .font(.dmSans(size: BudgetTypography.headingSize, weight: .bold, relativeTo: .title2))
-            .tracking(BudgetTypography.headingTracking)
-            .foregroundStyle(.primary)
-            .frame(maxWidth: .infinity, minHeight: 44, alignment: .leading)
+        ScreenTitleRow(title: title)
     }
 
     private func moneyField(value: Binding<Decimal>, accessibilityLabel: String = "Amount") -> some View {
@@ -1415,51 +1318,7 @@ struct PlanView: View {
     }
 
     private func presentExpenseEditor(_ expense: FixedExpense? = nil) {
-        newExpenseName = expense?.name ?? ""
-        newExpenseAmount = expense?.amount ?? 0
-        newExpenseCadence = expense?.effectiveCadence ?? .monthly
-        newExpenseStartsOn = expense?.startsOn
-        newExpenseEndsAfter = expense?.endsAfter
-        isExpenseDurationExpanded = false
         activeExpenseSheet = ActiveExpenseSheet(expense: expense)
-    }
-
-    private func saveExpense(_ expense: FixedExpense?) {
-        guard canSaveExpense else { return }
-        let trimmedName = newExpenseName.trimmingCharacters(in: .whitespacesAndNewlines)
-        if let expense {
-            expense.name = trimmedName
-            expense.amount = newExpenseAmount
-            expense.cadence = newExpenseCadence
-            expense.startsOn = newExpenseStartsOn
-            expense.endsAfter = newExpenseEndsAfter
-        } else {
-            plan.fixedExpenses.append(
-                FixedExpense(name: trimmedName,
-                             amount: newExpenseAmount,
-                             cadence: newExpenseCadence,
-                             startsOn: newExpenseStartsOn,
-                             endsAfter: newExpenseEndsAfter)
-            )
-        }
-        activeExpenseSheet = nil
-    }
-
-    private var canSaveExpense: Bool {
-        !newExpenseName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-            && newExpenseAmount > 0
-    }
-
-    private func previewFixedTotal(replacing expense: FixedExpense?) -> Decimal {
-        let original = expense?.covers(month: plan.monthStart) == true
-            ? expense?.monthlyAmount ?? 0
-            : 0
-        let draftCoversMonth = (newExpenseStartsOn.map { $0 <= plan.monthStart } ?? true)
-            && (newExpenseEndsAfter.map { plan.monthStart <= $0 } ?? true)
-        let draft = draftCoversMonth
-            ? newExpenseAmount / newExpenseCadence.divisorToMonthly
-            : 0
-        return plan.fixedTotal - original + draft
     }
 
     private func deleteExpense(_ expense: FixedExpense) {

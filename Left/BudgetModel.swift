@@ -63,6 +63,10 @@ final class MonthPlan {
     // remains represented by transactions.
     var catchUpAcknowledgedThrough: Date?
 
+    // The last day the inline catch-up reminder was shown. Showing it is not
+    // an acknowledgement of the uncovered spending period.
+    var catchUpPromptShownAt: Date?
+
     @Relationship(deleteRule: .cascade, inverse: \IncomeSource.plan)
     var incomeSources: [IncomeSource] = []
 
@@ -462,7 +466,7 @@ enum ExpenseCadence: String, Codable, CaseIterable, Identifiable {
         switch self {
         case .monthly: "Monthly"
         case .quarterly: "Quarterly"
-        case .annually: "Annually"
+        case .annually: "Yearly"
         }
     }
 
@@ -729,6 +733,63 @@ extension MonthPlan {
         let pace = elapsed > 0 ? spentToDate / Decimal(elapsed) : 0
         let projectedSpend = spentToDate + pace * Decimal(max(0, totalEarned - elapsed))
         return savingsAmount + (plannedSpend - projectedSpend)
+    }
+}
+
+// MARK: - Weekly report
+// Looks back at one Monday–Sunday week: the allowance its active days earned
+// minus the spending dated inside it. Carry and earlier rollover stay out so
+// the number describes that week alone. A week can span two monthly plans with
+// different daily rates, so the allowance is summed day by day.
+
+struct WeeklyReport: Equatable {
+    let weekStart: Date
+    let allowance: Decimal
+    let spent: Decimal
+
+    var left: Decimal { allowance - spent }
+
+    // Sunday, for labeling the range.
+    var lastDay: Date {
+        Self.calendar.date(byAdding: .day, value: 6, to: weekStart)!
+    }
+
+    // Weeks always start on Monday, whatever the locale's first weekday.
+    static var calendar: Calendar {
+        var calendar = Calendar.current
+        calendar.firstWeekday = 2
+        return calendar
+    }
+
+    static func weekStart(containing date: Date) -> Date {
+        calendar.dateInterval(of: .weekOfYear, for: date)!.start
+    }
+
+    // nil when no day of the week had an active plan, or when a plan covering
+    // it was still waiting on income: its allowance was zero, not earned.
+    static func make(weekStart: Date, plans: [MonthPlan]) -> WeeklyReport? {
+        let calendar = Self.calendar
+        var allowance: Decimal = 0
+        var activeDays = 0
+
+        for offset in 0..<7 {
+            let day = calendar.date(byAdding: .day, value: offset, to: weekStart)!
+            guard let plan = plans.first(where: {
+                calendar.isDate($0.monthStart, equalTo: day, toGranularity: .month)
+            }) else { continue }
+            guard calendar.component(.day, from: day) >= plan.firstActiveDay else { continue }
+            if plan.needsIncomeSetup { return nil }
+            allowance += plan.dailyRate
+            activeDays += 1
+        }
+        guard activeDays > 0 else { return nil }
+
+        let weekEnd = calendar.date(byAdding: .day, value: 7, to: weekStart)!
+        let spent = plans
+            .flatMap(\.transactions)
+            .filter { $0.date >= weekStart && $0.date < weekEnd }
+            .reduce(Decimal(0)) { $0 + $1.amount }
+        return WeeklyReport(weekStart: weekStart, allowance: allowance, spent: spent)
     }
 }
 

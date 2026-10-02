@@ -44,7 +44,7 @@ struct MonthDurationPicker: View {
             .buttonStyle(.plain)
             .overlay(alignment: .bottom) {
                 Rectangle()
-                    .fill(Color.leftDurationDivider)
+                    .fill(Color.leftDivider)
                     .frame(height: 0.5)
                     .padding(.horizontal, -AppSpacing.xl)
             }
@@ -102,18 +102,18 @@ struct MonthDurationPicker: View {
             VStack(spacing: 1) {
                 Text(month.formatted(.dateTime.month(.abbreviated)))
                     .font(.system(size: 17, weight: .medium))
-                    .foregroundStyle(endpoint ? .white : inRange ? Color.leftOnAccentFill : .primary)
+                    .foregroundStyle(endpoint ? Color.leftTextOnAccent : Color.primary)
 
                 Text(month.formatted(.dateTime.year()))
                     .font(.system(size: 13))
-                    .foregroundStyle(endpoint ? Color.leftOnAccent : inRange ? Color.leftAccentMuted : Color.leftMonthYear)
+                    .foregroundStyle(endpoint ? Color.leftTextOnAccent : Color.secondary)
             }
             .frame(maxWidth: .infinity)
             .frame(height: 64)
-            .background(endpoint ? Color.leftAccentStrong : inRange ? Color.leftAccentFill : Color(uiColor: .systemBackground))
+            .background(endpoint ? Color.leftAccent : inRange ? Color.leftNeutralFill : Color.leftBackground)
             .overlay {
                 RoundedRectangle(cornerRadius: 12, style: .continuous)
-                    .stroke(endpoint ? Color.leftAccentStrong : inRange ? Color.leftAccentFill : Color.leftMonthBorder, lineWidth: 1)
+                    .stroke(endpoint ? Color.leftAccent : inRange ? Color.leftNeutralFill : Color.leftDivider, lineWidth: 1)
             }
             .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
         }

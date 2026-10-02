@@ -74,9 +74,9 @@ struct SavingsGoalSheet: View {
                 actions
                     .padding(.horizontal, AppSpacing.xl)
                     .padding(.bottom, AppSpacing.lg)
-                    .background(Color(uiColor: .systemBackground))
+                    .background(Color.leftBackground)
             }
-            .background(Color(uiColor: .systemBackground).ignoresSafeArea())
+            .background(Color.leftBackground.ignoresSafeArea())
             .toolbar {
                 if isNameFocused || isValueFocused {
                     ToolbarItemGroup(placement: .keyboard) {
@@ -109,7 +109,7 @@ struct SavingsGoalSheet: View {
                 .focused($isNameFocused)
                 .padding(.horizontal, AppSpacing.md)
                 .frame(minHeight: 52)
-                .background(Color(uiColor: .secondarySystemBackground))
+                .background(Color.leftSurface)
                 .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
                 .accessibilityLabel("Savings goal name")
 
@@ -152,7 +152,7 @@ struct SavingsGoalSheet: View {
             Button(action: save) {
                 Text(goal == nil ? "Add goal" : "Save")
                     .font(.dmSans(.body, weight: .semibold))
-                    .foregroundStyle(Color(uiColor: .systemBackground))
+                    .foregroundStyle(Color.leftBackground)
                     .frame(maxWidth: .infinity)
                     .frame(minHeight: 52)
                     .background(Color.primary)
@@ -234,7 +234,7 @@ struct SavingsGoalSheet: View {
     plan.incomeSources.append(IncomeSource(name: "Salary", amount: 6200, affirmedAt: .now))
     let goal = SavingsGoal(name: "Roth IRA", amount: 500)
     plan.savingsGoals.append(goal)
-    return Color(uiColor: .systemBackground)
+    return Color.leftBackground
         .sheet(isPresented: .constant(true)) {
             SavingsGoalSheet(plan: plan, goal: goal)
         }

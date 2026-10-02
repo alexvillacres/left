@@ -57,7 +57,7 @@ struct DerivationBar: View {
             derivationDetails
                 .presentationDetents([.medium])
                 .presentationDragIndicator(.visible)
-                .presentationBackground(Color(uiColor: .systemBackground))
+                .presentationBackground(Color.leftBackground)
         }
     }
 
@@ -68,7 +68,7 @@ struct DerivationBar: View {
 
             Text("That leaves \(dailyRate.formatted(dailyDollars)) per day for \(days) days")
                 .font(.dmSans(.subheadline, weight: .bold))
-                .foregroundStyle(spendable > 0 ? Color.leftPositive : Color.leftNegative)
+                .foregroundStyle(spendable > 0 ? Color.leftPlanSpendableText : Color.leftFeedbackNegative)
                 .monospacedDigit()
                 .contentTransition(.numericText())
         }
@@ -82,27 +82,26 @@ struct DerivationBar: View {
 
             ZStack {
                 RoundedRectangle(cornerRadius: 12, style: .continuous)
-                    .fill(Color.meterTrack)
-                    .strokeBorder(Color.meterTrackBorder, lineWidth: 0.5)
+                    .fill(Color.leftNeutralFill)
 
                 if effectiveIncome > 0, spendable <= 0 {
                     RoundedRectangle(cornerRadius: 8, style: .continuous)
-                        .fill(Color.meterOverspentFill)
+                        .fill(Color.leftFeedbackOverspentBg)
                         .padding(meterInset)
                 } else if effectiveIncome > 0 {
                     let widths = segmentWidths(availableWidth: availableWidth)
                     HStack(spacing: segmentSpacing) {
                         if effectiveFixedTotal > 0 {
                             segment(width: widths.fixed,
-                                    fill: Color.meterFill)
+                                    fill: Color.leftPlanExpenses)
                         }
                         if savings > 0 {
                             segment(width: widths.savings,
-                                    fill: Color.leftAccentFill)
+                                    fill: Color.leftPlanSavings)
                         }
                         if spendable > 0 {
                             segment(width: widths.spendable,
-                                    fill: Color.leftAccentStrong)
+                                    fill: Color.leftPlanSpendable)
                         }
                     }
                     .padding(meterInset)
@@ -120,10 +119,10 @@ struct DerivationBar: View {
 
     private var legend: some View {
         HStack(spacing: AppSpacing.sm) {
-            legendItem("Income", color: Color.meterTrack)
-            legendItem("Fixed", color: Color.meterFill)
-            legendItem("Savings", color: Color.leftAccentFill)
-            legendItem("Spendable", color: Color.leftAccentStrong)
+            legendItem("Income", color: Color.leftNeutralFill)
+            legendItem("Fixed", color: Color.leftPlanExpenses)
+            legendItem("Savings", color: Color.leftPlanSavings)
+            legendItem("Spendable", color: Color.leftPlanSpendable)
             Spacer(minLength: 0)
             if showsDetails {
                 Image(systemName: "info.circle")
@@ -149,12 +148,12 @@ struct DerivationBar: View {
             )
 
             VStack(alignment: .leading, spacing: AppSpacing.lg) {
-                detailRow("Income", value: effectiveIncome, color: Color.meterTrack)
-                detailRow("Fixed expenses", value: effectiveFixedTotal, color: Color.meterFill, prefix: "−")
-                detailRow("Savings", value: savings, color: Color.leftAccentFill, prefix: "−")
+                detailRow("Income", value: effectiveIncome, color: Color.leftNeutralFill)
+                detailRow("Fixed expenses", value: effectiveFixedTotal, color: Color.leftPlanExpenses, prefix: "−")
+                detailRow("Savings", value: savings, color: Color.leftPlanSavings, prefix: "−")
                 Divider()
                 detailRow("Spendable", value: spendable,
-                          color: spendable > 0 ? Color.leftAccentStrong : Color.leftNegative)
+                          color: spendable > 0 ? Color.leftPlanSpendable : Color.leftFeedbackNegative)
 
                 HStack {
                     Text("Days in \(plan.monthStart.formatted(.dateTime.month(.wide)))")
@@ -167,7 +166,7 @@ struct DerivationBar: View {
 
                 Text("That leaves \(dailyRate.formatted(dailyDollars)) per day")
                     .font(.dmSans(.title3, weight: .bold))
-                    .foregroundStyle(spendable > 0 ? Color.leftPositive : Color.leftNegative)
+                    .foregroundStyle(spendable > 0 ? Color.leftPlanSpendableText : Color.leftFeedbackNegative)
                     .monospacedDigit()
             }
         }
@@ -175,7 +174,7 @@ struct DerivationBar: View {
         .padding(.horizontal, AppSpacing.xl)
         .padding(.top, AppSpacing.xl)
         .padding(.bottom, AppSpacing.lg)
-        .background(Color(uiColor: .systemBackground).ignoresSafeArea())
+        .background(Color.leftBackground.ignoresSafeArea())
     }
 
     private func detailRow(_ title: String,

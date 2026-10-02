@@ -42,15 +42,32 @@ Normal spending entry is full-screen and cents-first, with an optional note and
 a default category. The primary flow stays open → type amount → log.
 
 Today offers catch-up when there is a prior active day. After at least three
-uncovered days, it also shows an inline prompt. One total records **additional
+uncovered days, it also shows an inline prompt, then waits three days before
+showing it again if there is still no entry. One total records **additional
 spending not already logged** for the displayed period. It is saved once on the
 period's last day and remains identifiable and editable in Today and Activity.
 It does not reconstruct individual purchases or spread the amount across days.
 
 “Nothing spent” acknowledges the period without creating spending. Currently,
-closing the prompt also acknowledges it; it is not a temporary snooze. Gap
-detection uses logged dates and acknowledgements, so it is a convenience prompt,
-not a guarantee that records are complete.
+closing the prompt also acknowledges it; it is not a temporary snooze. Merely
+seeing the prompt does not acknowledge the gap. Gap detection uses logged dates
+and acknowledgements, so it is a convenience prompt, not a guarantee that
+records are complete.
+
+### Weekly report
+
+On the first open of a new Monday–Sunday week, on whatever day that is, a
+ticket appears over Today showing last week's leftover: the allowance earned on
+that week's active days minus the spending dated inside it. Carry and earlier
+rollover are left out, so the number describes that week alone. It is rounded
+down to whole dollars and paired with something that amount could buy.
+“Tear it off” dismisses it. Each week is shown once and cannot be revisited;
+skipped weeks do not pile up.
+
+There is no report for a week with no active plan days, a week whose plan was
+still waiting on income, or a leftover under $4, including zero and overspent
+weeks, until that ticket is designed. While Today's catch-up prompt covers days
+from last week, the report waits until the gap is logged or acknowledged.
 
 ### Monthly planning and income
 
@@ -110,6 +127,8 @@ These questions still need product decisions:
   ideas. Debug JSON restore is not a transaction-import feature for users.
 - **Guidance and onboarding:** contextual explainers and exploring before setup
   remain opportunities, not approved launch blockers.
+- **Weekly report range:** the low tiers need more variety, because most weeks
+  land under $100, and weeks under $4 or overspent need their own ticket.
 - **Correction safety:** decide whether deletion needs Undo or confirmation and
   whether closing catch-up should differ from acknowledging no spending.
 

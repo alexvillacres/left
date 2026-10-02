@@ -38,6 +38,7 @@ files unless requested. `CLAUDE.md` is a symlink to this file; preserve it.
 | `Left/Screens/IncomeSheet.swift` | Monthly source amount and whether it repeats |
 | `Left/Screens/AddSpendingView.swift` | Full-screen cents-first spending entry |
 | `Left/Screens/CatchUpView.swift` | One additional spending total for a date range |
+| `Left/Screens/WeeklyReportView.swift` | Weekly report ticket, tiers, and tear-off dismissal |
 | `Left/Screens/OnboardingView.swift` | Introduction leading into monthly setup |
 | `Left/Screens/SettingsView.swift` | Privacy/support links and debug-only backup access |
 | `Left/DataTransfer.swift` | Debug-only JSON export/import and validation |
@@ -75,19 +76,28 @@ carriedIn        = carriedGross − carriedAllocated
 ## UI conventions
 
 - Organize around Today, Activity, and Plan. Settings is a utility destination.
-  Use the existing floating navigation and contextual add action; scrolling
-  screens must reserve its bottom inset.
+  The bottom tab bar is navigation only. The + button lives on Today and only
+  logs spending; other screens add through their own rows.
 - Use DM Sans through existing font helpers, semantic palette colors, shared
-  spacing, and monospaced digits for changing amounts. Positive is neutral;
-  do not restore the old teal hero, calendar, or spending meter.
+  spacing, and monospaced digits for changing amounts. Do not restore the old
+  teal hero, calendar, or spending meter.
+- Color has personality but a fixed job. Ink is the action color. Orange means
+  recurring expenses, periwinkle means savings, and sage means spendable; use
+  them only for those parts of the plan, mainly as fills and marks. Income is
+  the neutral whole they divide. Other brand hues are expressive only.
+  Celebration surfaces that do not explain the plan, such as the weekly
+  report, may use any brand hue expressively; keep them restrained. Warning
+  and negative alone signal state; see DECISIONS 027, 029, and 030.
 - Use shared currency helpers and Foundation USD currency formatting. Never
   manually assemble currency strings.
-- Spending uses cents-first `NumpadView`; plan amounts use the system decimal
-  keyboard through `MoneyField`. Do not unify their input behavior.
+- Spending uses cents-first `NumpadView`. Plan amounts are whole-dollar: onboarding
+  and the recurring-expense sheet use `NumpadView` that way, other plan editors
+  use the system decimal keyboard through `MoneyField`. Never make a plan
+  amount cents-first; see DECISIONS 014.
 - Preserve numeric transitions and light save haptics; honor Reduce Motion.
 - Support light/dark appearance, Dynamic Type, VoiceOver, and 44-point touch
   targets. New sheets own an opaque background using existing sheet chrome.
-- Copy is calm and specific. Explain the balance as based on the plan and
+- Copy is clear and specific. Explain the balance as based on the plan and
   logged spending; it is not an observed bank balance.
 
 ## Working and verifying
@@ -99,3 +109,11 @@ changes, check light/dark mode and larger text. Do not claim checks that were
 not run. Documentation-only changes need link and consistency checks, not an
 app rebuild. The original scaffold build sequence is complete and no longer
 controls work.
+
+## Design iteration in Paper
+
+Never overwrite or replace an existing Paper screen. Duplicate it, name the copy
+with an iteration suffix (for example `Plan · v3 rows`), and edit the copy, so
+every earlier version stays visible and changes can be compared. Do not rebuild a
+body in place. When asked to discuss or give reasoning, discuss first and make
+no canvas changes until asked.

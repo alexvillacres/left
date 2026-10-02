@@ -182,7 +182,7 @@ a fixed hue.
 apply `.opacity()` on top — a translucent fill over a dark track reads as mud.
 
 ### 009. Positive is neutral; only warning and negative carry color
-**Date:** 2026-08-04 · **Status:** Active
+**Date:** 2026-08-04 · **Status:** Superseded by 027
 **Where:** `Left/Palette.swift`
 
 **Why:** If every state is colored, no state is legible at a glance. Being fine
@@ -190,7 +190,7 @@ is the common case and deserves no visual weight; the two states worth noticing
 keep their semantic color.
 
 ### 010. Ship a custom floating tab bar instead of `TabView`
-**Date:** 2026-08-04 · **Status:** Active
+**Date:** 2026-08-04 · **Status:** Superseded by 028
 **Where:** `Left/Components/FloatingTabBar.swift`, `Left/LeftApp.swift`
 
 A content-width capsule floating clear of the screen edges, not a bar pinned to
@@ -255,6 +255,13 @@ free dismissal matter more, and a surprising interpretation of a typed number is
 a bug waiting to happen.
 
 **Constrains:** Do not "unify" these two. The split is the decision.
+
+**Amended 2026-09-21:** Onboarding and the recurring-expense sheet use
+`NumpadView` for plan amounts, but in whole-dollar mode: typing `340` means $340, and passing
+`onDecimal` turns the blank key into "." for cents. The sheet keeps its fields in
+one compact card, and the system keyboard covered the card it was editing. The
+split that still stands is about meaning, not the widget: only spending is
+cents-first.
 
 ### 015. Spending entry is full-screen, and the note is a pushed screen
 **Date:** 2026-08-04 · **Status:** Active
@@ -336,7 +343,7 @@ looking for either name still finds the brief.
 **Constrains:** Edit `AGENTS.md`. Never replace the symlink with a real file.
 
 ### 020. Action sheets own an opaque system background
-**Date:** 2026-08-14 · **Status:** Active
+**Date:** 2026-08-14 · **Status:** Amended by 027
 **Where:** `Left/Components/DerivationBar.swift`, Plan editor sheets
 
 Action sheets use the app's custom header and paint
@@ -392,11 +399,13 @@ This replaces 003's per-source affirmation rationale.
 
 ### 023. Catch up with one additional spending total
 **Date:** 2026-09-19 · **Status:** Active
-**Where:** `Left/Screens/TodayView.swift`, `Left/Screens/CatchUpView.swift`,
+**Where:** `Left/Screens/TodayView.swift`, `Left/Components/CatchUpCard.swift`, `Left/Screens/CatchUpView.swift`,
 `Left/Screens/ActivityView.swift`, `Left/BudgetModel.swift`, `Left/DataTransfer.swift`
 
-Offer catch-up from Today, with a prompt after three uncovered days. Store one
-editable transaction with a covered date range and count it on the range's last
+Offer catch-up from Today, with a prompt after three uncovered days. If the
+user makes no entry or acknowledgement, show it again after three more days,
+not on each visit to Today. Store one editable transaction with a covered date
+range and count it on the range's last
 day. It represents spending not already logged.
 
 **Why:** Manual tracking needs a forgiving return path after missed entries.
@@ -405,7 +414,8 @@ Requiring every purchase to be reconstructed makes resuming harder.
 **Constrains:** Never spread or duplicate the amount across the covered dates.
 “Nothing spent” records acknowledgement, not spending. The current close action
 also acknowledges the period; different snooze behavior remains an open question.
-`catchUpAcknowledgedThrough` is persisted interaction state, not a daily balance.
+`catchUpAcknowledgedThrough` records acknowledgement;
+`catchUpPromptShownAt` records reminder cadence. Neither is a daily balance.
 Update backup handling when changing catch-up data.
 
 ### 024. Keep JSON backup a debug utility
@@ -458,3 +468,115 @@ app. A small set of documents with distinct jobs reduces that drift.
 noun. 012's historical fixed glyph dimensions are not a universal typography
 exception: use current components, scalable text, and accessible touch targets.
 Keep CLAUDE.md as a symlink to AGENTS.md.
+
+### 027. Color carries plan meaning and brand personality
+**Date:** 2026-09-19 · **Status:** Amended by 029
+**Where:** `Left/Palette.swift`, onboarding, Plan, balance explanation
+
+Left no longer aims for a calm, neutral interface. Ink (near-black, near-white
+in dark mode) is the action color. Three brand hues name where monthly income
+goes: orange is recurring expenses, periwinkle is savings, and sage is
+spendable. Income is the neutral whole they divide, drawn as the track the
+segments fill. Other brand hues, such as butter and tan, are expressive only:
+onboarding grounds, illustration, and empty states. The fern ramp is retired.
+
+**Why:** The brand is gaining personality through illustration and the
+marketing site, and a neutral app would read as a different product. Tying hue
+to a plan category makes the color useful: the allocation bar learned in
+onboarding explains the plan wherever it reappears. A single brand accent was
+rejected because one hue cannot show a three-way split. 009's neutral positive
+was rejected because the product no longer treats visual weight as the thing to
+minimize.
+
+**Constrains:** A category hue means only its category; never use it
+decoratively or for another concept. Category hues are fills and marks (bar
+segments, focus rings, dots); amounts stay in ink, except that the spendable
+amount may use the sage text shade. Text shades must meet 4.5:1. Buttons and
+interactive tint use ink, never a brand hue. Warning and negative alone signal
+state, and orange must never signal overspending. Pair color with a label so
+meaning never depends on color alone. 008 still applies: views request named
+roles, not hues. 020's opaque sheet rule stands, but screens and sheets now
+paint `leftBackground` (and cards `leftSurface`) instead of the system
+backgrounds so the tinted neutrals show; its "quiet" rationale no longer
+describes the direction.
+
+### 028. The tab bar navigates; + logs spending on Today
+**Date:** 2026-09-22 · **Status:** Active
+**Where:** `Left/Components/AppTabBar.swift`, `Left/Screens/TodayView.swift`,
+`Left/LeftApp.swift`
+
+The floating capsule became a full-width, opaque bar with a hairline top edge.
+The selected tab is shown by icon color alone. The contextual add slot is gone:
+Today owns a single ink + button that opens spending entry, and Activity and
+the Plan editors add through their own rows.
+
+**Why:** One + meant five different things, and the bar changed width as
+screens installed and cleared actions. That made the capsule shift sideways,
+and view lifecycle ordering sometimes left the button missing. Making + mean
+only spending, on the screen where spending is logged, removed both problems.
+
+**Constrains:** Do not reintroduce screen-installed actions into the tab bar.
+New entries, including ones for past days, start from Today by navigating to
+the day; Activity edits existing entries. It is still a custom bar rather than `TabView`, so a tab switch still
+resets that screen's navigation path.
+
+### 029. Celebration surfaces may use brand hues freely
+**Date:** 2026-09-28 · **Status:** Active
+**Where:** `Left/Screens/WeeklyReportView.swift`, `Left/Palette.swift`
+
+027's category rule governs the plan and the math that explains it: wherever
+orange, periwinkle, or sage appears beside plan amounts, it still means
+recurring expenses, savings, or spendable. Surfaces that celebrate rather than
+explain, starting with the weekly report, may use any brand hue, including
+periwinkle, as an expressive ground. Restraint comes from composition instead
+of a hue ban: one ground color and one illustration per surface, with ink
+type.
+
+**Why:** Left should feel expressive, and the weekly report tickets are where
+personality pays off. Banning the category hues outside the plan would leave
+only butter and tan for every expressive moment and make the brand read
+smaller than it is. Keeping them out of celebration screens protected a
+meaning those screens never carry, because a weekly report shows no plan
+breakdown for a periwinkle ground to be confused with.
+
+**Constrains:** A category hue must not appear as a fill or mark on a
+celebration surface that also shows plan categories; if a surface explains the
+plan, 027 applies in full. Text stays ink and meets 4.5:1 against the chosen
+ground. Buttons still use ink. Warning and negative still alone signal state,
+so an expressive ground must never be chosen to imply a good or bad week.
+
+### 030. Each main tab opens on a light ground that stays light in dark mode
+**Date:** 2026-10-01 · **Status:** Active
+**Where:** `Left/Components/ScreenHeader.swift`, `Left/Palette.swift`,
+`Left/Screens/TodayView.swift`, `Left/Screens/ActivityView.swift`,
+`Left/Screens/PlanView.swift`
+
+Today, Activity, and Plan each open on a solid ground block holding the period
+row and one headline number: butter for Today ("left"), tan for Activity
+("spent"), and a pale sage for Plan ("to spend"). The screen's content sits on
+a rounded sheet that rises over the bottom of the block and separates on a
+hairline rather than a shadow. The tab bar names the screen, so the title row
+is gone; Plan's Settings sits beside the headline. A header carries no
+subtext in the normal state: Today's yesterday line and Plan's daily rate were
+cut because the balance explanation and the allocation bar already say them.
+A caption appears only for an exception, such as a read-only past plan or a
+plan still waiting on income, and a negative balance shows as the headline in
+the negative color with its minus sign. The
+grounds keep their light values in dark mode, and everything on them uses
+fixed ground ink: near-black for primary text and a per-ground secondary that
+meets 4.5:1 on the ground and its control fill.
+
+**Why:** A neutral screen gave the three tabs no identity. Gradient washes were
+tried first and rejected: in dark mode a light-to-dark fade passes through
+olive midtones, and dark versions of the grounds made tan and sage hard to tell
+apart. Solid blocks with a hard edge avoid the mud, and keeping the light
+values keeps each tab recognizable at night, as the weekly report tickets
+already do (029). Plan's sage follows 027 because its headline is the
+spendable amount.
+
+**Constrains:** Do not give the grounds dark-mode variants or replace the hard
+edge with a fade. Butter and tan are expressive here; sage is allowed only
+because Plan's headline is spendable. Content on a ground uses the ground's
+ink, and any appearance-dependent color placed on it, such as a state color,
+must be resolved in the light appearance. Menus opened from the ground still
+follow the system appearance. Settings stays neutral, with no ground.

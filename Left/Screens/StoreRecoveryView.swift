@@ -39,7 +39,7 @@ struct StoreRecoveryView: View {
             Button(action: retry) {
                 Text("Try again")
                     .font(.dmSans(.body, weight: .semibold))
-                    .foregroundStyle(Color(uiColor: .systemBackground))
+                    .foregroundStyle(Color.leftBackground)
                     .frame(maxWidth: .infinity)
                     .frame(minHeight: 52)
                     .background(Color.primary)
@@ -52,7 +52,7 @@ struct StoreRecoveryView: View {
             } label: {
                 Text("Start over")
                     .font(.dmSans(.body, weight: .medium))
-                    .foregroundStyle(Color.leftNegative)
+                    .foregroundStyle(Color.leftFeedbackNegative)
                     .frame(maxWidth: .infinity)
                     .frame(minHeight: 52)
                     .contentShape(Rectangle())
@@ -62,7 +62,7 @@ struct StoreRecoveryView: View {
         .padding(.horizontal, AppSpacing.xl)
         .padding(.bottom, AppSpacing.lg)
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .leading)
-        .background(Color(uiColor: .systemBackground).ignoresSafeArea())
+        .background(Color.leftBackground.ignoresSafeArea())
         .environment(\.font, .dmSans(.body))
         .tracking(BudgetTypography.appTracking)
         .confirmationDialog("Start over with a fresh plan?",
