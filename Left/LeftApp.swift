@@ -126,6 +126,9 @@ struct AppRoot: View {
     // month rather than snapping to the current one. nil means the current month.
     @State private var browsedMonth: Date?
     @State private var opensPlanIncome = false
+    // The most recent swipe deletion, offered back for a few seconds.
+    @State private var deletedSpending: DeletedSpending?
+    @Environment(\.accessibilityVoiceOverEnabled) private var voiceOverEnabled
 
     var body: some View {
         // Deliberately not a TabView. Stacking the bar under the screen keeps
@@ -141,6 +144,8 @@ struct AppRoot: View {
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
             .clipped()
+            .overlay(alignment: .bottom) { undoBar }
+            .environment(\.deleteSpending, DeleteSpendingAction(perform: deleteSpending))
 
             AppTabBar(selection: Binding(
                 get: { selectedTab },
@@ -199,6 +204,46 @@ struct AppRoot: View {
                 .combined(with: .opacity)
                 .animation(motion)
         )
+    }
+
+    // On Today the bar sits beside the add button, on the same line, so
+    // neither covers the other.
+    @ViewBuilder
+    private var undoBar: some View {
+        if let deletedSpending {
+            UndoBar(deleted: deletedSpending) { undoDelete(deletedSpending) }
+                .padding(.leading, AppSpacing.lg)
+                .padding(.trailing, selectedTab == .today
+                         ? AppSpacing.xl + TodayView.addButtonSize + AppSpacing.md
+                         : AppSpacing.lg)
+                .padding(.bottom, AppSpacing.xl)
+                .transition(reduceMotion ? .opacity : .move(edge: .bottom).combined(with: .opacity))
+                .task(id: deletedSpending.id) {
+                    try? await Task.sleep(for: .seconds(voiceOverEnabled ? 10 : 5))
+                    guard !Task.isCancelled else { return }
+                    withAnimation(.smooth(duration: 0.25)) { self.deletedSpending = nil }
+                }
+        }
+    }
+
+    private func deleteSpending(_ transaction: Transaction) {
+        let deleted = DeletedSpending(transaction)
+        modelContext.delete(transaction)
+        HapticFeedback.lightImpact()
+        withAnimation(reduceMotion ? nil : .spring(duration: 0.35)) {
+            deletedSpending = deleted
+        }
+        AccessibilityNotification.Announcement(
+            "Deleted \(deleted.title), \(deleted.amount.formatted(.currency(code: "USD"))). Undo available."
+        ).post()
+    }
+
+    private func undoDelete(_ deleted: DeletedSpending) {
+        withAnimation(reduceMotion ? nil : .spring(duration: 0.35)) {
+            deleted.restore()
+            deletedSpending = nil
+        }
+        HapticFeedback.lightImpact()
     }
 
     private var tabRemovalOffset: CGFloat { 28 * tabDirection }

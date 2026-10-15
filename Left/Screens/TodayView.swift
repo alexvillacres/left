@@ -19,9 +19,9 @@ struct TodayView: View {
     // Owned by the root so it can also cover the tab bar.
     var coversZoomCorners: Binding<Bool> = .constant(false)
     var onSetUpIncome: () -> Void = {}
-    @Environment(\.modelContext) private var modelContext
+    @Environment(\.deleteSpending) private var deleteSpending
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
-    private static let addButtonSize: CGFloat = 56
+    static let addButtonSize: CGFloat = 56
     // HeroMoneyText's font already scales with Dynamic Type.
     private let heroSize: CGFloat = 44
 
@@ -92,8 +92,6 @@ struct TodayView: View {
                 }
                 .frame(width: geometry.size.width, height: geometry.size.height, alignment: .top)
             }
-            .contentShape(Rectangle())
-            .simultaneousGesture(daySwipeGesture)
             .accessibilityAction(named: "Previous day") {
                 shiftDay(-1)
             }
@@ -125,14 +123,6 @@ struct TodayView: View {
                             period: catchUp.period,
                             transaction: catchUp.transaction)
             }
-        }
-    }
-
-    private var daySwipeGesture: some Gesture {
-        DragGesture(minimumDistance: 24).onEnded { value in
-            guard abs(value.translation.width) > abs(value.translation.height),
-                  abs(value.translation.width) > 50 else { return }
-            shiftDay(value.translation.width > 0 ? -1 : 1)
         }
     }
 
@@ -244,7 +234,7 @@ struct TodayView: View {
         }
 
         // A plan is only created when the app runs in a given month. If the app
-        // skipped a month, one swipe crosses the gap instead of trapping the
+        // skipped a month, one step crosses the gap instead of trapping the
         // user on the edge of the nearest stored plan.
         let adjacentMonthStart = calendar.leftMonthStart(for: adjacentDay)
         if delta < 0 {
@@ -523,7 +513,7 @@ struct TodayView: View {
                 .listRowSeparator(.hidden)
                 .swipeActions(edge: .trailing) {
                     Button(role: .destructive) {
-                        delete(tx)
+                        deleteSpending(tx)
                     } label: {
                         Label("Delete", systemImage: "trash")
                     }
@@ -538,11 +528,6 @@ struct TodayView: View {
         .scrollContentBackground(.hidden)
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
         .background(Color.leftBackground)
-    }
-
-    private func delete(_ transaction: Transaction) {
-        modelContext.delete(transaction)
-        HapticFeedback.lightImpact()
     }
 
     // Resolve the displayed day's numbers in one pass. Accessing the SwiftData

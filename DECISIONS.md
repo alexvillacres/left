@@ -275,6 +275,34 @@ field's keyboard — and the numpad needs no keyboard at all. Moving the note to
 screen where the keyboard has room removed both detents, their computed heights,
 the focus-driven resize, and a double keyboard-inset workaround.
 
+### 031. Swipe deletion is immediate and offers Undo
+**Date:** 2026-10-15 · **Status:** Active
+**Where:** `Left/Components/UndoBar.swift`, `Left/LeftApp.swift`
+
+Swiping a spending entry away on Today or Activity deletes it at once and
+shows an ink bar naming the amount and entry ("Deleted $18.50 · Lunch with
+Sam") with Undo for five seconds, ten with VoiceOver. Undo re-creates the
+entry with its original ID, date, and catch-up range. On Today the bar sits
+beside the + button on the same line. AppRoot owns the bar so it survives a
+tab switch.
+
+**Why:** Deletion had no undo, and a full swipe made a mistaken delete one
+gesture away. A confirmation dialog would add friction to every intended
+delete, and turning off full swipe still could not reverse an intended one. Most
+apps reviewed delete at once and offer Undo in a short bar. Naming the amount
+matters here because deleting spending changes the balance.
+
+**Constrains:** Swipe deletes go through the `deleteSpending` environment
+action, not `modelContext.delete`. Delete inside the edit screen is a
+deliberate tap and does not show the bar.
+
+Today has no horizontal swipe between days. The previous-day and next-day
+arrows, the date menu, and the VoiceOver actions change the day. The day swipe
+covered the whole screen, list included, so swiping a row left also opened the
+next day. It was a hidden duplicate of the arrows, so it was removed rather
+than limited to the header. Do not add a horizontal screen gesture to Today
+while rows swipe to delete.
+
 ---
 
 ## App lifecycle

@@ -58,7 +58,8 @@ build results do not certify the current app. Product ideas live in
 - [ ] Log spending comfortably in under three seconds; verify note, category,
       date, and cents-first entry, including zero and large values.
 - [ ] Edit and delete spending from Today and Activity; verify totals and balance.
-- [ ] Verify transaction swipes do not accidentally navigate between days.
+- [x] Transaction swipes cannot navigate between days: the day swipe was
+      removed (DECISIONS 031).
 - [ ] Confirm Today explanation adds up at displayed currency precision for
       positive/negative carry, fractional daily rates, and past dates.
 - [ ] Verify catch-up after three uncovered days, manual entry, editing, and

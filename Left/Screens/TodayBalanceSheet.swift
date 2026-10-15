@@ -123,18 +123,11 @@ struct TodayBalanceSheet: View {
     }
 
     private func amountLine(title: String, amount: Decimal, showsPlus: Bool) -> some View {
-        ViewThatFits(in: .horizontal) {
-            HStack(alignment: .firstTextBaseline, spacing: AppSpacing.lg) {
-                Text(title)
-                Spacer(minLength: AppSpacing.sm)
-                signedAmount(amount, showsPlus: showsPlus)
-            }
-            VStack(alignment: .leading, spacing: AppSpacing.xxs) {
-                Text(title)
-                signedAmount(amount, showsPlus: showsPlus)
-            }
+        AdaptiveValuePair {
+            Text(title)
+        } value: {
+            signedAmount(amount, showsPlus: showsPlus)
         }
-        .frame(maxWidth: .infinity, alignment: .leading)
     }
 
     private func signedAmount(_ amount: Decimal, showsPlus: Bool) -> some View {

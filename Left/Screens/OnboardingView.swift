@@ -243,7 +243,9 @@ struct OnboardingView: View {
             Spacer(minLength: 24)
             VStack(spacing: 16) {
                 ViewThatFits(in: .horizontal) {
-                    HStack(alignment: .firstTextBaseline, spacing: 4) { summaryAmount; summarySuffix }
+                    if !dynamicTypeSize.isAccessibilitySize {
+                        HStack(alignment: .firstTextBaseline, spacing: 4) { summaryAmount; summarySuffix }
+                    }
                     VStack(spacing: 4) { summaryAmount; summarySuffix }
                 }
                 .accessibilityElement(children: .combine)
@@ -259,14 +261,21 @@ struct OnboardingView: View {
                 receiptRow("Recurring expenses", amount: -draft.fixedTotal)
                 receiptRow(usesPercent ? "Savings (\(percentSavings.formatted(.number))%)" : "Savings", amount: -draft.savingsAmount)
                 Divider()
-                receiptRow("Left for the month", amount: draft.monthlySpendable)
-                HStack(alignment: .firstTextBaseline) {
+                receiptRow("Monthly spending budget", amount: draft.monthlySpendable)
+                AdaptiveValuePair {
                     Text("÷ \(draft.daysInMonth()) days").foregroundStyle(.secondary)
-                    Spacer()
+                } value: {
                     Text("\(draft.dailyRate, format: .currency(code: "USD"))/day")
                         .font(.dmSans(size: 19, weight: .bold))
                         .foregroundStyle(Color.leftPlanSpendableText)
                         .monospacedDigit()
+                }
+                if draft.firstActiveDay > 1 {
+                    Text("Starting \(firstActiveDate.formatted(.dateTime.month(.wide).day())), you’ll accrue \(draft.plannedSpend, format: .currency(code: "USD")) for spending through \(monthEndDate.formatted(.dateTime.month(.wide).day())).")
+                        .font(.dmSans(size: 14))
+                        .foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                        .frame(maxWidth: .infinity, alignment: .leading)
                 }
             }
             .font(.dmSans(.subheadline))
@@ -280,20 +289,27 @@ struct OnboardingView: View {
                 .multilineTextAlignment(.center)
                 .padding(.bottom, 36)
         }
-        .frame(minHeight: minHeight)
+        .fixedSize(horizontal: false, vertical: true)
+        .frame(minHeight: minHeight, alignment: .top)
     }
 
     private var summaryAmount: some View {
         HeroMoneyText(amount: draft.remainingToday(on: .now, spentAsOf: plan.spent()), size: 64)
+    }
+    private var firstActiveDate: Date {
+        Calendar.current.date(byAdding: .day, value: draft.firstActiveDay - 1, to: draft.monthStart)!
+    }
+    private var monthEndDate: Date {
+        Calendar.current.date(byAdding: .day, value: draft.daysInMonth() - 1, to: draft.monthStart)!
     }
     private var summarySuffix: some View {
         Text("left today").font(.dmSans(size: 20, weight: .medium)).foregroundStyle(.secondary)
     }
 
     private func receiptRow(_ title: String, amount: Decimal) -> some View {
-        HStack(alignment: .firstTextBaseline) {
+        AdaptiveValuePair {
             Text(title).foregroundStyle(.secondary)
-            Spacer(minLength: 12)
+        } value: {
             MoneyText(amount: amount, showsCents: amount != Decimal(NSDecimalNumber(decimal: amount).intValue))
                 .font(.dmSans(.subheadline, weight: .medium))
         }
@@ -370,10 +386,10 @@ struct OnboardingView: View {
     }
 
     private var navigation: some View {
-        HStack(spacing: 12) {
+        navigationLayout {
             if step > 0 {
                 actionButton("Back", primary: false) { move(by: -1) }
-                    .frame(width: 92)
+                    .frame(width: dynamicTypeSize.isAccessibilitySize ? nil : 92)
             }
             actionButton(step == 2 ? "Set up my month" : step == 6 ? "Start using Left" : "Continue", primary: true) {
                 if step == 6 { save() } else { move(by: 1) }
@@ -385,6 +401,12 @@ struct OnboardingView: View {
         .padding(.horizontal, 24)
         .padding(.top, 12)
         .padding(.bottom, 16)
+    }
+
+    private var navigationLayout: AnyLayout {
+        dynamicTypeSize.isAccessibilitySize
+            ? AnyLayout(VStackLayout(spacing: 12))
+            : AnyLayout(HStackLayout(spacing: 12))
     }
 
     private func actionButton(_ title: String, primary: Bool, action: @escaping () -> Void) -> some View {

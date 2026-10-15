@@ -161,9 +161,9 @@ struct DerivationBar: View {
                 detailRow("Spendable", value: spendable,
                           color: spendable > 0 ? Color.leftPlanSpendable : Color.leftFeedbackNegative)
 
-                HStack {
+                AdaptiveValuePair {
                     Text("Days in \(plan.monthStart.formatted(.dateTime.month(.wide)))")
-                    Spacer()
+                } value: {
                     Text("÷ \(days)")
                         .monospacedDigit()
                 }
@@ -187,10 +187,12 @@ struct DerivationBar: View {
                            value: Decimal,
                            color: Color,
                            prefix: String? = nil) -> some View {
-        HStack(spacing: AppSpacing.sm) {
-            Circle().fill(color).frame(width: 10, height: 10)
-            Text(title)
-            Spacer()
+        AdaptiveValuePair {
+            HStack(spacing: AppSpacing.sm) {
+                Circle().fill(color).frame(width: 10, height: 10)
+                Text(title)
+            }
+        } value: {
             Text("\(prefix.map { "\($0) " } ?? "")\(value.formatted(wholeDollars))")
                 .monospacedDigit()
         }

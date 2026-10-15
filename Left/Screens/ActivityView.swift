@@ -7,7 +7,7 @@ struct ActivityView: View {
     @Binding var browsedMonth: Date?
     @State private var activeSpendingSheet: ActiveSpendingSheet?
     @State private var activeCatchUpSheet: ActiveCatchUpSheet?
-    @Environment(\.modelContext) private var modelContext
+    @Environment(\.deleteSpending) private var deleteSpending
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @ScaledMetric private var heroSize = 44
 
@@ -155,8 +155,7 @@ struct ActivityView: View {
                     .accessibilityHint("Edit spending")
                     .swipeActions(edge: .trailing) {
                         Button(role: .destructive) {
-                            modelContext.delete(transaction)
-                            HapticFeedback.lightImpact()
+                            deleteSpending(transaction)
                         } label: {
                             Label("Delete", systemImage: "trash")
                         }

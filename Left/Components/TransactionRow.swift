@@ -20,11 +20,7 @@ struct TransactionRow: View {
         .accessibilityLabel(accessibilityLabel)
     }
 
-    private var title: String {
-        if transaction.isCatchUp { return "Catch-up" }
-        if let note = transaction.note, !note.isEmpty { return note }
-        return transaction.category.label
-    }
+    private var title: String { transaction.displayTitle }
 
     private var catchUpRange: String? {
         guard transaction.isCatchUp,
@@ -49,5 +45,14 @@ struct TransactionRow: View {
         return [title, detail, transaction.amount.formatted(.currency(code: "USD"))]
             .compactMap { $0 }
             .joined(separator: ", ")
+    }
+}
+
+extension Transaction {
+    /// The name a row and the undo bar show: the note, else the category.
+    var displayTitle: String {
+        if isCatchUp { return "Catch-up" }
+        if let note, !note.isEmpty { return note }
+        return category.label
     }
 }

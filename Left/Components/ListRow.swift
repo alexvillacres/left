@@ -44,7 +44,7 @@ struct ListRow<Leading: View, Trailing: View>: View {
         HStack(spacing: AppSpacing.md) {
             leading
 
-            valueLayout {
+            AdaptiveValuePair {
                 VStack(alignment: .leading, spacing: 2) {
                     if let titleDetail {
                         // The detail drops beneath the title rather than
@@ -72,10 +72,7 @@ struct ListRow<Leading: View, Trailing: View>: View {
                     }
                 }
 
-                if !dynamicTypeSize.isAccessibilitySize {
-                    Spacer(minLength: AppSpacing.sm)
-                }
-
+            } value: {
                 trailing
                     .layoutPriority(1)
                     .fixedSize(horizontal: false, vertical: true)
@@ -88,12 +85,6 @@ struct ListRow<Leading: View, Trailing: View>: View {
         .frame(maxWidth: .infinity, minHeight: 56)
         .contentShape(Rectangle())
         .accessibilityElement(children: .combine)
-    }
-
-    private var valueLayout: AnyLayout {
-        dynamicTypeSize.isAccessibilitySize
-            ? AnyLayout(VStackLayout(alignment: .leading, spacing: AppSpacing.xs))
-            : AnyLayout(HStackLayout(spacing: AppSpacing.md))
     }
 
     private var titleText: some View {
@@ -201,6 +192,7 @@ struct RowAmount: View {
 /// rule beneath. Stacks the total under the title when text is too large to
 /// share a line.
 struct ListSectionHeader: View {
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     let title: String
     var value: String?
     var titleWeight: Font.Weight = .semibold
@@ -210,12 +202,14 @@ struct ListSectionHeader: View {
     var body: some View {
         VStack(spacing: AppSpacing.xs) {
             ViewThatFits(in: .horizontal) {
-                HStack(alignment: .firstTextBaseline, spacing: AppSpacing.md) {
-                    titleText
-                    Spacer(minLength: AppSpacing.sm)
-                    valueText
-                    if reservesAccessory, value != nil {
-                        ListRowAccessoryImage().hidden()
+                if !dynamicTypeSize.isAccessibilitySize {
+                    HStack(alignment: .firstTextBaseline, spacing: AppSpacing.md) {
+                        titleText
+                        Spacer(minLength: AppSpacing.sm)
+                        valueText
+                        if reservesAccessory, value != nil {
+                            ListRowAccessoryImage().hidden()
+                        }
                     }
                 }
 

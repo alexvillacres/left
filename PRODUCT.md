@@ -129,8 +129,8 @@ These questions still need product decisions:
   remain opportunities, not approved launch blockers.
 - **Weekly report range:** the low tiers need more variety, because most weeks
   land under $100, and weeks under $4 or overspent need their own ticket.
-- **Correction safety:** decide whether deletion needs Undo or confirmation and
-  whether closing catch-up should differ from acknowledging no spending.
+- **Correction safety:** decide whether closing catch-up should differ from
+  acknowledging no spending. Swipe deletion offers Undo (DECISIONS 031).
 
 Record an agreed direction in DECISIONS.md before treating any of these as a
 standing product rule. Release verification belongs in APP_STORE_CHECKLIST.md.
