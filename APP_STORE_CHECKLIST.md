@@ -41,9 +41,9 @@ build results do not certify the current app. Product ideas live in
       OS, device family, orientation, and encryption declaration.
 - [ ] Confirm version/build numbers before upload. Source currently says 1.0 (1).
 - [ ] Publish and verify the Privacy Policy and Support destinations configured
-      in `SettingsView.swift`: `https://goodjobstudios.com/left/privacy` and
-      `https://goodjobstudios.com/left/support`. Their availability was not checked
-      during this documentation review.
+      in `SettingsView.swift`: `https://left.alexvillacres.com/privacy/` and
+      `https://left.alexvillacres.com/support/`. The pages live in the portfolio repo
+      (`public/left/`); the subdomain must be added as a Netlify domain alias.
 - [ ] Ensure privacy copy accurately describes local storage, deletion, and the
       shipping feature set; confirm App Privacy answers for the submitted build.
 - [ ] Verify font/asset rights and include required license notices. DM Sans font

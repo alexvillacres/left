@@ -12,8 +12,8 @@ struct SettingsView: View {
     // Both pages must resolve publicly before the first submission: App Review
     // opens them, and a dead link is a rejection.
     private enum ExternalLink {
-        static let privacyPolicy = URL(string: "https://goodjobstudios.com/left/privacy")!
-        static let support = URL(string: "https://goodjobstudios.com/left/support")!
+        static let privacyPolicy = URL(string: "https://left.alexvillacres.com/privacy/")!
+        static let support = URL(string: "https://left.alexvillacres.com/support/")!
     }
 
     var body: some View {
