@@ -20,6 +20,7 @@ struct PlanView: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(\.modelContext) private var modelContext
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     @Bindable var plan: MonthPlan
     var isOnboarding: Bool = false
     var onBack: (() -> Void)?
@@ -37,8 +38,8 @@ struct PlanView: View {
     @State private var isSettingsPresented = false
     @State private var incomeUpdateNote: String?
     @FocusState private var isMoneyFieldFocused: Bool
-    @ScaledMetric private var planTotalSize: CGFloat = 44
-    @ScaledMetric private var detailTotalSize: CGFloat = 36
+    private let planTotalSize: CGFloat = 44
+    private let detailTotalSize: CGFloat = 36
 
     private var monthName: String { plan.monthStart.formatted(.dateTime.month(.wide)) }
     private var canEditPlan: Bool {
@@ -274,24 +275,30 @@ struct PlanView: View {
                 .frame(width: 8, height: 42)
                 .accessibilityHidden(true)
 
-            VStack(alignment: .leading, spacing: 1) {
-                Text("Spendable")
-                    .font(.dmSans(.body, weight: .medium))
-                    .foregroundStyle(.primary)
+            spendableLayout {
+                VStack(alignment: .leading, spacing: 1) {
+                    Text("Spendable")
+                        .font(.dmSans(.body, weight: .medium))
+                        .foregroundStyle(.primary)
 
-                Text("\(daily)/day")
-                    .font(.dmSans(.subheadline))
-                    .foregroundStyle(.secondary)
+                    Text("\(daily)/day")
+                        .font(.dmSans(.subheadline))
+                        .foregroundStyle(.secondary)
+                        .monospacedDigit()
+                }
+
+                if !dynamicTypeSize.isAccessibilitySize {
+                    Spacer(minLength: AppSpacing.sm)
+                }
+
+                Text(amount)
+                    .font(.dmSans(.body, weight: .semibold))
+                    .foregroundStyle(isPositive ? Color.leftPlanSpendableText : Color.leftFeedbackNegative)
                     .monospacedDigit()
+                    .contentTransition(.numericText())
+                    .fixedSize(horizontal: false, vertical: true)
             }
-
-            Spacer(minLength: AppSpacing.sm)
-
-            Text(amount)
-                .font(.dmSans(.body, weight: .semibold))
-                .foregroundStyle(isPositive ? Color.leftPlanSpendableText : Color.leftFeedbackNegative)
-                .monospacedDigit()
-                .contentTransition(.numericText())
+            .frame(maxWidth: .infinity, alignment: .leading)
         }
         .padding(.vertical, AppSpacing.md)
         .padding(.horizontal, AppSpacing.lg)
@@ -301,6 +308,12 @@ struct PlanView: View {
         )
         .accessibilityElement(children: .ignore)
         .accessibilityLabel("Spendable, \(amount), \(daily) per day")
+    }
+
+    private var spendableLayout: AnyLayout {
+        dynamicTypeSize.isAccessibilitySize
+            ? AnyLayout(VStackLayout(alignment: .leading, spacing: AppSpacing.sm))
+            : AnyLayout(HStackLayout(spacing: AppSpacing.lg))
     }
 
     private func planSummaryRow(

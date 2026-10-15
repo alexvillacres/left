@@ -16,6 +16,7 @@ enum ListRowAccessory {
 /// accessory. Type, spacing, and height are fixed so rows match across
 /// screens; callers own the tap action and VoiceOver wording.
 struct ListRow<Leading: View, Trailing: View>: View {
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     let title: String
     var titleDetail: String?
     var subtitle: String?
@@ -43,37 +44,43 @@ struct ListRow<Leading: View, Trailing: View>: View {
         HStack(spacing: AppSpacing.md) {
             leading
 
-            VStack(alignment: .leading, spacing: 2) {
-                if let titleDetail {
-                    // The detail drops beneath the title rather than
-                    // squeezing it when large text can't share a line.
-                    ViewThatFits(in: .horizontal) {
-                        HStack(alignment: .firstTextBaseline, spacing: AppSpacing.sm) {
-                            titleText.fixedSize()
-                            detailText(titleDetail)
-                                .lineLimit(1)
+            valueLayout {
+                VStack(alignment: .leading, spacing: 2) {
+                    if let titleDetail {
+                        // The detail drops beneath the title rather than
+                        // squeezing it when large text can't share a line.
+                        ViewThatFits(in: .horizontal) {
+                            HStack(alignment: .firstTextBaseline, spacing: AppSpacing.sm) {
+                                titleText.fixedSize()
+                                detailText(titleDetail)
+                                    .lineLimit(1)
+                            }
+                            VStack(alignment: .leading, spacing: 2) {
+                                titleText
+                                detailText(titleDetail)
+                                    .lineLimit(2)
+                            }
                         }
-                        VStack(alignment: .leading, spacing: 2) {
-                            titleText
-                            detailText(titleDetail)
-                                .lineLimit(2)
-                        }
+                    } else {
+                        titleText
                     }
-                } else {
-                    titleText
+
+                    if let subtitle {
+                        Text(subtitle)
+                            .font(.dmSans(.subheadline))
+                            .foregroundStyle(.secondary)
+                    }
                 }
 
-                if let subtitle {
-                    Text(subtitle)
-                        .font(.dmSans(.subheadline))
-                        .foregroundStyle(.secondary)
+                if !dynamicTypeSize.isAccessibilitySize {
+                    Spacer(minLength: AppSpacing.sm)
                 }
+
+                trailing
+                    .layoutPriority(1)
+                    .fixedSize(horizontal: false, vertical: true)
             }
-
-            Spacer(minLength: AppSpacing.sm)
-
-            trailing
-                .layoutPriority(1)
+            .frame(maxWidth: .infinity, alignment: .leading)
 
             accessoryView
         }
@@ -81,6 +88,12 @@ struct ListRow<Leading: View, Trailing: View>: View {
         .frame(maxWidth: .infinity, minHeight: 56)
         .contentShape(Rectangle())
         .accessibilityElement(children: .combine)
+    }
+
+    private var valueLayout: AnyLayout {
+        dynamicTypeSize.isAccessibilitySize
+            ? AnyLayout(VStackLayout(alignment: .leading, spacing: AppSpacing.xs))
+            : AnyLayout(HStackLayout(spacing: AppSpacing.md))
     }
 
     private var titleText: some View {

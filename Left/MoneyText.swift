@@ -40,6 +40,12 @@ struct HeroMoneyText: View {
             ForEach(Self.scales, id: \.self) { scale in
                 styledText(pointSize: size * scale)
             }
+            // The last candidate must accept the available width, even for
+            // accessibility text sizes or unusually long amounts.
+            label
+                .font(.dmSans(size: size * Self.scales.last!, weight: .semibold, relativeTo: .largeTitle))
+                .monospacedDigit()
+                .fixedSize(horizontal: false, vertical: true)
         }
     }
 

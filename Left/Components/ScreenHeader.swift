@@ -157,16 +157,27 @@ extension ScreenTitleRow where Action == EmptyView {
 /// The period being browsed, plus its stepper. Sits at the same height as the
 /// title row so the two read as one block wherever a screen stacks them.
 struct PeriodRow<Label: View, Trailing: View>: View {
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     @ViewBuilder var label: Label
     @ViewBuilder var trailing: Trailing
 
     var body: some View {
-        HStack(spacing: AppSpacing.xs) {
+        layout {
             label
-            Spacer(minLength: AppSpacing.sm)
+            if !dynamicTypeSize.isAccessibilitySize {
+                Spacer(minLength: AppSpacing.sm)
+            }
             trailing
         }
         .frame(minHeight: ScreenHeaderMetrics.rowHeight)
+    }
+}
+
+private extension PeriodRow {
+    var layout: AnyLayout {
+        dynamicTypeSize.isAccessibilitySize
+            ? AnyLayout(VStackLayout(alignment: .leading, spacing: AppSpacing.xs))
+            : AnyLayout(HStackLayout(spacing: AppSpacing.xs))
     }
 }
 
