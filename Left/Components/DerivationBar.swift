@@ -126,7 +126,7 @@ struct DerivationBar: View {
     private var legend: some View {
         HStack(spacing: AppSpacing.sm) {
             legendItem("Income", color: Color.leftNeutralFill)
-            legendItem("Fixed", color: Color.leftPlanExpenses)
+            legendItem("Recurring", color: Color.leftPlanExpenses)
             legendItem("Savings", color: Color.leftPlanSavings)
             legendItem("Spendable", color: Color.leftPlanSpendable)
             Spacer(minLength: 0)
@@ -155,7 +155,7 @@ struct DerivationBar: View {
 
             VStack(alignment: .leading, spacing: AppSpacing.lg) {
                 detailRow("Income", value: effectiveIncome, color: Color.leftNeutralFill)
-                detailRow("Fixed expenses", value: effectiveFixedTotal, color: Color.leftPlanExpenses, prefix: "−")
+                detailRow("Recurring expenses", value: effectiveFixedTotal, color: Color.leftPlanExpenses, prefix: "−")
                 detailRow("Savings", value: savings, color: Color.leftPlanSavings, prefix: "−")
                 Divider()
                 detailRow("Spendable", value: spendable,
@@ -222,7 +222,7 @@ struct DerivationBar: View {
     }
 
     private var accessibilitySummary: String {
-        "Income \(effectiveIncome.formatted(wholeDollars)), minus fixed expenses \(effectiveFixedTotal.formatted(wholeDollars)), minus savings \(savingsTerm), leaves \(spendable.formatted(wholeDollars)) across \(days) days, or \(dailyRate.formatted(dailyDollars)) per day."
+        "Income \(effectiveIncome.formatted(wholeDollars)), minus recurring expenses \(effectiveFixedTotal.formatted(wholeDollars)), minus savings \(savingsTerm), leaves \(spendable.formatted(wholeDollars)) across \(days) days, or \(dailyRate.formatted(dailyDollars)) per day."
     }
 
     private var savingsTerm: String {

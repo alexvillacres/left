@@ -532,7 +532,7 @@ struct OnboardingView: View {
     private var detail: String {
         switch step {
         case 0: "Left turns your monthly plan into one clear number for everyday spending."
-        case 1: "Bills in your plan are already covered. You only log everyday purchases."
+        case 1: "Recurring expenses in your plan are already covered. You only log everyday purchases."
         case 2: "Whatever you don’t spend carries forward. Larger days use what you’ve built up, and Left adjusts automatically."
         case 3: "Add the income you expect this month.\nYou can update it later if things change."
         case 4: "Add rent, utilities, and other recurring costs. Left will account for them automatically."

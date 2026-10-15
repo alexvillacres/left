@@ -58,7 +58,7 @@ struct TodayBalanceSheet: View {
     }
 
     private var allowanceDetail: String {
-        if allowance < 0 { return "Your plan’s bills and savings exceed its income" }
+        if allowance < 0 { return "Your plan’s recurring expenses and savings exceed its income" }
         if allowance == 0 { return "No daily allowance on this date" }
         return "From your plan"
     }

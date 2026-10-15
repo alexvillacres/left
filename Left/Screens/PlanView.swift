@@ -121,7 +121,7 @@ struct PlanView: View {
                             fixedExpensesEditor
                         } label: {
                             planSummaryRow(
-                                title: "Fixed expenses",
+                                title: "Recurring expenses",
                                 subtitle: itemCount(plan.fixedExpenses.count, singular: "expense"),
                                 amount: plan.fixedTotal,
                                 indicatorColor: .leftPlanExpenses,
@@ -571,7 +571,7 @@ struct PlanView: View {
             deleteExpense(expense)
         }
         .accessibilityLabel("\(expense.name), \(expenseBillingDescription(expense)), \(amount) a month")
-        .accessibilityHint("Opens fixed expense editor")
+        .accessibilityHint("Opens recurring expense editor")
     }
 
     // MARK: - Savings
