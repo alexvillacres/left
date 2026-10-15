@@ -12,7 +12,8 @@ struct CatchUpView: View {
     @State private var startDate: Date
     @State private var endDate: Date
     @State private var showingDates = false
-    @ScaledMetric private var amountSize: CGFloat = 64
+    // HeroMoneyText already scales relative to .largeTitle.
+    private let amountSize: CGFloat = 64
 
     init(plan: MonthPlan,
          period: ClosedRange<Date>,

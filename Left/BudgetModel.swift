@@ -529,13 +529,15 @@ final class Transaction {
 }
 
 // Fixed set keeps the add-sheet to one row of chips. Codable enums
-// store cleanly in SwiftData.
+// store cleanly in SwiftData. `.other` is the uncategorized default, not a
+// choice: spending logged without a chip saves as `.other`, so it is left out
+// of `allCases`. `.fun` is a legacy case shown the same way.
 enum Category: String, Codable, CaseIterable, Identifiable {
     case coffee, food, grocery, bar, transit, shopping, household, fun, other
     var id: String { rawValue }
 
     static var allCases: [Category] {
-        [.grocery, .bar, .food, .transit, .coffee, .household, .shopping, .other]
+        [.grocery, .bar, .food, .transit, .coffee, .household, .shopping]
     }
 
     var label: String {
@@ -547,8 +549,8 @@ enum Category: String, Codable, CaseIterable, Identifiable {
         case .transit: "Transit"
         case .shopping: "Shopping"
         case .household: "Household"
-        case .fun: "Other"
-        case .other: "Other"
+        case .fun: "Uncategorized"
+        case .other: "Uncategorized"
         }
     }
 

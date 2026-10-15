@@ -6,6 +6,10 @@ struct TodayBalanceSheet: View {
     let spent: Decimal
     let remaining: Decimal
     let entryCount: Int
+    // The ground's secondary ink and rail color, so the steps match Today's
+    // ground in both its butter and its below-zero state.
+    var secondaryInk: Color = .leftGroundTodayTextSecondary
+    var rule: Color = .leftReportButterPerforation
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     // Drops each dot onto the first line of its step as text scales.
@@ -31,13 +35,13 @@ struct TodayBalanceSheet: View {
             step(carriedForward >= 0 ? "Carried forward" : "Over from earlier days",
                  amount: carriedForward,
                  detail: carriedDetail,
-                 dot: carriedForward > 0 ? .filled(.leftGroundTodayTextSecondary)
+                 dot: carriedForward > 0 ? .filled(secondaryInk)
                     : carriedForward < 0 ? .filled(.leftFeedbackNegative) : .hollow)
             step(isToday ? "Today’s allowance" : "Day’s allowance",
                  amount: displayedAllowance,
                  showsPlus: true,
                  detail: allowanceDetail,
-                 dot: displayedAllowance > 0 ? .filled(.leftGroundTodayTextSecondary)
+                 dot: displayedAllowance > 0 ? .filled(secondaryInk)
                     : displayedAllowance < 0 ? .filled(.leftFeedbackNegative) : .hollow)
             step(isToday ? "Logged today" : "Logged that day",
                  amount: -displayedSpent,
@@ -45,7 +49,7 @@ struct TodayBalanceSheet: View {
                  dot: .hollow,
                  continues: false)
         }
-        .foregroundStyle(Color.leftGroundTextPrimary, Color.leftGroundTodayTextSecondary)
+        .foregroundStyle(Color.leftGroundTextPrimary, secondaryInk)
         .environment(\.colorScheme, .light)
     }
 
@@ -106,14 +110,14 @@ struct TodayBalanceSheet: View {
                 case .filled(let color):
                     Circle().fill(color)
                 case .hollow:
-                    Circle().strokeBorder(Color.leftGroundTodayTextSecondary, lineWidth: 2)
+                    Circle().strokeBorder(secondaryInk, lineWidth: 2)
                 }
             }
             .frame(width: dotSize, height: dotSize)
 
             if continues {
                 Rectangle()
-                    .fill(Color.leftReportButterPerforation)
+                    .fill(rule)
                     .frame(width: 2)
                     .frame(maxHeight: .infinity)
             }

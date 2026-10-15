@@ -266,7 +266,8 @@ struct TodayView: View {
 
     private func heroSection(plan: MonthPlan?, snapshot: DaySnapshot?,
                              maxBreakdownHeight: CGFloat) -> some View {
-        ScreenGroundHeader(ground: .today) {
+        let overspent = plan.map { !$0.needsIncomeSetup } == true && isOverspent(snapshot)
+        return ScreenGroundHeader(ground: overspent ? .todayNegative : .today) {
             periodRow
 
             if let plan, plan.needsIncomeSetup {
@@ -278,6 +279,14 @@ struct TodayView: View {
                     // Expanding the explanation must not compress the headline.
                     .fixedSize(horizontal: false, vertical: true)
                     .padding(.top, AppSpacing.sm)
+
+                if overspent, let plan, let snapshot {
+                    Text(overspentCaption(plan: plan, snapshot: snapshot))
+                        .font(.dmSans(.subheadline, weight: .medium))
+                        .foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                        .padding(.top, AppSpacing.xxs)
+                }
 
                 if let snapshot {
                     // Grow the ground to move spending down. At larger text
@@ -304,14 +313,42 @@ struct TodayView: View {
                 }
             }
         }
+        .animation(reduceMotion ? nil : .easeInOut(duration: 0.3), value: overspent)
+    }
+
+    // Compare at display precision so a fractional-cent deficit that shows as
+    // $0.00 never turns the ground red.
+    private func isOverspent(_ snapshot: DaySnapshot?) -> Bool {
+        guard let snapshot else { return false }
+        return snapshot.remaining.rounded(scale: 2, mode: .bankers) < 0
+    }
+
+    // Says where a deficit goes: it is drawn from the following days, and from
+    // next month when the month ends. Tomorrow assumes nothing else is logged.
+    private func overspentCaption(plan: MonthPlan, snapshot: DaySnapshot) -> String {
+        guard isToday else { return "This came out of the days that followed." }
+        let calendar = Calendar.current
+        guard let tomorrow = calendar.date(byAdding: .day, value: 1, to: snapshot.date),
+              calendar.isDate(tomorrow, equalTo: plan.monthStart, toGranularity: .month) else {
+            return "This comes out of next month."
+        }
+        let tomorrowStart = (snapshot.remaining + plan.dailyRate).rounded(scale: 2, mode: .bankers)
+        return "This comes out of the coming days. Tomorrow starts at \(tomorrowStart.formatted(.currency(code: "USD")))."
     }
 
     private func balanceBreakdown(_ snapshot: DaySnapshot) -> some View {
-        TodayBalanceSheet(date: snapshot.date,
-                          allowance: snapshot.allowance,
-                          spent: snapshot.spent,
-                          remaining: snapshot.remaining,
-                          entryCount: snapshot.transactions.count)
+        let overspent = isOverspent(snapshot)
+        return TodayBalanceSheet(date: snapshot.date,
+                                 allowance: snapshot.allowance,
+                                 spent: snapshot.spent,
+                                 remaining: snapshot.remaining,
+                                 entryCount: snapshot.transactions.count,
+                                 secondaryInk: overspent
+                                    ? .leftGroundTodayNegativeTextSecondary
+                                    : .leftGroundTodayTextSecondary,
+                                 rule: overspent
+                                    ? .leftGroundTodayNegativeRule
+                                    : .leftReportButterPerforation)
     }
 
     @ViewBuilder
@@ -325,15 +362,10 @@ struct TodayView: View {
                 // "left" names the number now that there is no screen title;
                 // the hero steps down a size before it would wrap.
                 HStack(alignment: .top, spacing: AppSpacing.xxs) {
-                    // The amount alone carries state now that the status line
-                    // is gone: below zero it takes the negative color, resolved
-                    // light because it sits on the ground. The minus sign keeps
-                    // it from relying on color alone.
+                    // Below zero the ground turns red and the amount stays ink;
+                    // the minus sign keeps it from relying on color alone.
                     HeroMoneyText(amount: snapshot.remaining, size: heroSize, suffix: "left")
-                        .foregroundStyle(snapshot.remaining < 0
-                                         ? AnyShapeStyle(Color.leftFeedbackNegative)
-                                         : AnyShapeStyle(.primary))
-                        .environment(\.colorScheme, .light)
+                        .foregroundStyle(.primary)
                         .contentTransition(.numericText())
                         .animation(reduceMotion ? nil : .spring(duration: 0.4), value: snapshot.remaining)
                     Image(systemName: "info.circle")

@@ -159,6 +159,14 @@ extension Color {
     static let leftGroundTodayFill = Color.dynamic(light: Ramp.butter200, dark: Ramp.butter200)
     static let leftGroundTodayTextSecondary = Color.dynamic(light: Ramp.butter700, dark: Ramp.butter700)
 
+    // Today's ground below zero. The ground carries the state so the headline
+    // can stay ink; red type on butter read poorly. Secondary ink meets 4.5:1
+    // on the ground and its fill.
+    static let leftGroundTodayNegative = Color.dynamic(light: 0xF7DEDD, dark: 0xF7DEDD)
+    static let leftGroundTodayNegativeFill = Color.dynamic(light: 0xEFC8C6, dark: 0xEFC8C6)
+    static let leftGroundTodayNegativeTextSecondary = Color.dynamic(light: 0x6E3432, dark: 0x6E3432)
+    static let leftGroundTodayNegativeRule = Color.dynamic(light: 0xDDA9A7, dark: 0xDDA9A7)
+
     static let leftGroundActivity = Color.dynamic(light: Ramp.tan100, dark: Ramp.tan100)
     static let leftGroundActivityFill = Color.dynamic(light: Ramp.tan200, dark: Ramp.tan200)
     static let leftGroundActivityTextSecondary = Color.dynamic(light: Ramp.tan700, dark: Ramp.tan700)

@@ -15,11 +15,15 @@ struct AddSpendingView: View {
 
     // Cents-first entry: raw digit string, so typing 6 5 0 → $6.50.
     @State private var digits = ""
-    @State private var category: Category = .other
+    // Nil until a chip is chosen; saves as the uncategorized `.other`.
+    @State private var category: Category?
     @State private var note = ""
     @State private var fixedCanvasHeight: CGFloat?
     @FocusState private var isNoteFocused: Bool
-    @ScaledMetric private var amountSize = 64
+    // Not a scaled metric: HeroMoneyText already scales relative to
+    // .largeTitle, and scaling here as well compounds at large text sizes.
+    private static let amountSize: CGFloat = 64
+    private static let topBarHeight: CGFloat = 52
 
     init(plan: MonthPlan, date: Date = .now, transaction: Transaction? = nil,
          dateRange: ClosedRange<Date>? = nil) {
@@ -30,7 +34,8 @@ struct AddSpendingView: View {
 
         if let transaction {
             _digits = State(initialValue: Self.digits(for: transaction.amount))
-            _category = State(initialValue: transaction.category)
+            _category = State(initialValue: Category.allCases.contains(transaction.category)
+                              ? transaction.category : nil)
             _note = State(initialValue: transaction.note ?? "")
         }
     }
@@ -51,53 +56,29 @@ struct AddSpendingView: View {
         GeometryReader { geometry in
             Color.clear
                 .overlay(alignment: .top) {
-                    ZStack(alignment: .top) {
-                Color.leftEntryBackground
+                    // This is a fixed canvas. The system keyboard is allowed to
+                    // cover its lower portion instead of changing the proposed
+                    // height and shifting or removing spending-entry content.
+                    // Navigation chrome sits on the same canvas, above the entry
+                    // content rather than over it.
+                    VStack(spacing: 0) {
+                        topBar
 
-                // This is a fixed canvas. The system keyboard is allowed to cover
-                // its lower portion instead of changing the VStack's proposed
-                // height and shifting or removing spending-entry content.
-                VStack(spacing: 0) {
-                    Spacer(minLength: AppSpacing.xl)
-
-                    // Amount, note, and category are one group — the things being
-                    // described. The keypad below is the instrument you describe
-                    // them with. Keeping the flexible space above this group anchors
-                    // the whole entry flow to the bottom of the screen.
-                    VStack(spacing: AppSpacing.lg) {
-                        HeroMoneyText(amount: amount, size: amountSize)
-                            .foregroundStyle(digits.isEmpty ? Color.secondary : Color.primary)
-                            .contentTransition(.numericText())
-                            .animation(.spring(duration: 0.2), value: amount)
-                            .padding(.horizontal, AppSpacing.xl)
-
-                        noteRow
-                            .padding(.horizontal, AppSpacing.xl)
-
-                        // Owns its own horizontal padding so chips scroll edge to
-                        // edge instead of clipping inside an inset container.
-                        categoryChips
-                    }
-                    .padding(.bottom, AppSpacing.lg)
-
-                    VStack(spacing: AppSpacing.md) {
-                        NumpadView(onDigit: appendDigit, onBackspace: backspace)
-                        primaryButton
-                        if isEditing {
-                            deleteButton
+                        // At large text sizes the entry content can be taller
+                        // than the screen; it scrolls instead of running past
+                        // the bottom edge. When it fits, it stays anchored to
+                        // the bottom of the screen.
+                        ScrollView {
+                            entryContent
+                                .frame(maxWidth: .infinity)
+                                .frame(minHeight: max(0, (fixedCanvasHeight ?? geometry.size.height) - Self.topBarHeight),
+                                       alignment: .bottom)
                         }
+                        .scrollIndicators(.hidden)
+                        .scrollBounceBehavior(.basedOnSize)
+                        .scrollDismissesKeyboard(.interactively)
                     }
-                    .padding(.horizontal, AppSpacing.xl)
-                    .padding(.bottom, AppSpacing.sm)
-                    .allowsHitTesting(!isNoteFocused)
-                    .accessibilityHidden(isNoteFocused)
-                }
-                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
-
-                // Keep navigation chrome on the same fixed, keyboard-ignoring
-                // canvas instead of inserting it into the changing safe area.
-                topBar
-                    }
+                    .background(Color.leftEntryBackground)
                     .frame(
                         width: geometry.size.width,
                         height: fixedCanvasHeight ?? geometry.size.height,
@@ -127,6 +108,43 @@ struct AddSpendingView: View {
         }
     }
 
+    private var entryContent: some View {
+        VStack(spacing: 0) {
+            Spacer(minLength: AppSpacing.lg)
+
+            // Amount, note, and category are one group — the things being
+            // described. The keypad below is the instrument you describe
+            // them with.
+            VStack(spacing: AppSpacing.lg) {
+                HeroMoneyText(amount: amount, size: Self.amountSize)
+                    .foregroundStyle(digits.isEmpty ? Color.secondary : Color.primary)
+                    .contentTransition(.numericText())
+                    .animation(.spring(duration: 0.2), value: amount)
+                    .padding(.horizontal, AppSpacing.xl)
+
+                noteRow
+                    .padding(.horizontal, AppSpacing.xl)
+
+                // Owns its own horizontal padding so chips scroll edge to
+                // edge instead of clipping inside an inset container.
+                categoryChips
+            }
+            .padding(.bottom, AppSpacing.lg)
+
+            VStack(spacing: AppSpacing.md) {
+                NumpadView(onDigit: appendDigit, onBackspace: backspace)
+                primaryButton
+                if isEditing {
+                    deleteButton
+                }
+            }
+            .padding(.horizontal, AppSpacing.xl)
+            .padding(.bottom, AppSpacing.sm)
+            .allowsHitTesting(!isNoteFocused)
+            .accessibilityHidden(isNoteFocused)
+        }
+    }
+
     private var topBar: some View {
         HStack {
             FlatBackButton(accessibilityLabel: "Cancel")
@@ -145,7 +163,7 @@ struct AddSpendingView: View {
             }
         }
         .padding(.horizontal, AppSpacing.xl)
-        .background(Color.leftEntryBackground)
+        .frame(height: Self.topBarHeight)
     }
 
     // MARK: - Note
@@ -165,21 +183,31 @@ struct AddSpendingView: View {
 
     // MARK: - Category chips
 
+    // No chip starts selected, so an unchosen category is visibly unchosen.
+    // When editing, the chosen chip is scrolled into view so it is never
+    // selected off-screen.
     private var categoryChips: some View {
-        ScrollView(.horizontal, showsIndicators: false) {
-            HStack(spacing: AppSpacing.sm) {
-                ForEach(Category.allCases) { cat in
-                    chip(cat)
+        ScrollViewReader { proxy in
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: AppSpacing.sm) {
+                    ForEach(Category.allCases) { cat in
+                        chip(cat)
+                            .id(cat)
+                    }
                 }
+                .padding(.horizontal, AppSpacing.xl)
             }
-            .padding(.horizontal, AppSpacing.xl)
+            .onAppear {
+                if let category { proxy.scrollTo(category, anchor: .center) }
+            }
         }
     }
 
+    // Tapping the selected chip clears it back to uncategorized.
     private func chip(_ cat: Category) -> some View {
         let selected = cat == category
         return Button {
-            category = cat
+            category = selected ? nil : cat
         } label: {
             Label {
                 Text(cat.label)
@@ -198,6 +226,7 @@ struct AddSpendingView: View {
         }
         .buttonStyle(.plain)
         .accessibilityAddTraits(selected ? .isSelected : [])
+        .accessibilityHint(selected ? "Double-tap to clear the category" : "")
     }
 
     // MARK: - Actions
@@ -253,12 +282,12 @@ struct AddSpendingView: View {
             // History edits stay inside the selected monthly plan. Clamp the
             // retained time to now when moving an older entry onto today.
             if dateRange != nil { transaction.date = min(date, .now) }
-            transaction.category = category
+            transaction.category = category ?? .other
             transaction.note = trimmed.isEmpty ? nil : trimmed
         } else {
             let tx = Transaction(amount: amount,
                                  date: dateRange == nil ? date : min(date, .now),
-                                 category: category,
+                                 category: category ?? .other,
                                  note: trimmed.isEmpty ? nil : trimmed)
             modelContext.insert(tx)
             tx.plan = plan

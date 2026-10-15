@@ -35,6 +35,10 @@ struct ScreenGround {
     static let today = ScreenGround(fill: .leftGroundToday,
                                     controlFill: .leftGroundTodayFill,
                                     secondaryInk: .leftGroundTodayTextSecondary)
+    // Replaces Today's butter while the balance is below zero.
+    static let todayNegative = ScreenGround(fill: .leftGroundTodayNegative,
+                                            controlFill: .leftGroundTodayNegativeFill,
+                                            secondaryInk: .leftGroundTodayNegativeTextSecondary)
     static let activity = ScreenGround(fill: .leftGroundActivity,
                                        controlFill: .leftGroundActivityFill,
                                        secondaryInk: .leftGroundActivityTextSecondary)

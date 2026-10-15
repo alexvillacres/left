@@ -39,7 +39,9 @@ spending meter have been removed.
 ### Recording and catching up
 
 Normal spending entry is full-screen and cents-first, with an optional note and
-a default category. The primary flow stays open → type amount → log.
+an optional category. No category chip starts selected; spending logged without
+one is uncategorized and shows a dashed icon. Tapping a selected chip clears it.
+The primary flow stays open → type amount → log.
 
 Today offers catch-up when there is a prior active day. After at least three
 uncovered days, it also shows an inline prompt, then waits three days before

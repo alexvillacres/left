@@ -608,3 +608,48 @@ because Plan's headline is spendable. Content on a ground uses the ground's
 ink, and any appearance-dependent color placed on it, such as a state color,
 must be resolved in the light appearance. Menus opened from the ground still
 follow the system appearance. Settings stays neutral, with no ground.
+
+### 031. Category is optional and starts unselected
+**Date:** 2026-10-15 · **Status:** Active
+**Where:** `Left/Screens/AddSpendingView.swift`, `Left/BudgetModel.swift`
+
+Spending entry opens with no category chip selected. Logging without choosing
+one saves the existing `.other` value, now labeled "Uncategorized" and still
+drawn as a dashed circle. There is no "Other" chip; tapping the selected chip
+clears it. Editing an entry scrolls its chosen chip into view.
+
+**Why:** The default was a selected "Other" chip at the end of a horizontal
+row, usually off-screen, so entries were silently categorized by a choice the
+user never saw. Moving a highlighted "Other" to the front would make the state
+visible but would still present skipping as a choice and put a solid ink chip
+in front of an optional field. Since a skipped category and "Other" carry the
+same information, one honest uncategorized state replaces both.
+
+**Constrains:** Keep the stored raw value `other` for uncategorized so
+existing stores and JSON backups need no migration; `.fun` displays the same
+way. Category stays optional and must not block logging. Any future breakdown
+by category should show uncategorized spending as its own group and treat
+catch-up totals separately, since they are stored as `.other`.
+
+### 032. Today's ground turns red below zero
+**Date:** 2026-10-15 · **Status:** Active · **Amends:** 030
+**Where:** `Left/Screens/TodayView.swift`, `Left/Screens/TodayBalanceSheet.swift`,
+`Left/Components/ScreenHeader.swift`, `Left/Palette.swift`
+
+When the displayed balance is below zero, Today's butter ground becomes a pale
+negative red and the headline returns to ink, keeping its minus sign. One
+caption under the headline says where the deficit goes: "This comes out of the
+coming days. Tomorrow starts at −$X." On the last day of a month it says the
+deficit comes out of next month; on a past day it says it came out of the days
+that followed. The ground change animates and honors Reduce Motion.
+
+**Why:** A negative-colored headline on butter read poorly, and the red number
+alone did not explain what going negative means. Tomorrow's starting balance
+shows the carry concretely without telling the user how to spend.
+
+**Constrains:** The red ground is a state signal under 027, not an expressive
+choice, and like every ground it keeps its light value in dark mode. Tomorrow's
+figure is today's balance plus the daily rate, assuming nothing else is logged;
+do not show it across a month boundary, where next month's rate may differ or
+not exist yet. Compare at display precision so a fractional-cent deficit that
+shows as $0.00 does not turn the ground red.
