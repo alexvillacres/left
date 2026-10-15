@@ -54,7 +54,7 @@ struct NumpadView: View {
             keyButton { onBackspace() } label: {
                 Image(systemName: "delete.backward")
             }
-            .accessibilityLabel("Delete")
+            .accessibilityLabel("Backspace")
         case .blank:
             Color.clear
                 .frame(maxWidth: .infinity)

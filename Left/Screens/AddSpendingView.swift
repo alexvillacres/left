@@ -191,10 +191,13 @@ struct AddSpendingView: View {
                 .lineLimit(1)
                 .padding(.horizontal, AppSpacing.md)
                 .padding(.vertical, AppSpacing.sm)
+                .frame(minHeight: 44)
                 .background(selected ? Color.primary : Color(uiColor: .secondarySystemFill))
                 .clipShape(Capsule())
+                .contentShape(Capsule())
         }
         .buttonStyle(.plain)
+        .accessibilityAddTraits(selected ? .isSelected : [])
     }
 
     // MARK: - Actions
