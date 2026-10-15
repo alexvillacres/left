@@ -41,6 +41,15 @@ struct ScreenGround {
     static let plan = ScreenGround(fill: .leftGroundPlan,
                                    controlFill: .leftGroundPlanFill,
                                    secondaryInk: .leftGroundPlanTextSecondary)
+    static let income = ScreenGround(fill: .leftGroundIncome,
+                                     controlFill: .leftGroundIncomeFill,
+                                     secondaryInk: .leftGroundIncomeTextSecondary)
+    static let expenses = ScreenGround(fill: .leftGroundExpenses,
+                                       controlFill: .leftGroundExpensesFill,
+                                       secondaryInk: .leftGroundExpensesTextSecondary)
+    static let savings = ScreenGround(fill: .leftGroundSavings,
+                                      controlFill: .leftGroundSavingsFill,
+                                      secondaryInk: .leftGroundSavingsTextSecondary)
 }
 
 enum ScreenGroundMetrics {

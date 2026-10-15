@@ -16,6 +16,8 @@ struct TodayView: View {
     private static let addSpendingMorphID = "add-spending"
     var visitID: UUID = UUID()
     var animateAddButtonEntrance = false
+    // Owned by the root so it can also cover the tab bar.
+    var coversZoomCorners: Binding<Bool> = .constant(false)
     var onSetUpIncome: () -> Void = {}
     @Environment(\.modelContext) private var modelContext
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
@@ -104,6 +106,9 @@ struct TodayView: View {
                 }
             }
             .background(Color.leftBackground.ignoresSafeArea())
+        }
+        .onChange(of: activeSpendingSheet?.id) { _, id in
+            if id == nil { coversZoomCorners.wrappedValue = false }
         }
         .fullScreenCover(item: $activeSpendingSheet) { sheet in
             if let plan {
@@ -280,6 +285,8 @@ struct TodayView: View {
                     .environment(\.colorScheme, .light)
             } else {
                 heroAmount(snapshot: snapshot)
+                    // Expanding the explanation must not compress the headline.
+                    .fixedSize(horizontal: false, vertical: true)
                     .padding(.top, AppSpacing.sm)
 
                 if let snapshot {
@@ -433,6 +440,7 @@ struct TodayView: View {
     private var addSpendingButton: some View {
         Button {
             activeSpendingSheet = ActiveSpendingSheet()
+            blendZoomCorners()
         } label: {
             Image(systemName: "plus")
                 .font(.system(size: 20, weight: .semibold))
@@ -463,6 +471,22 @@ struct TodayView: View {
         }
     }
 
+    // The system zoom keeps the cover clipped to the display's corner radius
+    // until it settles, so light Today would show in the corners. Darken
+    // behind it once the cover nearly fills the screen, then let go.
+    private func blendZoomCorners() {
+        guard !reduceMotion else { return }
+        Task { @MainActor in
+            try? await Task.sleep(for: .milliseconds(200))
+            guard activeSpendingSheet != nil else { return }
+            withAnimation(.easeIn(duration: 0.12)) {
+                coversZoomCorners.wrappedValue = true
+            }
+            try? await Task.sleep(for: .seconds(1))
+            coversZoomCorners.wrappedValue = false
+        }
+    }
+
     private var addButtonVisibleImmediately: Bool {
         !animateAddButtonEntrance || reduceMotion
     }
@@ -490,23 +514,20 @@ struct TodayView: View {
                         activeSpendingSheet = ActiveSpendingSheet(transaction: tx)
                     }
                 } label: {
-                    transactionRow(tx)
+                    TransactionRow(transaction: tx)
+                        .padding(.horizontal, AppSpacing.xl)
                 }
                 .buttonStyle(.plain)
                 .listRowInsets(EdgeInsets())
                 .listRowBackground(Color.leftBackground)
-                .alignmentGuide(.listRowSeparatorLeading) { _ in
-                    0
-                }
-                .alignmentGuide(.listRowSeparatorTrailing) { dimensions in
-                    dimensions.width
-                }
+                .listRowSeparator(.hidden)
                 .swipeActions(edge: .trailing) {
                     Button(role: .destructive) {
                         delete(tx)
                     } label: {
                         Label("Delete", systemImage: "trash")
                     }
+                    .tint(Color.leftDestructiveFill)
                 }
             }
         }
@@ -517,41 +538,6 @@ struct TodayView: View {
         .scrollContentBackground(.hidden)
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
         .background(Color.leftBackground)
-    }
-
-    private func transactionRow(_ tx: Transaction) -> some View {
-        HStack(spacing: AppSpacing.md) {
-            CategoryIcon(category: tx.category, isCatchUp: tx.isCatchUp)
-                .font(.dmSans(.body))
-                .foregroundStyle(.secondary)
-                .frame(width: 28)
-            if tx.isCatchUp, let start = tx.catchUpStartDate, let end = tx.catchUpEndDate {
-                Text("Catch-up · \(catchUpLabel(start: start, end: end))")
-                    .font(.dmSans(.body, weight: .medium))
-            } else if let note = tx.note, !note.isEmpty {
-                Text(note)
-                    .font(.dmSans(.body, weight: .medium))
-                    .lineLimit(2)
-            } else {
-                Text(tx.category.label)
-                    .font(.dmSans(.body, weight: .medium))
-                    .foregroundStyle(.secondary)
-                    .lineLimit(1)
-            }
-            Spacer()
-            MoneyText(amount: tx.amount)
-                .layoutPriority(1)
-        }
-        .padding(.horizontal, AppSpacing.xl)
-        .padding(.vertical, AppSpacing.md)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .contentShape(Rectangle())
-    }
-
-    private func catchUpLabel(start: Date, end: Date) -> String {
-        let startText = start.formatted(.dateTime.month(.abbreviated).day())
-        let endText = end.formatted(.dateTime.month(.abbreviated).day())
-        return startText == endText ? startText : "\(startText)–\(endText)"
     }
 
     private func delete(_ transaction: Transaction) {

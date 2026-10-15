@@ -32,10 +32,16 @@ private enum Ramp {
     // Hue steps share one scale: 100 is a pale tint for a ground, 200 is the
     // solid control fill on that tint, 500 is the brand mark, 600 is a darker
     // rule, and 700 is secondary ink that meets 4.5:1 on a 100 and its 200.
+    static let orange100: UInt = 0xFBD9CA
+    static let orange200: UInt = 0xE7C8BA
     static let orange500: UInt = 0xF36334
+    static let orange700: UInt = 0x5B3A2E
 
+    static let periwinkle100: UInt = 0xDDE4F8
+    static let periwinkle200: UInt = 0xCBD2E4
     static let periwinkle500: UInt = 0xA5B7F1
     static let periwinkle600: UInt = 0x99AADF
+    static let periwinkle700: UInt = 0x414858
 
     static let sage100: UInt = 0xD9E6C9
     static let sage200: UInt = 0xC8D8B5
@@ -75,6 +81,10 @@ extension Color {
     static let leftAccent = Color.dynamic(light: Ramp.neutral950, dark: Ramp.neutral0)
     static let leftTextOnAccent = Color.dynamic(light: Ramp.neutral0, dark: Ramp.neutral950)
 
+    // Destructive swipe actions retain white system labels in both appearances.
+    // Both red fills exceed 4.5:1 contrast against white.
+    static let leftDestructiveFill = Color.dynamic(light: 0xC63735, dark: 0xB83230)
+
     // MARK: - Plan
 
     // Each hue means exactly one part of the plan; income is the neutral
@@ -92,6 +102,10 @@ extension Color {
 
     // Only these signal a problem. Expenses orange must never stand in for them.
     static let leftFeedbackWarning = Color.dynamic(light: 0xA8730F, dark: 0xEDB345)
+    // The chip behind "Needs amount"; text is darker than the warning hue so
+    // it holds 4.5:1 at small sizes.
+    static let leftFeedbackWarningBg = Color.dynamic(light: 0xF8EDD6, dark: 0x3A2F17)
+    static let leftFeedbackWarningText = Color.dynamic(light: 0x7A5409, dark: 0xEDB345)
     static let leftFeedbackNegative = Color.dynamic(light: 0xC63735, dark: 0xE4605E)
     static let leftFeedbackNegativeBg = Color.dynamic(light: 0xF7DEDD, dark: 0x3C1F1E)
 
@@ -154,6 +168,21 @@ extension Color {
     static let leftGroundPlan = Color.dynamic(light: Ramp.sage100, dark: Ramp.sage100)
     static let leftGroundPlanFill = Color.dynamic(light: Ramp.sage200, dark: Ramp.sage200)
     static let leftGroundPlanTextSecondary = Color.dynamic(light: Ramp.sage700, dark: Ramp.sage700)
+
+    // Plan detail screens (Income, Expenses, Savings) open on the tint of the
+    // plan part they edit. Income is the neutral whole, so it takes the neutral
+    // ramp rather than a hue.
+    static let leftGroundIncome = Color.dynamic(light: Ramp.neutral100, dark: Ramp.neutral100)
+    static let leftGroundIncomeFill = Color.dynamic(light: Ramp.neutral200, dark: Ramp.neutral200)
+    static let leftGroundIncomeTextSecondary = Color.dynamic(light: Ramp.neutral700, dark: Ramp.neutral700)
+
+    static let leftGroundExpenses = Color.dynamic(light: Ramp.orange100, dark: Ramp.orange100)
+    static let leftGroundExpensesFill = Color.dynamic(light: Ramp.orange200, dark: Ramp.orange200)
+    static let leftGroundExpensesTextSecondary = Color.dynamic(light: Ramp.orange700, dark: Ramp.orange700)
+
+    static let leftGroundSavings = Color.dynamic(light: Ramp.periwinkle100, dark: Ramp.periwinkle100)
+    static let leftGroundSavingsFill = Color.dynamic(light: Ramp.periwinkle200, dark: Ramp.periwinkle200)
+    static let leftGroundSavingsTextSecondary = Color.dynamic(light: Ramp.periwinkle700, dark: Ramp.periwinkle700)
 
     // MARK: - Chrome (structural neutrals)
 

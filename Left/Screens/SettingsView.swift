@@ -41,24 +41,9 @@ struct SettingsView: View {
                         NavigationLink {
                             DataBackupView()
                         } label: {
-                            HStack(spacing: AppSpacing.md) {
-                                VStack(alignment: .leading, spacing: AppSpacing.xxs) {
-                                    Text("Data backup")
-                                        .font(.dmSans(.body, weight: .medium))
-                                        .foregroundStyle(.primary)
-                                    Text("Export or import a JSON backup")
-                                        .font(.dmSans(.caption))
-                                        .foregroundStyle(.secondary)
-                                }
-                                Spacer(minLength: AppSpacing.sm)
-                                Image(systemName: "chevron.right")
-                                    .font(.caption.weight(.semibold))
-                                    .foregroundStyle(Color(uiColor: .tertiaryLabel))
-                            }
-                            .frame(maxWidth: .infinity)
-                            .frame(minHeight: 44)
-                            .padding(.vertical, AppSpacing.lg)
-                            .contentShape(Rectangle())
+                            ListRow(title: "Data backup",
+                                    subtitle: "Export or import a JSON backup",
+                                    accessory: .chevron)
                         }
                         .buttonStyle(.plain)
 #endif
@@ -120,28 +105,8 @@ struct SettingsView: View {
 
     private func linkRow(title: String, subtitle: String, url: URL) -> some View {
         Link(destination: url) {
-            HStack(spacing: AppSpacing.md) {
-                VStack(alignment: .leading, spacing: AppSpacing.xxs) {
-                    Text(title)
-                        .font(.dmSans(.body, weight: .medium))
-                        .foregroundStyle(.primary)
-
-                    Text(subtitle)
-                        .font(.dmSans(.caption))
-                        .foregroundStyle(.secondary)
-                }
-
-                Spacer(minLength: AppSpacing.sm)
-
-                // Outward arrow rather than a chevron: this leaves the app.
-                Image(systemName: "arrow.up.right")
-                    .font(.caption.weight(.semibold))
-                    .foregroundStyle(Color(uiColor: .tertiaryLabel))
-            }
-            .frame(maxWidth: .infinity)
-            .frame(minHeight: 44)
-            .padding(.vertical, AppSpacing.lg)
-            .contentShape(Rectangle())
+            // Outward arrow rather than a chevron: this leaves the app.
+            ListRow(title: title, subtitle: subtitle, accessory: .external)
         }
         .buttonStyle(.plain)
         .accessibilityElement(children: .ignore)

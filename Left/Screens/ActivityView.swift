@@ -133,100 +133,49 @@ struct ActivityView: View {
             .accessibilityElement(children: .combine)
     }
 
+    // Day headers are ordinary rows rather than section headers, so the
+    // system adds no header padding or tint of its own.
     private func historyList(_ days: [SpendingDay], plan: MonthPlan) -> some View {
         List {
             ForEach(days) { day in
-                Section {
-                    ForEach(day.transactions) { transaction in
-                        Button {
-                            edit(transaction, in: plan)
-                        } label: {
-                            transactionRow(transaction)
-                        }
-                        .buttonStyle(.plain)
-                        .listRowInsets(EdgeInsets(top: 0, leading: AppSpacing.xl,
-                                                  bottom: 0, trailing: AppSpacing.xl))
-                        .listRowBackground(Color.leftBackground)
-                        .accessibilityHint("Edit spending")
-                        .swipeActions(edge: .trailing) {
-                            Button(role: .destructive) {
-                                modelContext.delete(transaction)
-                                HapticFeedback.lightImpact()
-                            } label: {
-                                Label("Delete", systemImage: "trash")
-                            }
-                        }
-                    }
-                } header: {
-                    ViewThatFits(in: .horizontal) {
-                        HStack(alignment: .firstTextBaseline) {
-                            dayTitle(day.date)
-                            Spacer(minLength: AppSpacing.md)
-                            MoneyText(amount: day.total)
-                        }
-                        VStack(alignment: .leading, spacing: AppSpacing.xxs) {
-                            dayTitle(day.date)
-                            MoneyText(amount: day.total)
-                        }
-                    }
-                    .font(.dmSans(.subheadline, weight: .medium))
-                    .foregroundStyle(.secondary)
-                    .textCase(nil)
-                    .padding(.vertical, AppSpacing.sm)
-                    .listRowInsets(EdgeInsets(top: 0, leading: AppSpacing.xl,
-                                              bottom: 0, trailing: AppSpacing.xl))
-                    .accessibilityElement(children: .combine)
+                ListSectionHeader(title: dayTitle(day.date),
+                                  value: day.total.formatted(.currency(code: "USD")),
+                                  titleWeight: .medium)
+                    .padding(.top, day.id == days.first?.id ? 0 : AppSpacing.md)
                     .accessibilityLabel("\(day.date.formatted(.dateTime.weekday(.wide).month(.wide).day())), total \(day.total.formatted(.currency(code: "USD")))")
+                    .historyListRow()
+
+                ForEach(day.transactions) { transaction in
+                    Button {
+                        edit(transaction, in: plan)
+                    } label: {
+                        TransactionRow(transaction: transaction)
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityHint("Edit spending")
+                    .swipeActions(edge: .trailing) {
+                        Button(role: .destructive) {
+                            modelContext.delete(transaction)
+                            HapticFeedback.lightImpact()
+                        } label: {
+                            Label("Delete", systemImage: "trash")
+                        }
+                        .tint(Color.leftDestructiveFill)
+                    }
+                    .historyListRow()
                 }
-                .listSectionSeparator(.hidden)
             }
         }
         .listStyle(.plain)
-        .listRowSeparator(.hidden)
+        .environment(\.defaultMinListRowHeight, 0)
+        .contentMargins(.top, AppSpacing.lg, for: .scrollContent)
         .scrollContentBackground(.hidden)
     }
 
-    private func dayTitle(_ date: Date) -> Text {
-        if Calendar.current.isDateInToday(date) { return Text("Today") }
-        if Calendar.current.isDateInYesterday(date) { return Text("Yesterday") }
-        return Text(date, format: .dateTime.weekday(.abbreviated).month(.abbreviated).day())
-    }
-
-    private func transactionRow(_ transaction: Transaction) -> some View {
-        HStack(spacing: AppSpacing.md) {
-            CategoryIcon(category: transaction.category, isCatchUp: transaction.isCatchUp)
-                .font(.dmSans(.body))
-                .foregroundStyle(.secondary)
-                .frame(width: 28)
-                .accessibilityHidden(true)
-            VStack(alignment: .leading, spacing: AppSpacing.xxs) {
-                if transaction.isCatchUp,
-                   let start = transaction.catchUpStartDate,
-                   let end = transaction.catchUpEndDate {
-                    Text("Catch-up")
-                        .font(.dmSans(.body, weight: .medium))
-                    Text(catchUpLabel(start: start, end: end))
-                        .font(.dmSans(.caption))
-                        .foregroundStyle(.secondary)
-                } else if let note = transaction.note, !note.isEmpty {
-                    Text(note)
-                        .font(.dmSans(.body, weight: .medium))
-                        .lineLimit(2)
-                    Text(transaction.category.label)
-                        .font(.dmSans(.caption))
-                        .foregroundStyle(.secondary)
-                } else {
-                    Text(transaction.category.label)
-                        .font(.dmSans(.body, weight: .medium))
-                }
-            }
-            Spacer(minLength: AppSpacing.sm)
-            MoneyText(amount: transaction.amount)
-                .layoutPriority(1)
-        }
-        .padding(.vertical, AppSpacing.md)
-        .frame(maxWidth: .infinity, minHeight: 44, alignment: .leading)
-        .contentShape(Rectangle())
+    private func dayTitle(_ date: Date) -> String {
+        if Calendar.current.isDateInToday(date) { return "Today" }
+        if Calendar.current.isDateInYesterday(date) { return "Yesterday" }
+        return date.formatted(.dateTime.weekday(.abbreviated).month(.abbreviated).day())
     }
 
     private func edit(_ transaction: Transaction, in plan: MonthPlan) {
@@ -239,12 +188,6 @@ struct ActivityView: View {
         } else {
             activeSpendingSheet = ActiveSpendingSheet(plan: plan, transaction: transaction)
         }
-    }
-
-    private func catchUpLabel(start: Date, end: Date) -> String {
-        let startText = start.formatted(.dateTime.month(.abbreviated).day())
-        let endText = end.formatted(.dateTime.month(.abbreviated).day())
-        return startText == endText ? startText : "\(startText)–\(endText)"
     }
 
     private func spendingDays(in plan: MonthPlan) -> [SpendingDay] {
@@ -307,4 +250,12 @@ struct ActivityView: View {
     plan.transactions.append(Transaction(amount: 41, date: cal.date(byAdding: .day, value: 3, to: start)!, category: .bar))
     return ActivityView(browsedMonth: .constant(nil))
         .modelContainer(container)
+}
+
+private extension View {
+    func historyListRow() -> some View {
+        listRowInsets(EdgeInsets(top: 0, leading: AppSpacing.xl, bottom: 0, trailing: AppSpacing.xl))
+            .listRowSeparator(.hidden)
+            .listRowBackground(Color.leftBackground)
+    }
 }

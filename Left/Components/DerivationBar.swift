@@ -8,11 +8,15 @@ struct DerivationBar: View {
     var income: Decimal? = nil
     var fixedTotal: Decimal? = nil
     var showsDetails = true
+    // Just the proportional meter, for the Plan summary where the rows below
+    // already name each part.
+    var isMeterOnly = false
 
     @State private var isShowingDetails = false
 
-    private let meterHeight: CGFloat = 56
-    private let meterInset: CGFloat = 4
+    private var meterHeight: CGFloat { isMeterOnly ? 44 : 56 }
+    private var meterInset: CGFloat { isMeterOnly ? 6 : 4 }
+    private var segmentRadius: CGFloat { isMeterOnly ? 10 : 8 }
     private let segmentSpacing: CGFloat = 4
     private let minimumSegmentWidth: CGFloat = 8
 
@@ -39,6 +43,8 @@ struct DerivationBar: View {
                     .font(.dmSans(.subheadline))
                     .foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
+            } else if isMeterOnly {
+                meter
             } else if showsDetails {
                 Button {
                     isShowingDetails = true
@@ -81,11 +87,11 @@ struct DerivationBar: View {
             let availableWidth = max(geometry.size.width - meterInset * 2, 0)
 
             ZStack {
-                RoundedRectangle(cornerRadius: 12, style: .continuous)
+                RoundedRectangle(cornerRadius: isMeterOnly ? 16 : 12, style: .continuous)
                     .fill(Color.leftNeutralFill)
 
                 if effectiveIncome > 0, spendable <= 0 {
-                    RoundedRectangle(cornerRadius: 8, style: .continuous)
+                    RoundedRectangle(cornerRadius: segmentRadius, style: .continuous)
                         .fill(Color.leftFeedbackOverspentBg)
                         .padding(meterInset)
                 } else if effectiveIncome > 0 {
@@ -112,7 +118,7 @@ struct DerivationBar: View {
     }
 
     private func segment(width: CGFloat, fill: Color) -> some View {
-        RoundedRectangle(cornerRadius: 8, style: .continuous)
+        RoundedRectangle(cornerRadius: segmentRadius, style: .continuous)
             .fill(fill)
             .frame(width: width)
     }

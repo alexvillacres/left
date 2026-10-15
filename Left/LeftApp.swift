@@ -118,6 +118,7 @@ struct AppRoot: View {
     @State private var selectedTab: AppTab = .today
     @State private var todayVisitID = UUID()
     @State private var animateTodayAddButtonOnEntry = false
+    @State private var coversZoomCorners = false
     @State private var tabDirection: CGFloat = 1
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     // Activity and Plan show the same granularity, so they browse one month
@@ -145,6 +146,12 @@ struct AppRoot: View {
                 get: { selectedTab },
                 set: { selectTab($0) }
             ))
+        }
+        .overlay {
+            Color.leftEntryBackground
+                .ignoresSafeArea()
+                .opacity(coversZoomCorners ? 1 : 0)
+                .allowsHitTesting(false)
         }
         .overlay {
             if let weeklyReport {
@@ -216,7 +223,8 @@ struct AppRoot: View {
         switch selectedTab {
         case .today:
             TodayView(visitID: todayVisitID,
-                      animateAddButtonEntrance: animateTodayAddButtonOnEntry) {
+                      animateAddButtonEntrance: animateTodayAddButtonOnEntry,
+                      coversZoomCorners: $coversZoomCorners) {
                 browsedMonth = nil
                 opensPlanIncome = true
                 selectTab(.plan)

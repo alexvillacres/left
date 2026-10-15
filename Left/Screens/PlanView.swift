@@ -32,13 +32,13 @@ struct PlanView: View {
     @State private var activeExpenseSheet: ActiveExpenseSheet?
     @State private var activeIncomeSheet: ActiveIncomeSheet?
     @State private var activeSavingsSheet: ActiveSavingsSheet?
-    @State private var expenseBasis: ExpenseBasis = .monthly
     @State private var onboardingStep: OnboardingStep = .income
     @State private var isIncomePresented = false
     @State private var isSettingsPresented = false
     @State private var incomeUpdateNote: String?
     @FocusState private var isMoneyFieldFocused: Bool
     @ScaledMetric private var planTotalSize: CGFloat = 44
+    @ScaledMetric private var detailTotalSize: CGFloat = 36
 
     private var monthName: String { plan.monthStart.formatted(.dateTime.month(.wide)) }
     private var canEditPlan: Bool {
@@ -98,7 +98,9 @@ struct PlanView: View {
 
             ScrollView {
                 VStack(alignment: .leading, spacing: AppSpacing.lg) {
-                    planDerivation
+                    if !plan.needsIncomeSetup {
+                        DerivationBar(plan: plan, showsDetails: false, isMeterOnly: true)
+                    }
 
                     VStack(spacing: 0) {
                         Button {
@@ -139,6 +141,10 @@ struct PlanView: View {
                         }
                     }
                     .buttonStyle(.plain)
+
+                    if !plan.needsIncomeSetup {
+                        spendableRow
+                    }
                 }
                 .padding(.horizontal, AppSpacing.xl)
                 .padding(.top, AppSpacing.xl)
@@ -257,6 +263,46 @@ struct PlanView: View {
         HapticFeedback.lightImpact()
     }
 
+    private var spendableRow: some View {
+        let isPositive = plan.monthlySpendable > 0
+        let amount = plan.monthlySpendable.formatted(wholeDollarFormat)
+        let daily = plan.dailyRate.formatted(.currency(code: "USD"))
+
+        return HStack(spacing: AppSpacing.lg) {
+            Capsule()
+                .fill(isPositive ? Color.leftPlanSpendable : Color.leftFeedbackNegative)
+                .frame(width: 8, height: 42)
+                .accessibilityHidden(true)
+
+            VStack(alignment: .leading, spacing: 1) {
+                Text("Spendable")
+                    .font(.dmSans(.body, weight: .medium))
+                    .foregroundStyle(.primary)
+
+                Text("\(daily)/day")
+                    .font(.dmSans(.subheadline))
+                    .foregroundStyle(.secondary)
+                    .monospacedDigit()
+            }
+
+            Spacer(minLength: AppSpacing.sm)
+
+            Text(amount)
+                .font(.dmSans(.body, weight: .semibold))
+                .foregroundStyle(isPositive ? Color.leftPlanSpendableText : Color.leftFeedbackNegative)
+                .monospacedDigit()
+                .contentTransition(.numericText())
+        }
+        .padding(.vertical, AppSpacing.md)
+        .padding(.horizontal, AppSpacing.lg)
+        .background(
+            RoundedRectangle(cornerRadius: 20, style: .continuous)
+                .fill(isPositive ? Color.leftPlanSpendableSurface : Color.leftFeedbackNegativeBg)
+        )
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel("Spendable, \(amount), \(daily) per day")
+    }
+
     private func planSummaryRow(
         title: String,
         subtitle: String,
@@ -265,37 +311,15 @@ struct PlanView: View {
         subtractsFromPlan: Bool,
         isPending: Bool = false
     ) -> some View {
-        HStack(spacing: AppSpacing.lg) {
+        ListRow(title: title, subtitle: subtitle, accessory: .chevron) {
             Capsule()
                 .fill(indicatorColor)
-                .frame(width: 8, height: 36)
+                .frame(width: 8, height: 42)
+                .padding(.trailing, AppSpacing.xxs)
                 .accessibilityHidden(true)
-
-            VStack(alignment: .leading, spacing: AppSpacing.xxs) {
-                Text(title)
-                    .font(.dmSans(.body, weight: .medium))
-                    .foregroundStyle(.primary)
-
-                Text(subtitle)
-                    .font(.dmSans(.caption))
-                    .foregroundStyle(.secondary)
-            }
-
-            Spacer(minLength: AppSpacing.sm)
-
-            Text(isPending ? "—" : summaryAmount(amount, subtractsFromPlan: subtractsFromPlan))
-                .font(.dmSans(.body, weight: .medium))
-                .foregroundStyle(.primary)
-                .monospacedDigit()
-                .contentTransition(.numericText())
-
-            Image(systemName: "chevron.right")
-                .font(.caption.weight(.semibold))
-                .foregroundStyle(Color(uiColor: .tertiaryLabel))
+        } trailing: {
+            RowAmount(text: isPending ? "—" : summaryAmount(amount, subtractsFromPlan: subtractsFromPlan))
         }
-        .frame(maxWidth: .infinity)
-        .frame(minHeight: 64)
-        .contentShape(Rectangle())
         .accessibilityElement(children: .ignore)
         .accessibilityLabel("\(title), \(subtitle), \(isPending ? "Amount needed" : summaryAmount(amount, subtractsFromPlan: subtractsFromPlan))")
         .accessibilityHint("Opens \(monthName) \(title.lowercased())")
@@ -304,170 +328,142 @@ struct PlanView: View {
     // MARK: - Editors
 
     private var incomeEditor: some View {
-        editorScreen(title: "Income", total: plan.incomeTotal, isPending: plan.needsIncomeSetup) {
-            VStack(alignment: .leading, spacing: 0) {
+        editorScreen(ground: .income, label: "income", total: plan.incomeTotal, note: incomeFooter) {
+            if plan.incomeSources.isEmpty, plan.monthlyIncome > 0 {
+                historicalRow("Income", amount: plan.monthlyIncome, note: monthName)
+            }
+
+            ForEach(sortedIncomeSources, id: \.persistentModelID) { source in
                 if canEditPlan {
-                    Text(plan.needsIncomeSetup
-                         ? "Add \(monthName)’s amounts to see your daily allowance. You can enter zero for a source you’re not budgeting with this month."
-                         : "Update the take-home income you’re budgeting with in \(monthName). Earlier months stay unchanged.")
-                        .font(.dmSans(.subheadline))
-                        .foregroundStyle(.secondary)
-                        .fixedSize(horizontal: false, vertical: true)
-                        .padding(.bottom, AppSpacing.md)
+                    incomeEditorRow(source)
+                } else {
+                    historicalRow(source.name, amount: source.amount,
+                                  note: source.needsMonthlyAmount ? "Amount not entered" : incomeNote(for: source))
                 }
+            }
 
-                if let incomeUpdateNote {
-                    Text(incomeUpdateNote)
-                        .font(.dmSans(.caption))
-                        .foregroundStyle(.secondary)
-                        .padding(.bottom, AppSpacing.md)
-                }
-
-                if plan.incomeSources.isEmpty, plan.monthlyIncome > 0 {
-                    historicalRow("Income", amount: plan.monthlyIncome, note: monthName)
-                }
-
-                ForEach(Array(sortedIncomeSources.enumerated()), id: \.element.persistentModelID) { index, source in
-                    if canEditPlan {
-                        incomeEditorRow(source)
-                    } else {
-                        historicalRow(source.name, amount: source.amount,
-                                      note: source.needsMonthlyAmount ? "Amount not entered" : incomeNote(for: source))
-                    }
-
-                    if index < sortedIncomeSources.count - 1 {
-                        Divider()
-                            .padding(.horizontal, -AppSpacing.xl)
-                    }
-                }
-
-                if !plan.incomeSources.isEmpty {
-                    Divider()
-                        .padding(.horizontal, -AppSpacing.xl)
-                }
-
-                if canEditPlan {
-                    addRow("Add income source") {
-                        activeIncomeSheet = ActiveIncomeSheet()
-                    }
+            if canEditPlan {
+                ListAddRow("Add income") {
+                    activeIncomeSheet = ActiveIncomeSheet()
                 }
             }
         }
     }
 
-    private var fixedExpensesEditor: some View {
-        editorScreen(title: "Fixed expenses", total: plan.fixedTotal) {
-            VStack(alignment: .leading, spacing: AppSpacing.md) {
-                SegmentedControl(
-                    options: [ExpenseBasis.monthly, .daily],
-                    selection: $expenseBasis,
-                    label: \.label
-                )
+    private var incomeFooter: String? {
+        guard canEditPlan else { return nil }
+        let pending = plan.incomeSources.filter(\.needsMonthlyAmount)
+        guard let first = pending.first else {
+            return "Sources that repeat carry their amount into next month. Others start blank so you can confirm what you earned."
+        }
+        let who = pending.count == 1 ? first.name : "your other sources"
+        return "Add what \(who) brought in this month to see what you can spend."
+    }
 
-                VStack(spacing: 0) {
-                    ForEach(Array(sortedFixedExpenses.enumerated()), id: \.element.persistentModelID) { index, expense in
+    private var fixedExpensesEditor: some View {
+        editorScreen(ground: .expenses, label: "expenses", total: plan.fixedTotal, note: nil) {
+            ForEach(fixedExpenseGroups, id: \.cadence) { group in
+                VStack(alignment: .leading, spacing: 0) {
+                    expenseGroupHeader(group.cadence, expenses: group.expenses)
+
+                    ForEach(group.expenses, id: \.persistentModelID) { expense in
                         if canEditPlan {
                             fixedExpenseEditorRow(expense)
                         } else {
-                            historicalRow(expense.name, amount: expenseDisplayAmount(expense),
-                                          note: expense.effectiveCadence.label)
-                        }
-
-                        if index < sortedFixedExpenses.count - 1 {
-                            Divider()
-                                .padding(.horizontal, -AppSpacing.xl)
+                            ListRow(title: expense.name, titleDetail: billedAmount(expense),
+                                    subtitle: windowNote(startsOn: expense.startsOn, endsAfter: expense.endsAfter)) {
+                                RowAmount(expense.monthlyAmount)
+                            }
                         }
                     }
+                }
+                .padding(.bottom, AppSpacing.lg)
+            }
 
-                    if !plan.fixedExpenses.isEmpty {
-                        Divider()
-                            .padding(.horizontal, -AppSpacing.xl)
-                    }
-
-                    if canEditPlan {
-                        addRow("Add expense") {
-                            presentExpenseEditor()
-                        }
-                    }
+            if canEditPlan {
+                ListAddRow("Add expense") {
+                    presentExpenseEditor()
                 }
             }
         }
     }
 
     private var savingsEditor: some View {
-        editorScreen(title: "Savings", total: plan.savingsAmount) {
-            VStack(alignment: .leading, spacing: AppSpacing.md) {
-                ForEach(sortedSavingsGoals) { goal in
-                    if canEditPlan {
-                        savingsGoalCard(goal)
-                    } else {
-                        historicalRow(goal.name, amount: goal.resolvedAmount(income: plan.incomeTotal),
-                                      note: goal.percent.map { "\($0.formatted(.number))% of income" } ?? "Monthly amount")
-                    }
-                }
-
-                if plan.savingsGoals.isEmpty, plan.savingsAmount > 0 {
-                    historicalRow("Savings", amount: plan.savingsAmount,
-                                  note: plan.savingsPercent.map { "\($0.formatted(.number))% of income" } ?? "Monthly amount")
-                }
-
+        editorScreen(ground: .savings, label: "savings", total: plan.savingsAmount,
+                     note: "The monthly amount comes out of what you can spend. Savings you set aside are not spending.") {
+            ForEach(sortedSavingsGoals) { goal in
                 if canEditPlan {
-                    addRow("Add savings goal") {
-                        activeSavingsSheet = ActiveSavingsSheet()
-                    }
+                    savingsGoalRow(goal)
+                } else {
+                    historicalRow(goal.name, amount: goal.resolvedAmount(income: plan.incomeTotal),
+                                  note: savingsSubtitle(for: goal))
+                }
+            }
+
+            if plan.savingsGoals.isEmpty, plan.savingsAmount > 0 {
+                historicalRow("Savings", amount: plan.savingsAmount,
+                              note: plan.savingsPercent.map { "\($0.formatted(.number))% of income" } ?? "Monthly amount")
+            }
+
+            if canEditPlan {
+                ListAddRow("Add savings goal") {
+                    activeSavingsSheet = ActiveSavingsSheet()
                 }
             }
         }
     }
 
+    // The ground names the plan part being edited; the sheet beneath holds its
+    // rows, with an optional note pinned to the bottom.
     private func editorScreen<Content: View>(
-        title: String,
+        ground: ScreenGround,
+        label: String,
         total: Decimal,
-        isPending: Bool = false,
+        note: String?,
         @ViewBuilder content: () -> Content
     ) -> some View {
         VStack(spacing: 0) {
-            ScrollView {
-                VStack(alignment: .leading, spacing: AppSpacing.lg) {
-                    FlatBackButton(accessibilityLabel: "Back")
-                    .accessibilityHint("Returns to Plan")
-
+            ScreenGroundHeader(ground: ground) {
+                PeriodRow {
+                    PlanBackPill()
+                } trailing: {
                     Text("\(plan.monthStart.formatted(.dateTime.month(.wide).year()))\(canEditPlan ? "" : " · Read only")")
-                        .font(.dmSans(.subheadline))
-                        .foregroundStyle(.secondary)
-
-                    ViewThatFits(in: .horizontal) {
-                      HStack(alignment: .firstTextBaseline, spacing: AppSpacing.md) {
-                        Text(title == "Income" ? "\(monthName) income" : title)
-                            .font(.dmSans(size: BudgetTypography.headingSize, weight: .bold, relativeTo: .title2))
-                            .tracking(BudgetTypography.headingTracking)
-                            .foregroundStyle(.primary)
-
-                        Spacer(minLength: AppSpacing.sm)
-
-                        Text(isPending ? "—" : total.formatted(wholeDollarFormat))
-                            .font(.dmSans(.title2, weight: .semibold))
-                            .foregroundStyle(.primary)
-                            .monospacedDigit()
-                            .contentTransition(.numericText())
-                      }
-                      VStack(alignment: .leading, spacing: AppSpacing.sm) {
-                        Text(title == "Income" ? "\(monthName) income" : title)
-                            .font(.dmSans(.title2, weight: .bold))
-                        Text(isPending ? "—" : total.formatted(wholeDollarFormat))
-                            .font(.dmSans(.title2, weight: .semibold))
-                            .monospacedDigit()
-                      }
-                    }
-
-                    content()
+                        .font(.dmSans(.callout, weight: .medium))
+                        .tracking(BudgetTypography.tracking(for: ScreenHeaderMetrics.periodSize))
+                        .foregroundStyle(.primary)
+                        .padding(.trailing, AppSpacing.md)
                 }
-                .padding(.horizontal, AppSpacing.xl)
-                .padding(.top, AppSpacing.xs)
-                .padding(.bottom, AppSpacing.xl)
+
+                HeroMoneyText(amount: total, size: detailTotalSize, suffix: label, showsCents: false)
+                    .foregroundStyle(.primary)
+                    .contentTransition(.numericText())
+                    .animation(reduceMotion ? nil : .spring(duration: 0.4), value: total)
+                    .padding(.top, AppSpacing.sm)
+                    .accessibilityElement(children: .combine)
             }
 
-            planDerivationBarFooter
+            VStack(spacing: 0) {
+                ScrollView {
+                    VStack(alignment: .leading, spacing: 0) {
+                        content()
+                    }
+                    .padding(.horizontal, AppSpacing.xl)
+                    .padding(.top, AppSpacing.xl)
+                    .padding(.bottom, AppSpacing.lg)
+                }
+
+                if let note {
+                    Text(note)
+                        .font(.dmSans(.subheadline))
+                        .foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .padding(.horizontal, AppSpacing.xl)
+                        .padding(.top, AppSpacing.sm)
+                        .padding(.bottom, AppSpacing.lg)
+                }
+            }
+            .screenSheet()
         }
         .background(Color.leftBackground.ignoresSafeArea())
         .navigationTitle("")
@@ -476,56 +472,28 @@ struct PlanView: View {
     }
 
     private func historicalRow(_ title: String, amount: Decimal, note: String) -> some View {
-        HStack(alignment: .firstTextBaseline, spacing: AppSpacing.md) {
-            VStack(alignment: .leading, spacing: AppSpacing.xxs) {
-                Text(title).font(.dmSans(.body, weight: .medium))
-                Text(note).font(.dmSans(.caption)).foregroundStyle(.secondary)
-            }
-            Spacer(minLength: AppSpacing.sm)
-            MoneyText(amount: amount).layoutPriority(1)
+        ListRow(title: title, subtitle: note) {
+            RowAmount(amount)
         }
-        .padding(.vertical, AppSpacing.lg)
-        .accessibilityElement(children: .combine)
     }
 
     // MARK: - Income
 
     private func incomeEditorRow(_ source: IncomeSource) -> some View {
         let startsLater = source.startsOn.map { $0 > plan.monthStart } ?? false
+        let amount = source.amount.formatted(wholeDollarFormat)
 
         return Button {
             activeIncomeSheet = ActiveIncomeSheet(source: source)
         } label: {
-            HStack(spacing: AppSpacing.sm) {
-                VStack(alignment: .leading, spacing: AppSpacing.xxs) {
-                    Text(source.name)
-                        .font(.dmSans(.body, weight: .medium))
-                        .foregroundStyle(.primary)
-                        .lineLimit(1)
-
-                    if let windowNote = windowNote(startsOn: source.startsOn, endsAfter: source.endsAfter) {
-                        Text(windowNote)
-                            .font(.dmSans(.caption))
-                            .foregroundStyle(.secondary)
-                    }
-
-                    Text(incomeNote(for: source))
-                        .font(.dmSans(.caption))
-                        .foregroundStyle(.secondary)
+            ListRow(title: source.name, subtitle: incomeSubtitle(for: source), accessory: .chevron) {
+                if source.needsMonthlyAmount {
+                    needsAmountChip
+                } else {
+                    RowAmount(source.amount)
                 }
-
-                Spacer(minLength: AppSpacing.sm)
-
-                Text(source.needsMonthlyAmount ? "Add amount" : source.amount.formatted(wholeDollarFormat))
-                    .font(.dmSans(.body, weight: .medium))
-                    .foregroundStyle(.primary)
-                    .monospacedDigit()
-                    .contentTransition(.numericText())
             }
             .opacity(startsLater ? 0.52 : 1)
-            .frame(maxWidth: .infinity)
-            .padding(.vertical, AppSpacing.lg)
-            .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
         .contextMenu {
@@ -540,64 +508,45 @@ struct PlanView: View {
                 deleteIncome(source)
             }
         }
-        .accessibilityLabel("\(source.name), \(source.needsMonthlyAmount ? "Amount needed" : source.amount.formatted(wholeDollarFormat)), \(incomeNote(for: source))")
+        .accessibilityLabel("\(source.name), \(source.needsMonthlyAmount ? "Amount needed" : amount), \(incomeSubtitle(for: source))")
         .accessibilityHint("Update \(monthName) income")
     }
 
+    private var needsAmountChip: some View {
+        Text("Needs amount")
+            .font(.dmSans(.subheadline, weight: .semibold))
+            .foregroundStyle(Color.leftFeedbackWarningText)
+            .padding(.horizontal, AppSpacing.md)
+            .padding(.vertical, 5)
+            .background(Capsule().fill(Color.leftFeedbackWarningBg))
+    }
+
     private func incomeNote(for source: IncomeSource) -> String {
-        if source.needsMonthlyAmount { return "Needs an amount for \(monthName)" }
         if let end = source.endsAfter, end <= plan.monthStart { return "Ends in \(monthName)" }
-        return source.carriesAmountForward ? "Amount repeats next month" : "New amount each month"
+        return source.carriesAmountForward ? "Repeats monthly" : "Asks each month"
+    }
+
+    private func incomeSubtitle(for source: IncomeSource) -> String {
+        [windowNote(startsOn: source.startsOn, endsAfter: source.endsAfter), incomeNote(for: source)]
+            .compactMap { $0 }
+            .joined(separator: " · ")
     }
 
     // MARK: - Fixed expenses
 
     private func fixedExpenseEditorRow(_ expense: FixedExpense) -> some View {
         let startsLater = expense.startsOn.map { $0 > plan.monthStart } ?? false
+        let subtitle = windowNote(startsOn: expense.startsOn, endsAfter: expense.endsAfter)
+        let amount = expense.monthlyAmount.formatted(wholeDollarFormat)
 
         return Button {
             presentExpenseEditor(expense)
         } label: {
-            HStack(spacing: AppSpacing.md) {
-                VStack(alignment: .leading, spacing: AppSpacing.xxs) {
-                    HStack(spacing: AppSpacing.sm) {
-                        Text(expense.name)
-                            .font(.dmSans(.body, weight: .medium))
-                            .foregroundStyle(.primary)
-                            .lineLimit(1)
-
-                        if let cadenceLabel = expenseCadenceLabel(expense) {
-                            Text(cadenceLabel)
-                                .font(.dmSans(.footnote))
-                                .foregroundStyle(.secondary)
-                                .lineLimit(1)
-                                .fixedSize(horizontal: true, vertical: false)
-                                .padding(.horizontal, 10)
-                                .padding(.vertical, AppSpacing.xxs)
-                                .background(Color(uiColor: .secondarySystemFill))
-                                .clipShape(Capsule())
-                        }
-                    }
-
-                    if let note = windowNote(startsOn: expense.startsOn, endsAfter: expense.endsAfter) {
-                        Text(note)
-                            .font(.dmSans(.caption))
-                            .foregroundStyle(.secondary)
-                    }
-                }
-
-                Spacer(minLength: AppSpacing.sm)
-
-                Text(expenseDisplayAmount(expense), format: expenseDisplayFormat)
-                    .font(.dmSans(.body, weight: .medium))
-                    .foregroundStyle(.primary)
-                    .monospacedDigit()
-                    .contentTransition(.numericText())
+            ListRow(title: expense.name, titleDetail: billedAmount(expense), subtitle: subtitle,
+                    accessory: .chevron) {
+                RowAmount(expense.monthlyAmount)
             }
             .opacity(startsLater ? 0.52 : 1)
-            .frame(maxWidth: .infinity)
-            .padding(.vertical, AppSpacing.lg)
-            .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
         .contextMenu {
@@ -608,51 +557,23 @@ struct PlanView: View {
         .accessibilityAction(named: Text("Delete \(expense.name)")) {
             deleteExpense(expense)
         }
-        .accessibilityLabel("\(expense.name), \(expenseCadenceLabel(expense) ?? "Billed monthly"), \(expenseDisplayAmount(expense).formatted(expenseDisplayFormat)), \(expenseBasis.label)")
+        .accessibilityLabel("\(expense.name), \(expenseBillingDescription(expense)), \(amount) a month")
         .accessibilityHint("Opens fixed expense editor")
     }
 
     // MARK: - Savings
 
-    private func savingsGoalCard(_ goal: SavingsGoal) -> some View {
-        VStack(alignment: .leading, spacing: AppSpacing.sm) {
-            Button {
-                activeSavingsSheet = ActiveSavingsSheet(goal: goal)
-            } label: {
-                HStack(alignment: .firstTextBaseline, spacing: AppSpacing.md) {
-                    Text(goal.name)
-                        .font(.dmSans(.body, weight: .medium))
-                        .foregroundStyle(.primary)
-                        .lineLimit(1)
+    private func savingsGoalRow(_ goal: SavingsGoal) -> some View {
+        let amount = goal.resolvedAmount(income: plan.incomeTotal).formatted(wholeDollarFormat)
 
-                    Spacer(minLength: AppSpacing.sm)
-
-                    Text(savingsGoalValue(goal))
-                        .font(.dmSans(.body, weight: .medium))
-                        .foregroundStyle(.primary)
-                        .monospacedDigit()
-                        .contentTransition(.numericText())
-                }
-                .frame(maxWidth: .infinity, minHeight: 28)
-                .contentShape(Rectangle())
+        return Button {
+            activeSavingsSheet = ActiveSavingsSheet(goal: goal)
+        } label: {
+            ListRow(title: goal.name, subtitle: savingsSubtitle(for: goal), accessory: .chevron) {
+                RowAmount(goal.resolvedAmount(income: plan.incomeTotal))
             }
-            .buttonStyle(.plain)
-            .accessibilityLabel("Edit \(goal.name), \(savingsGoalValue(goal))")
-
-            SegmentedControl(
-                options: SavingsMode.allCases,
-                selection: savingsModeBinding(for: goal),
-                label: \.label
-            )
-
-            Text(savingsResolution(for: goal))
-                .font(.dmSans(.caption))
-                .foregroundStyle(.secondary)
-                .monospacedDigit()
         }
-        .padding(AppSpacing.md)
-        .background(Color.leftSurface)
-        .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+        .buttonStyle(.plain)
         .contextMenu {
             Button("Delete \(goal.name)", systemImage: "trash", role: .destructive) {
                 deleteSavingsGoal(goal)
@@ -661,42 +582,17 @@ struct PlanView: View {
         .accessibilityAction(named: Text("Delete \(goal.name)")) {
             deleteSavingsGoal(goal)
         }
+        .accessibilityLabel("\(goal.name), \(amount), \(savingsSubtitle(for: goal))")
+        .accessibilityHint("Edit savings goal")
     }
 
-    private func savingsModeBinding(for goal: SavingsGoal) -> Binding<SavingsMode> {
-        Binding {
-            goal.usesPercent ? .percent : .amount
-        } set: { mode in
-            guard mode != (goal.usesPercent ? .percent : .amount) else { return }
-            let resolved = goal.resolvedAmount(income: plan.incomeTotal)
-
-            switch mode {
-            case .amount:
-                goal.target = .amount(resolved)
-            case .percent:
-                let percent = plan.incomeTotal > 0
-                    ? (resolved / plan.incomeTotal * 100).rounded(scale: 1)
-                    : 0
-                goal.target = .percentOfIncome(percent)
-            }
-        }
-    }
-
-    private func savingsGoalValue(_ goal: SavingsGoal) -> String {
+    private func savingsSubtitle(for goal: SavingsGoal) -> String {
         if let percent = goal.percent {
-            return "\(percent.formatted(.number))%"
+            return "\(percent.formatted(.number))% of income"
         }
-        return goal.amount.formatted(wholeDollarFormat)
-    }
-
-    private func savingsResolution(for goal: SavingsGoal) -> String {
-        if goal.usesPercent {
-            return "≈ \(goal.resolvedAmount(income: plan.incomeTotal).formatted(wholeDollarFormat)) this month"
-        }
-
-        guard plan.incomeTotal > 0 else { return "0% of income" }
+        guard plan.incomeTotal > 0, goal.amount > 0 else { return "Monthly amount" }
         let percent = goal.amount / plan.incomeTotal * 100
-        return "≈ \(percent.formatted(.number.precision(.fractionLength(1))))% of \(plan.incomeTotal.formatted(wholeDollarFormat))"
+        return "≈ \(percent.formatted(.number.precision(.fractionLength(0))))% of income"
     }
 
     private var onboardingSavingsModePicker: some View {
@@ -781,40 +677,8 @@ struct PlanView: View {
         return goal
     }
 
-    // MARK: - Derivation
-
-    private var planDerivationBarFooter: some View {
-        planDerivation
-            .padding(.horizontal, AppSpacing.xl)
-            .padding(.vertical, AppSpacing.md)
-            .background(Color.leftBackground)
-            .overlay(alignment: .top) { Divider() }
-    }
-
-    private var planDerivation: some View {
-        Group {
-            if plan.needsIncomeSetup {
-                Text(canEditPlan ? "Your daily allowance will appear once \(monthName)’s income is set." : "Income wasn’t completed for this month.")
-                    .font(.dmSans(.subheadline))
-                    .foregroundStyle(.secondary)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .fixedSize(horizontal: false, vertical: true)
-            } else {
-                DerivationBar(plan: plan)
-            }
-        }
-    }
-
     private var wholeDollarFormat: Decimal.FormatStyle.Currency {
         .init(code: "USD").precision(.fractionLength(0))
-    }
-
-    private var dailyDollarFormat: Decimal.FormatStyle.Currency {
-        .init(code: "USD").precision(.fractionLength(2))
-    }
-
-    private var expenseDisplayFormat: Decimal.FormatStyle.Currency {
-        expenseBasis == .daily ? dailyDollarFormat : wholeDollarFormat
     }
 
     private var incomeSummary: String {
@@ -863,29 +727,6 @@ struct PlanView: View {
     private func summaryAmount(_ amount: Decimal, subtractsFromPlan: Bool) -> String {
         let formatted = amount.formatted(wholeDollarFormat)
         return subtractsFromPlan && amount != 0 ? "−\(formatted)" : formatted
-    }
-
-    private func expenseDisplayAmount(_ expense: FixedExpense) -> Decimal {
-        switch expenseBasis {
-        case .daily:
-            expense.monthlyAmount / Decimal(plan.daysInMonth())
-        case .monthly:
-            expense.monthlyAmount
-        case .annually:
-            expense.monthlyAmount * 12
-        }
-    }
-
-    private func addRow(_ title: String, action: @escaping () -> Void) -> some View {
-        Button(action: action) {
-            Text(title)
-                .font(.dmSans(.body, weight: .medium))
-                .foregroundStyle(Color.leftAccent)
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .padding(.vertical, AppSpacing.lg)
-                .contentShape(Rectangle())
-        }
-        .buttonStyle(.plain)
     }
 
     // MARK: - Onboarding
@@ -1003,49 +844,22 @@ struct PlanView: View {
     }
 
     private func onboardingIncomeRow(_ source: IncomeSource) -> some View {
-        HStack(spacing: AppSpacing.sm) {
+        HStack(spacing: 0) {
             Button {
                 activeIncomeSheet = ActiveIncomeSheet(source: source)
             } label: {
-                HStack(spacing: AppSpacing.md) {
-                    VStack(alignment: .leading, spacing: AppSpacing.xxs) {
-                        Text(source.name)
-                            .font(.dmSans(.body, weight: .medium))
-                            .foregroundStyle(.primary)
-                            .lineLimit(1)
-
-                        Text(incomeNote(for: source))
-                            .font(.dmSans(.caption))
-                            .foregroundStyle(.secondary)
-                    }
-
-                    Spacer()
-
-                    Text(source.amount, format: .currency(code: "USD"))
-                        .font(.dmSans(.body, weight: .medium))
-                        .foregroundStyle(.primary)
-                        .monospacedDigit()
-                        .layoutPriority(1)
+                ListRow(title: source.name, subtitle: incomeNote(for: source)) {
+                    RowAmount(source.amount)
                 }
-                .padding(.vertical, AppSpacing.lg)
-                .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
-            .accessibilityLabel("Edit \(source.name), \(source.amount.formatted(.currency(code: "USD"))), \(incomeNote(for: source))")
+            .accessibilityLabel("Edit \(source.name), \(source.amount.formatted(wholeDollarFormat)), \(incomeNote(for: source))")
 
-            Button(role: .destructive) {
+            ListRowRemoveButton(accessibilityLabel: "Remove \(source.name)") {
                 deleteIncome(source)
-            } label: {
-                Image(systemName: "xmark")
-                    .font(.dmSans(.caption, weight: .medium))
-                    .foregroundStyle(.secondary)
-                    .frame(width: 44, height: 44)
-                    .contentShape(Rectangle())
             }
-            .buttonStyle(.plain)
             .disabled(!canDeleteIncome)
             .opacity(canDeleteIncome ? 1 : 0.35)
-            .accessibilityLabel("Remove \(source.name)")
         }
     }
 
@@ -1191,38 +1005,19 @@ struct PlanView: View {
                    focus: $isMoneyFieldFocused)
     }
 
+    // No cadence sections here, so a non-monthly bill names its cadence.
     private func onboardingExpenseRow(_ expense: FixedExpense) -> some View {
-        HStack(spacing: AppSpacing.md) {
-            VStack(alignment: .leading, spacing: AppSpacing.xxs) {
-                Text(expense.name)
-                    .font(.dmSans(.body, weight: .medium))
-                    .lineLimit(1)
-
-                Text(expense.effectiveCadence.label)
-                    .font(.dmSans(.caption))
-                    .foregroundStyle(.secondary)
+        HStack(spacing: 0) {
+            ListRow(title: expense.name,
+                    titleDetail: billedAmount(expense).map { "\($0) \(expense.effectiveCadence.label.lowercased())" }) {
+                RowAmount(expense.monthlyAmount)
             }
+            .accessibilityLabel("\(expense.name), \(expenseBillingDescription(expense)), \(expense.monthlyAmount.formatted(wholeDollarFormat)) a month")
 
-            Spacer()
-
-            Text(expense.monthlyAmount, format: .currency(code: "USD"))
-                .font(.dmSans(.body, weight: .medium))
-                .monospacedDigit()
-                .layoutPriority(1)
-
-            Button(role: .destructive) {
+            ListRowRemoveButton(accessibilityLabel: "Remove \(expense.name)") {
                 deleteExpense(expense)
-            } label: {
-                Image(systemName: "xmark")
-                    .font(.dmSans(.caption, weight: .medium))
-                    .foregroundStyle(.secondary)
-                    .frame(width: 44, height: 44)
-                    .contentShape(Rectangle())
             }
-            .buttonStyle(.plain)
-            .accessibilityLabel("Remove \(expense.name)")
         }
-        .padding(.vertical, AppSpacing.lg)
     }
 
     private var onboardingNavigation: some View {
@@ -1350,9 +1145,32 @@ struct PlanView: View {
         plan.incomeSources.count > 1 || plan.monthlyIncome <= 0
     }
 
-    private func expenseCadenceLabel(_ expense: FixedExpense) -> String? {
+    private func expenseBillingDescription(_ expense: FixedExpense) -> String {
+        guard let billed = billedAmount(expense) else { return "Billed monthly" }
+        return "\(billed) billed \(expense.effectiveCadence.label.lowercased())"
+    }
+
+    // The section names the cadence, so only non-monthly rows add their
+    // actual bill beside the name; the trailing amount is the monthly share.
+    private func billedAmount(_ expense: FixedExpense) -> String? {
         guard expense.effectiveCadence != .monthly else { return nil }
-        return "Billed \(expense.effectiveCadence.label.lowercased())"
+        return expense.amount.formatted(wholeDollarFormat)
+    }
+
+    private var fixedExpenseGroups: [(cadence: ExpenseCadence, expenses: [FixedExpense])] {
+        let expenses = sortedFixedExpenses
+        return ExpenseCadence.allCases.compactMap { cadence in
+            let matching = expenses.filter { $0.effectiveCadence == cadence }
+            return matching.isEmpty ? nil : (cadence, matching)
+        }
+    }
+
+    private func expenseGroupHeader(_ cadence: ExpenseCadence, expenses: [FixedExpense]) -> some View {
+        let title = cadence == .monthly ? cadence.label : "\(cadence.label), set aside monthly"
+        let subtotal = expenses.reduce(Decimal.zero) { $0 + $1.monthlyAmount }.formatted(wholeDollarFormat)
+
+        return ListSectionHeader(title: title, value: subtotal, reservesAccessory: canEditPlan)
+            .accessibilityLabel("\(title), \(subtotal) a month")
     }
 
     private func windowNote(startsOn: Date?, endsAfter: Date?) -> String? {
@@ -1374,25 +1192,35 @@ private enum OnboardingStep: Int, CaseIterable, Identifiable {
     var id: Int { rawValue }
 }
 
-private enum ExpenseBasis: String, CaseIterable, Identifiable {
-    case daily, monthly, annually
+/// Returns from a plan detail screen, on that screen's ground.
+private struct PlanBackPill: View {
+    @Environment(\.dismiss) private var dismiss
+    @Environment(\.periodPillFill) private var fill
 
-    var id: String { rawValue }
+    var body: some View {
+        Button {
+            dismiss()
+        } label: {
+            HStack(spacing: AppSpacing.sm) {
+                Image(systemName: "chevron.left")
+                    .font(.system(size: ScreenHeaderMetrics.menuChevronSize + 2, weight: .semibold))
+                    .foregroundStyle(.primary)
 
-    var label: String {
-        switch self {
-        case .daily: "Daily"
-        case .monthly: "Monthly"
-        case .annually: "Annual"
+                Text("Plan")
+                    .font(.dmSans(.callout, weight: .medium))
+                    .tracking(BudgetTypography.tracking(for: ScreenHeaderMetrics.periodSize))
+                    .foregroundStyle(.primary)
+            }
+            .padding(.leading, AppSpacing.md)
+            .padding(.trailing, AppSpacing.lg)
+            .padding(.vertical, 7)
+            .background(Capsule().fill(fill))
+            .frame(minHeight: ScreenHeaderMetrics.rowHeight)
+            .contentShape(Capsule())
         }
-    }
-
-    var suffix: String {
-        switch self {
-        case .daily: "/ day"
-        case .monthly: "/ month"
-        case .annually: "/ year"
-        }
+        .buttonStyle(.plain)
+        .accessibilityLabel("Back")
+        .accessibilityHint("Returns to Plan")
     }
 }
 

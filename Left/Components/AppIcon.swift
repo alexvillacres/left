@@ -23,12 +23,13 @@ struct AppIcon: View {
 struct CategoryIcon: View {
     let category: Category
     var isCatchUp = false
+    var size: CGFloat = 22
 
     var body: some View {
         if isCatchUp {
-            Image(systemName: "arrow.uturn.backward.circle")
+            Image(systemName: "arrow.uturn.backward")
         } else if let asset {
-            AppIcon(asset: asset, size: 24)
+            AppIcon(asset: asset, size: size)
         } else {
             Image(systemName: category.symbol)
         }
@@ -39,9 +40,11 @@ struct CategoryIcon: View {
         case .food: "IconDining"
         case .grocery: "IconGrocery"
         case .bar: "IconBar"
-        case .transit: "IconCar"
+        case .transit: "IconTransit"
         case .shopping: "IconShopping"
-        case .coffee, .household, .fun, .other: nil
+        case .coffee: "IconCoffee"
+        case .household: "IconHousehold"
+        case .fun, .other: nil
         }
     }
 }
