@@ -87,13 +87,16 @@ carriedIn        = carriedGross − carriedAllocated
   the neutral whole they divide. Other brand hues are expressive only.
   Celebration surfaces that do not explain the plan, such as the weekly
   report, may use any brand hue expressively; keep them restrained. Warning
-  and negative alone signal state; see DECISIONS 027, 029, and 030.
+  and negative alone signal state. Screens use a neutral grey ground, never a
+  tinted one; see DECISIONS 027, 029, and 036.
 - Use shared currency helpers and Foundation USD currency formatting. Never
   manually assemble currency strings.
-- Spending uses cents-first `NumpadView`. Plan amounts are whole-dollar: onboarding
-  and the recurring-expense sheet use `NumpadView` that way, other plan editors
-  use the system decimal keyboard through `MoneyField`. Never make a plan
-  amount cents-first; see DECISIONS 014.
+- Spending uses cents-first `NumpadView`; catch-up also keeps `NumpadView`. Plan
+  amounts are whole-dollar and use the system decimal keyboard through
+  `MoneyField` on a short sheet. This covers every Plan editor and the onboarding
+  setup steps. Onboarding and the recurring-expense sheet still use `NumpadView`
+  until they are migrated. Never make a plan amount cents-first; see DECISIONS
+  014 and 033.
 - Preserve numeric transitions and light save haptics; honor Reduce Motion.
 - Support light/dark appearance, Dynamic Type, VoiceOver, and 44-point touch
   targets. New sheets own an opaque background using existing sheet chrome.

@@ -58,6 +58,9 @@ records are complete.
 
 ### Weekly report
 
+Held out of the first release (DECISIONS 035). The behavior below describes the
+current build.
+
 On the first open of a new Monday–Sunday week, on whatever day that is, a
 ticket appears over Today showing last week's leftover: the allowance earned on
 that week's active days minus the spending dated inside it. Carry and earlier
@@ -131,6 +134,8 @@ These questions still need product decisions:
   remain opportunities, not approved launch blockers.
 - **Weekly report range:** the low tiers need more variety, because most weeks
   land under $100, and weeks under $4 or overspent need their own ticket.
+- **Catch-up itself:** whether to keep catch-up at all is being reconsidered.
+  It would be a larger refactor and is set aside for later.
 - **Correction safety:** decide whether closing catch-up should differ from
   acknowledging no spending. Swipe deletion offers Undo (DECISIONS 031).
 

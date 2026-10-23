@@ -242,7 +242,7 @@ before depletion rather than a hard color flip.
 ## Interaction
 
 ### 014. Cents-first entry belongs to `NumpadView` and nowhere else
-**Date:** 2026-07-15 · **Status:** Active
+**Date:** 2026-07-15 · **Status:** Amended by 033
 **Where:** `Left/Components/NumpadView.swift`, `Left/Components/MoneyField.swift`
 
 `NumpadView` is for logging spending — the thing done five times a day, where
@@ -261,7 +261,8 @@ a bug waiting to happen.
 `onDecimal` turns the blank key into "." for cents. The sheet keeps its fields in
 one compact card, and the system keyboard covered the card it was editing. The
 split that still stands is about meaning, not the widget: only spending is
-cents-first.
+cents-first. *(This amendment is superseded by 033: plan amounts move back to
+the system keyboard. The cents-first rule above still stands.)*
 
 ### 015. Spending entry is full-screen, and the note is a pushed screen
 **Date:** 2026-08-04 · **Status:** Active
@@ -407,7 +408,7 @@ historical. Today stays focused on the amount, while a tap reveals allowance,
 carry, logged spending, and the resulting balance.
 
 ### 022. Ask whether a monthly income amount repeats
-**Date:** 2026-09-19 · **Status:** Active
+**Date:** 2026-09-19 · **Status:** Amended by 034
 **Where:** `Left/BudgetModel.swift` — `clone(for:)`, `needsMonthlyAmount`,
 `Left/Screens/IncomeSheet.swift`, `Left/Screens/PlanView.swift`
 
@@ -574,7 +575,7 @@ ground. Buttons still use ink. Warning and negative still alone signal state,
 so an expressive ground must never be chosen to imply a good or bad week.
 
 ### 030. Each main tab opens on a light ground that stays light in dark mode
-**Date:** 2026-10-01 · **Status:** Active
+**Date:** 2026-10-01 · **Status:** Superseded by 036
 **Where:** `Left/Components/ScreenHeader.swift`, `Left/Palette.swift`,
 `Left/Screens/TodayView.swift`, `Left/Screens/ActivityView.swift`,
 `Left/Screens/PlanView.swift`
@@ -632,7 +633,7 @@ by category should show uncategorized spending as its own group and treat
 catch-up totals separately, since they are stored as `.other`.
 
 ### 032. Today's ground turns red below zero
-**Date:** 2026-10-15 · **Status:** Active · **Amends:** 030
+**Date:** 2026-10-15 · **Status:** Superseded by 037 · **Amends:** 030
 **Where:** `Left/Screens/TodayView.swift`, `Left/Screens/TodayBalanceSheet.swift`,
 `Left/Components/ScreenHeader.swift`, `Left/Palette.swift`
 
@@ -653,3 +654,141 @@ figure is today's balance plus the daily rate, assuming nothing else is logged;
 do not show it across a month boundary, where next month's rate may differ or
 not exist yet. Compare at display precision so a fractional-cent deficit that
 shows as $0.00 does not turn the ground red.
+
+### 033. Plan amounts use the system keyboard on a short sheet
+**Date:** 2026-10-23 · **Status:** Active *(not yet implemented)* · **Amends:** 014
+**Where:** `Left/Components/MoneyField.swift`, `Left/Screens/IncomeSheet.swift`,
+`Left/Screens/RecurringExpenseSheet.swift`, `Left/Screens/SavingsGoalSheet.swift`,
+`Left/Screens/OnboardingView.swift`
+
+Every Plan editor (income source, recurring expense, savings goal, and the
+monthly income ask) is a short sheet that sits directly above the system
+decimal pad. Each sheet has a title, a large amount with the caret, the name,
+the controls for that type, and then the action. The onboarding setup steps for
+income, recurring expenses, and savings use the same large amount and the same
+keyboard. `NumpadView` is kept only for full-screen entry where the amount is
+the whole job: spending, which is cents-first, and catch-up. Plan amounts are
+still whole dollars and never cents-first.
+
+**Why:** Every plan item has a name, so the system keyboard appears regardless.
+Pairing it with a custom keypad would give one sheet two different typing
+surfaces. A short sheet keeps the segmented controls and Save visible above the
+keyboard, so no Done toolbar is needed, and it can grow to hold the savings
+percentage and the recurring cadence and end month. If onboarding matches Plan,
+the first amount a user enters behaves the same way as every later edit to it.
+The 2026-09-21 amendment to 014 moved the recurring-expense sheet to the keypad
+because the system keyboard covered its card. A short sheet that rises above
+the keyboard removes that problem.
+
+**Constrains:** Do not add a custom keypad to a plan editor. A new item opens
+with the name focused, and its return key moves to the amount. A value that is
+needed this month, such as an unfilled income amount, opens with the amount
+focused. An existing item opens without a keyboard. Delete is available only
+when editing, never when creating. Paper designs: "Plan sheets · v1 system
+keyboard" and "Onboarding setup · v1 system keyboard".
+
+### 034. Income repeats or asks each month, with no duration
+**Date:** 2026-10-23 · **Status:** Active *(not yet implemented)* · **Amends:** 022
+**Where:** `Left/Screens/IncomeSheet.swift`, `Left/Components/MonthDurationPicker.swift`,
+`Left/BudgetModel.swift` — `IncomeSource`, `clone(for:)`
+
+The income sheet asks one question: "Same next month" or "Ask each month". It
+replaces both the "Use this amount next month too" toggle and the duration
+picker. To stop a source, the user removes it. That takes it out of the current
+month and every later month, and earlier months keep their own copies. When a
+source asks each month, the sheet offers last month's amount as a suggestion.
+It does not fill it in.
+
+**Why:** A repeat toggle and a duration control are two answers to the question
+"what happens next month?", and together they could contradict each other.
+Income rarely has a known end date. When it ends, the user knows in that month
+and can remove the source then. Prefilling last month's amount would let an
+unchanged figure pass for a confirmed one. Gating the allowance only works if
+the amount is entered.
+
+**Constrains:** Keep `startsOn`, `endsAfter`, and `covers(month:)`, and keep
+honoring them for existing stores and JSON backups. Only the income editor
+stops writing them. Recurring expenses keep their cadence and their start and
+end months. An explicitly entered zero is still a valid amount.
+
+### 035. The weekly report is held out of the first release
+**Date:** 2026-10-23 · **Status:** Deferred
+**Where:** `Left/Screens/WeeklyReportView.swift`, `Left/Screens/TodayView.swift`
+
+The weekly report ticket will not ship in the first App Store release.
+
+**Why:** It is a secondary surface. The low tiers and the overspent week are
+still undesigned (see PRODUCT.md), and launch effort is going into Today and
+Plan.
+
+**Constrains:** Do not extend it or design new tiers before release. Decide
+whether to hide or remove it when the release work is done, and update
+PRODUCT.md and APP_STORE_CHECKLIST.md at that time.
+
+### 036. Screens are greyscale; color is kept for plan meaning and state
+**Date:** 2026-10-23 · **Status:** Active *(not yet implemented)* · **Supersedes:** 030 · **Amends:** 032
+**Where:** `Left/Components/ScreenHeader.swift`, `Left/Palette.swift`,
+`Left/Screens/TodayView.swift`, `Left/Screens/ActivityView.swift`,
+`Left/Screens/PlanView.swift`
+
+Today, Activity, and Plan open on the same neutral grey ground. Each has the
+period row and one headline number, with a hairline separating the header from
+the content below. There are no butter, tan, or sage grounds. The rest of 030's
+header rules still apply: one headline, no subtext in the normal state, and a
+caption or pill only for an exception such as a read-only past plan or a plan
+waiting on income.
+
+**Why:** The Paper designs settled on greyscale. Tinted grounds gave each tab an
+identity but competed with the headline number, and they needed their own ink
+and dark-mode rules. A neutral ground keeps attention on the amount and lets
+the few colors that remain stand out.
+
+**Constrains:** 027's plan hues still apply as marks, such as the allocation bar
+and onboarding's plan bar, and so do the warning and negative state colors.
+Neither is used as a screen ground. 032's red ground for a negative balance is
+withdrawn along with the grounds; how Today shows a balance below zero is being
+redesigned. The header no longer needs fixed ground ink, and dark-mode
+behavior should be decided when the grounds are removed. Paper designs: the
+"main screens" and "plan screens" artboards.
+
+### 037. Below zero, Today says "over"
+**Date:** 2026-10-23 · **Status:** Active *(not yet implemented)* · **Supersedes:** 032 · **Amends:** 036
+**Where:** `Left/Screens/TodayView.swift`, `Left/Screens/TodayBalanceSheet.swift`,
+`Left/BudgetModel.swift`
+
+When the displayed balance is below zero, Today's headline shows the amount
+without a minus sign and replaces "left" with "over": "$23.40 over". The number
+stays in ink, and only the word "over" uses the negative color. One caption
+says where the deficit goes:
+- If tomorrow is in the same month: "Tomorrow starts at $18.60." If tomorrow
+  is still below zero: "Tomorrow starts at $22.20 over."
+- On the last day of a month: "This comes out of December."
+- On a past day: the deficit came out of the days that followed.
+
+When the balance breakdown is open, it adds a line under the three steps
+naming the entry where the running balance first went below zero and what was
+left just before it: "Trader Joe's took you past zero. You had $49.00 left
+before it." A small negative-color dot marks that entry in the list. The dot
+appears only while the breakdown is open. If the day's balance was already
+below zero before any entry, from carry or with nothing logged, the line says
+earlier days carried it past zero and names no entry.
+
+**Why:** Going over happens often, so it must be clear without feeling like a
+penalty. "−$23.40 left" is a double negative. A large red number several times
+a week reads as a scolding and dulls red for when it matters. Coloring only
+the word keeps color paired with a label (027), and keeps the headline's size
+and position, so going over is a different state rather than an alarm. A red
+ground is gone with 036. Naming the entry that crossed zero answers the
+question a negative balance raises without telling the user how to spend.
+
+**Constrains:** Do not show a minus sign or color the number in the headline.
+Compare at display precision, so a fractional-cent deficit shown as $0.00 is
+not "over". Tomorrow's figure is today's balance plus the daily rate, assuming
+nothing else is logged, and is never shown across a month boundary. Find the
+crossing entry by walking the day's entries in the order Today lists
+them, starting from the day's opening balance (carry plus allowance). Entries
+logged for a past date may have no meaningful time, so the list order is the
+only order there is. Mark only that one entry. The line
+describes, it does not advise; do not suggest cutting back or name a
+category. Paper design: "Today over · v1".
+
