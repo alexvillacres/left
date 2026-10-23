@@ -157,7 +157,7 @@ struct AddSpendingView: View {
                     .datePickerStyle(.compact)
             } else if showsDateContext {
                 Text(date, format: .dateTime.weekday(.abbreviated).month(.abbreviated).day())
-                    .font(.dmSans(.subheadline, weight: .medium))
+                    .font(.dmSansSupporting(weight: .medium))
                     .foregroundStyle(.secondary)
                     .lineLimit(1)
             }
@@ -239,13 +239,13 @@ struct AddSpendingView: View {
         return Button(action: save) {
             Text(isEditing ? "Save" : "Log it")
                 .font(.dmSans(.headline, weight: .medium))
-                .foregroundStyle(isActive ? Color.leftBackground : Color.secondary)
+                .foregroundStyle(isActive ? Color.leftBackground : Color.leftDisabledForeground)
                 .frame(maxWidth: .infinity)
                 .frame(minHeight: 52)
-                .background(isActive ? Color.primary : Color(uiColor: .secondarySystemFill))
+                .background(isActive ? Color.primary : Color.leftDisabledFill)
                 .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
         }
-        .buttonStyle(.plain)
+        .buttonStyle(OpaqueButtonStyle())
         .disabled(!isActive)
         .animation(.easeInOut(duration: 0.15), value: isActive)
         .accessibilityHint(isActive ? "" : "Enter an amount first")

@@ -14,6 +14,14 @@ enum BudgetTypography {
 }
 
 extension Font {
+    static func dmSansRowTitle(weight: Weight = .medium) -> Font {
+        .dmSans(size: 16, weight: weight, relativeTo: .body)
+    }
+
+    static func dmSansSupporting(weight: Weight = .regular) -> Font {
+        .dmSans(size: 14, weight: weight, relativeTo: .subheadline)
+    }
+
     static func dmSans(_ textStyle: TextStyle, weight: Weight = .regular) -> Font {
         .custom(dmSansName(for: weight), size: defaultSize(for: textStyle), relativeTo: textStyle)
     }

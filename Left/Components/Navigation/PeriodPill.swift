@@ -33,15 +33,16 @@ struct PeriodPill<Menu: View>: View {
 
                 Image(systemName: "chevron.down")
                     .font(.system(size: ScreenHeaderMetrics.menuChevronSize, weight: .semibold))
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(isEnabled ? Color.leftTextSecondary : Color.leftDisabledForeground)
             }
-            .foregroundStyle(.primary)
+            .foregroundStyle(isEnabled ? Color.leftTextPrimary : Color.leftDisabledForeground)
             .padding(.horizontal, AppSpacing.md)
             .padding(.vertical, 7)
             .frame(minHeight: 32)
-            .background(RoundedRectangle(cornerRadius: cornerRadius).fill(fill))
+            .background(RoundedRectangle(cornerRadius: cornerRadius).fill(isEnabled ? fill : Color.leftDisabledFill))
             .contentShape(RoundedRectangle(cornerRadius: cornerRadius))
         }
+        .buttonStyle(OpaqueButtonStyle())
         .disabled(!isEnabled)
         .accessibilityLabel(accessibilityLabel)
         .accessibilityHint(accessibilityHint ?? "")

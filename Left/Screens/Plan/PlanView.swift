@@ -20,7 +20,6 @@ struct PlanView: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(\.modelContext) private var modelContext
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
-    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     @Bindable var plan: MonthPlan
     var isOnboarding: Bool = false
     var onBack: (() -> Void)?
@@ -38,8 +37,7 @@ struct PlanView: View {
     @State private var isSettingsPresented = false
     @State private var incomeUpdateNote: String?
     @FocusState private var isMoneyFieldFocused: Bool
-    private let planTotalSize: CGFloat = 44
-    private let detailTotalSize: CGFloat = 36
+    private let detailTotalSize: CGFloat = 44
 
     private var monthName: String { plan.monthStart.formatted(.dateTime.month(.wide)) }
     private var canEditPlan: Bool {
@@ -98,57 +96,64 @@ struct PlanView: View {
             planHeader
 
             ScrollView {
-                VStack(alignment: .leading, spacing: AppSpacing.lg) {
-                    if !plan.needsIncomeSetup {
-                        DerivationBar(plan: plan, showsDetails: false, isMeterOnly: true)
+                VStack(spacing: 0) {
+                    Button {
+                        isIncomePresented = true
+                    } label: {
+                        PlanSummaryRow(
+                            title: "Income",
+                            subtitle: incomeSummary,
+                            amount: plan.incomeTotal,
+                            icon: "IconIncome",
+                            isPending: plan.needsIncomeSetup,
+                            monthName: monthName
+                        )
                     }
 
-                    VStack(spacing: 0) {
-                        Button {
-                            isIncomePresented = true
-                        } label: {
-                            planSummaryRow(
-                                title: "Income",
-                                subtitle: incomeSummary,
-                                amount: plan.incomeTotal,
-                                indicatorColor: .leftNeutralFill,
-                                subtractsFromPlan: false,
-                                isPending: plan.needsIncomeSetup
-                            )
-                        }
-
-                        NavigationLink {
-                            fixedExpensesEditor
-                        } label: {
-                            planSummaryRow(
-                                title: "Recurring expenses",
-                                subtitle: itemCount(plan.fixedExpenses.count, singular: "expense"),
-                                amount: plan.fixedTotal,
-                                indicatorColor: .leftPlanExpenses,
-                                subtractsFromPlan: true
-                            )
-                        }
-
-                        NavigationLink {
-                            savingsEditor
-                        } label: {
-                            planSummaryRow(
-                                title: "Savings",
-                                subtitle: savingsSummary,
-                                amount: plan.savingsAmount,
-                                indicatorColor: .leftPlanSavings,
-                                subtractsFromPlan: true
-                            )
-                        }
+                    NavigationLink {
+                        fixedExpensesEditor
+                    } label: {
+                        PlanSummaryRow(
+                            title: "Recurring expenses",
+                            subtitle: itemCount(plan.fixedExpenses.count, singular: "expense"),
+                            amount: plan.fixedTotal,
+                            icon: "IconRecurringExpense",
+                            monthName: monthName
+                        )
                     }
-                    .buttonStyle(.plain)
 
-                    if !plan.needsIncomeSetup {
-                        spendableRow
+                    NavigationLink {
+                        savingsEditor
+                    } label: {
+                        PlanSummaryRow(
+                            title: "Savings",
+                            subtitle: savingsSummary,
+                            amount: plan.savingsAmount,
+                            icon: "IconSavings",
+                            monthName: monthName
+                        )
                     }
+
+                    Button {
+                        isSettingsPresented = true
+                    } label: {
+                        HStack(spacing: AppSpacing.md) {
+                            Text("Settings")
+                                .font(.dmSansRowTitle(weight: .regular))
+                                .foregroundStyle(Color.leftTextSecondary)
+                            Spacer(minLength: AppSpacing.sm)
+                            ListRowAccessoryImage()
+                                .frame(width: 8)
+                        }
+                        .padding(.horizontal, AppSpacing.xl)
+                        .padding(.vertical, AppSpacing.sm)
+                        .frame(minHeight: 48)
+                        .contentShape(Rectangle())
+                    }
+                    .padding(.top, AppSpacing.xl)
                 }
-                .padding(.horizontal, AppSpacing.xl)
-                .padding(.top, AppSpacing.xl)
+                .buttonStyle(.plain)
+                .padding(.top, AppSpacing.sm)
                 .padding(.bottom, AppSpacing.xl)
             }
             .screenContent()
@@ -164,88 +169,13 @@ struct PlanView: View {
     }
 
     private var planHeader: some View {
-        ScreenHeader {
-            PeriodRow {
-                PeriodPill(
-                    label: plan.monthStart.formatted(.dateTime.month(.wide).year()),
-                    isEnabled: orderedPlans.count > 1,
-                    accessibilityLabel: "Plan month, \(plan.monthStart.formatted(.dateTime.month(.wide).year()))",
-                    accessibilityHint: "Choose a previous month's plan"
-                ) {
-                    ForEach(orderedPlans.reversed()) { candidate in
-                        Button {
-                            selectMonth(candidate.monthStart)
-                        } label: {
-                            if candidate.monthStart == plan.monthStart {
-                                Label(candidate.monthStart.formatted(.dateTime.month(.wide).year()),
-                                      systemImage: "checkmark")
-                            } else {
-                                Text(candidate.monthStart, format: .dateTime.month(.wide).year())
-                            }
-                        }
-                    }
-                }
-            } trailing: {
-                PeriodStepper(previousLabel: "Previous plan",
-                              nextLabel: "Next plan",
-                              canGoPrevious: adjacentPlan(-1) != nil,
-                              canGoNext: adjacentPlan(1) != nil,
-                              onPrevious: { stepMonth(-1) },
-                              onNext: { stepMonth(1) })
-            }
-
-            HStack(alignment: .top, spacing: AppSpacing.xs) {
-                planTotal
-                settingsLink
-            }
-            .padding(.top, AppSpacing.sm)
-        }
-    }
-
-    // The tab bar names the screen, so Settings sits beside the headline.
-    private var settingsLink: some View {
-        Button {
-            isSettingsPresented = true
-        } label: {
-            AppIcon(asset: "IconSettings", size: 22)
-                .foregroundStyle(.secondary)
-                .frame(width: ScreenHeaderMetrics.rowHeight,
-                       height: ScreenHeaderMetrics.rowHeight)
-                .contentShape(Rectangle())
-        }
-        .buttonStyle(.plain)
-        .accessibilityLabel("Settings")
-    }
-
-    // The same slot Today and Activity fill with their headline number: what
-    // this month's plan leaves to spend. The daily rate lives in the bar below.
-    private var planTotal: some View {
-        VStack(alignment: .leading, spacing: AppSpacing.xxs) {
-            // Whole dollars like every other plan amount: it is income minus
-            // whole-dollar fixed expenses and savings. The daily rate below
-            // keeps its cents because Today builds from it.
-            HeroMoneyText(amount: plan.monthlySpendable, size: planTotalSize,
-                          suffix: "to spend", showsCents: false)
-                .foregroundStyle(.primary)
-                .contentTransition(.numericText())
-                .animation(reduceMotion ? nil : .spring(duration: 0.4), value: plan.monthlySpendable)
-
-            if let planTotalCaption {
-                Text(planTotalCaption)
-                    .font(.dmSans(.subheadline))
-                    .foregroundStyle(.secondary)
-                    .fixedSize(horizontal: false, vertical: true)
-            }
-        }
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .accessibilityElement(children: .combine)
-    }
-
-    // Shown only when the headline needs a caveat; a normal month has none.
-    private var planTotalCaption: String? {
-        guard canEditPlan else { return "Past plan · Read only" }
-        guard !plan.needsIncomeSetup else { return "Add income to see your allowance" }
-        return nil
+        PlanHeader(plan: plan, plans: orderedPlans, canEdit: canEditPlan,
+                   canGoPrevious: adjacentPlan(-1) != nil,
+                   canGoNext: adjacentPlan(1) != nil,
+                   onSelect: selectMonth,
+                   onPrevious: { stepMonth(-1) },
+                   onNext: { stepMonth(1) },
+                   onSettings: { isSettingsPresented = true })
     }
 
     private func stepMonth(_ delta: Int) {
@@ -264,84 +194,10 @@ struct PlanView: View {
         HapticFeedback.lightImpact()
     }
 
-    private var spendableRow: some View {
-        let isPositive = plan.monthlySpendable > 0
-        let amount = plan.monthlySpendable.formatted(wholeDollarFormat)
-        let daily = plan.dailyRate.formatted(.currency(code: "USD"))
-
-        return HStack(spacing: AppSpacing.lg) {
-            Capsule()
-                .fill(isPositive ? Color.leftPlanSpendable : Color.leftFeedbackNegative)
-                .frame(width: 8, height: 42)
-                .accessibilityHidden(true)
-
-            spendableLayout {
-                VStack(alignment: .leading, spacing: 1) {
-                    Text("Spendable")
-                        .font(.dmSans(.body, weight: .medium))
-                        .foregroundStyle(.primary)
-
-                    Text("\(daily)/day")
-                        .font(.dmSans(.subheadline))
-                        .foregroundStyle(.secondary)
-                        .monospacedDigit()
-                }
-
-                if !dynamicTypeSize.isAccessibilitySize {
-                    Spacer(minLength: AppSpacing.sm)
-                }
-
-                Text(amount)
-                    .font(.dmSans(.body, weight: .semibold))
-                    .foregroundStyle(isPositive ? Color.leftPlanSpendableText : Color.leftFeedbackNegative)
-                    .monospacedDigit()
-                    .contentTransition(.numericText())
-                    .fixedSize(horizontal: false, vertical: true)
-            }
-            .frame(maxWidth: .infinity, alignment: .leading)
-        }
-        .padding(.vertical, AppSpacing.md)
-        .padding(.horizontal, AppSpacing.lg)
-        .background(
-            RoundedRectangle(cornerRadius: 20, style: .continuous)
-                .fill(isPositive ? Color.leftPlanSpendableSurface : Color.leftFeedbackNegativeBg)
-        )
-        .accessibilityElement(children: .ignore)
-        .accessibilityLabel("Spendable, \(amount), \(daily) per day")
-    }
-
-    private var spendableLayout: AnyLayout {
-        dynamicTypeSize.isAccessibilitySize
-            ? AnyLayout(VStackLayout(alignment: .leading, spacing: AppSpacing.sm))
-            : AnyLayout(HStackLayout(spacing: AppSpacing.lg))
-    }
-
-    private func planSummaryRow(
-        title: String,
-        subtitle: String,
-        amount: Decimal,
-        indicatorColor: Color,
-        subtractsFromPlan: Bool,
-        isPending: Bool = false
-    ) -> some View {
-        ListRow(title: title, subtitle: subtitle, accessory: .chevron) {
-            Capsule()
-                .fill(indicatorColor)
-                .frame(width: 8, height: 42)
-                .padding(.trailing, AppSpacing.xxs)
-                .accessibilityHidden(true)
-        } trailing: {
-            RowAmount(text: isPending ? "—" : summaryAmount(amount, subtractsFromPlan: subtractsFromPlan))
-        }
-        .accessibilityElement(children: .ignore)
-        .accessibilityLabel("\(title), \(subtitle), \(isPending ? "Amount needed" : summaryAmount(amount, subtractsFromPlan: subtractsFromPlan))")
-        .accessibilityHint("Opens \(monthName) \(title.lowercased())")
-    }
-
     // MARK: - Editors
 
     private var incomeEditor: some View {
-        editorScreen(label: "income", total: plan.incomeTotal, note: incomeFooter) {
+        editorScreen(label: "income", total: plan.incomeTotal, note: plan.needsIncomeSetup ? incomeFooter : nil) {
             if plan.incomeSources.isEmpty, plan.monthlyIncome > 0 {
                 historicalRow("Income", amount: plan.monthlyIncome, note: monthName)
             }
@@ -356,7 +212,7 @@ struct PlanView: View {
             }
 
             if canEditPlan {
-                ListAddRow("Add income") {
+                PlanDetailAddButton("Add income") {
                     activeIncomeSheet = ActiveIncomeSheet()
                 }
             }
@@ -374,7 +230,7 @@ struct PlanView: View {
     }
 
     private var fixedExpensesEditor: some View {
-        editorScreen(label: "expenses", total: plan.fixedTotal, note: nil) {
+        editorScreen(label: "expenses", total: plan.fixedTotal, note: nil, topPadding: 0) {
             ForEach(fixedExpenseGroups, id: \.cadence) { group in
                 VStack(alignment: .leading, spacing: 0) {
                     expenseGroupHeader(group.cadence, expenses: group.expenses)
@@ -383,27 +239,33 @@ struct PlanView: View {
                         if canEditPlan {
                             fixedExpenseEditorRow(expense)
                         } else {
-                            ListRow(title: expense.name, titleDetail: billedAmount(expense),
+                            PlanDetailRow(title: expense.name, titleDetail: billedAmount(expense),
                                     subtitle: windowNote(startsOn: expense.startsOn, endsAfter: expense.endsAfter)) {
-                                RowAmount(expense.monthlyAmount)
+                                PlanDetailAmount(expense.monthlyAmount)
                             }
                         }
                     }
                 }
-                .padding(.bottom, AppSpacing.lg)
+                .padding(.vertical, AppSpacing.md)
+                .overlay(alignment: .bottom) {
+                    Color.leftDivider
+                        .frame(height: 1)
+                        .padding(.horizontal, -AppSpacing.xl)
+                }
             }
 
             if canEditPlan {
-                ListAddRow("Add expense") {
+                PlanDetailAddButton("Add expense") {
                     presentExpenseEditor()
                 }
+                .padding(.top, AppSpacing.lg)
             }
         }
     }
 
     private var savingsEditor: some View {
         editorScreen(label: "savings", total: plan.savingsAmount,
-                     note: "The monthly amount comes out of what you can spend. Savings you set aside are not spending.") {
+                     note: nil) {
             ForEach(sortedSavingsGoals) { goal in
                 if canEditPlan {
                     savingsGoalRow(goal)
@@ -419,60 +281,56 @@ struct PlanView: View {
             }
 
             if canEditPlan {
-                ListAddRow("Add savings goal") {
+                PlanDetailAddButton("Add savings goal") {
                     activeSavingsSheet = ActiveSavingsSheet()
                 }
             }
         }
     }
 
-    // Detail screens share the neutral header and content foundation.
+    // Detail screens use the same content-sized headline rhythm as the main tabs.
     private func editorScreen<Content: View>(
         label: String,
         total: Decimal,
         note: String?,
+        topPadding: CGFloat = AppSpacing.sm,
         @ViewBuilder content: () -> Content
     ) -> some View {
         VStack(spacing: 0) {
             ScreenHeader {
-                PeriodRow {
-                    PlanBackPill()
-                } trailing: {
-                    Text("\(plan.monthStart.formatted(.dateTime.month(.wide).year()))\(canEditPlan ? "" : " · Read only")")
-                        .font(.dmSans(.callout, weight: .medium))
-                        .tracking(BudgetTypography.tracking(for: ScreenHeaderMetrics.periodSize))
-                        .foregroundStyle(.primary)
-                        .padding(.trailing, AppSpacing.md)
-                }
+                PlanBackLink()
 
-                HeroMoneyText(amount: total, size: detailTotalSize, suffix: label, showsCents: false)
-                    .foregroundStyle(.primary)
-                    .contentTransition(.numericText())
-                    .animation(reduceMotion ? nil : .spring(duration: 0.4), value: total)
-                    .padding(.top, AppSpacing.sm)
-                    .accessibilityElement(children: .combine)
+                ScreenHeadlineSlot {
+                    HeroMoneyText(amount: total, size: detailTotalSize, weight: .medium,
+                                  suffix: label, showsCents: false,
+                                  suffixColor: .leftTextTertiary, suffixSizeRatio: 2.0 / 3.0)
+                        .foregroundStyle(.primary)
+                        .contentTransition(.numericText())
+                        .animation(reduceMotion ? nil : .spring(duration: 0.4), value: total)
+                        .accessibilityElement(children: .combine)
+
+                    Text("\(plan.monthStart.formatted(.dateTime.month(.wide).year()))\(canEditPlan ? "" : " · Read only")")
+                        .font(.dmSans(.subheadline))
+                        .foregroundStyle(Color.leftTextSecondary)
+                        .multilineTextAlignment(.center)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
             }
 
-            VStack(spacing: 0) {
-                ScrollView {
-                    VStack(alignment: .leading, spacing: 0) {
-                        content()
+            ScrollView {
+                VStack(alignment: .leading, spacing: 0) {
+                    content()
+                    if let note {
+                        Text(note)
+                            .font(.dmSansSupporting())
+                            .foregroundStyle(.secondary)
+                            .fixedSize(horizontal: false, vertical: true)
+                            .padding(.top, AppSpacing.lg)
                     }
-                    .padding(.horizontal, AppSpacing.xl)
-                    .padding(.top, AppSpacing.xl)
-                    .padding(.bottom, AppSpacing.lg)
                 }
-
-                if let note {
-                    Text(note)
-                        .font(.dmSans(.subheadline))
-                        .foregroundStyle(.secondary)
-                        .fixedSize(horizontal: false, vertical: true)
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                        .padding(.horizontal, AppSpacing.xl)
-                        .padding(.top, AppSpacing.sm)
-                        .padding(.bottom, AppSpacing.lg)
-                }
+                .padding(.horizontal, AppSpacing.xl)
+                .padding(.top, topPadding)
+                .padding(.bottom, AppSpacing.lg)
             }
             .screenContent()
         }
@@ -483,8 +341,8 @@ struct PlanView: View {
     }
 
     private func historicalRow(_ title: String, amount: Decimal, note: String) -> some View {
-        ListRow(title: title, subtitle: note) {
-            RowAmount(amount)
+        PlanDetailRow(title: title, subtitle: note) {
+            PlanDetailAmount(amount)
         }
     }
 
@@ -497,11 +355,11 @@ struct PlanView: View {
         return Button {
             activeIncomeSheet = ActiveIncomeSheet(source: source)
         } label: {
-            ListRow(title: source.name, subtitle: incomeSubtitle(for: source), accessory: .chevron) {
+            PlanDetailRow(title: source.name, subtitle: incomeSubtitle(for: source), accessory: .chevron) {
                 if source.needsMonthlyAmount {
                     needsAmountChip
                 } else {
-                    RowAmount(source.amount)
+                    PlanDetailAmount(source.amount)
                 }
             }
             .opacity(startsLater ? 0.52 : 1)
@@ -525,7 +383,7 @@ struct PlanView: View {
 
     private var needsAmountChip: some View {
         Text("Needs amount")
-            .font(.dmSans(.subheadline, weight: .semibold))
+            .font(.dmSansSupporting(weight: .semibold))
             .foregroundStyle(Color.leftFeedbackWarningText)
             .padding(.horizontal, AppSpacing.md)
             .padding(.vertical, 5)
@@ -553,9 +411,8 @@ struct PlanView: View {
         return Button {
             presentExpenseEditor(expense)
         } label: {
-            ListRow(title: expense.name, titleDetail: billedAmount(expense), subtitle: subtitle,
-                    accessory: .chevron) {
-                RowAmount(expense.monthlyAmount)
+            PlanDetailRow(title: expense.name, titleDetail: billedAmount(expense), subtitle: subtitle) {
+                PlanDetailAmount(expense.monthlyAmount)
             }
             .opacity(startsLater ? 0.52 : 1)
         }
@@ -580,8 +437,8 @@ struct PlanView: View {
         return Button {
             activeSavingsSheet = ActiveSavingsSheet(goal: goal)
         } label: {
-            ListRow(title: goal.name, subtitle: savingsSubtitle(for: goal), accessory: .chevron) {
-                RowAmount(goal.resolvedAmount(income: plan.incomeTotal))
+            PlanDetailRow(title: goal.name, subtitle: savingsSubtitle(for: goal), accessory: .chevron) {
+                PlanDetailAmount(goal.resolvedAmount(income: plan.incomeTotal))
             }
         }
         .buttonStyle(.plain)
@@ -735,11 +592,6 @@ struct PlanView: View {
         "\(count) \(count == 1 ? singular : singular + "s")"
     }
 
-    private func summaryAmount(_ amount: Decimal, subtractsFromPlan: Bool) -> String {
-        let formatted = amount.formatted(wholeDollarFormat)
-        return subtractsFromPlan && amount != 0 ? "−\(formatted)" : formatted
-    }
-
     // MARK: - Onboarding
 
     private var onboardingFlow: some View {
@@ -807,7 +659,7 @@ struct PlanView: View {
             VStack(spacing: 0) {
                 if plan.incomeSources.isEmpty {
                     Text("No income sources added")
-                        .font(.dmSans(.subheadline))
+                        .font(.dmSansSupporting())
                         .foregroundStyle(.secondary)
                         .frame(maxWidth: .infinity)
                         .padding(.vertical, AppSpacing.xl)
@@ -842,7 +694,7 @@ struct PlanView: View {
             if plan.incomeTotal > 0 {
                 HStack {
                     Text("Total")
-                        .font(.dmSans(.subheadline))
+                        .font(.dmSansSupporting())
                         .foregroundStyle(.secondary)
                     Spacer()
                     Text(plan.incomeTotal, format: .currency(code: "USD"))
@@ -870,7 +722,6 @@ struct PlanView: View {
                 deleteIncome(source)
             }
             .disabled(!canDeleteIncome)
-            .opacity(canDeleteIncome ? 1 : 0.35)
         }
     }
 
@@ -885,7 +736,7 @@ struct PlanView: View {
             VStack(spacing: 0) {
                 if plan.fixedExpenses.isEmpty {
                     Text("No recurring expenses added")
-                        .font(.dmSans(.subheadline))
+                        .font(.dmSansSupporting())
                         .foregroundStyle(.secondary)
                         .frame(maxWidth: .infinity)
                         .padding(.vertical, AppSpacing.xl)
@@ -948,7 +799,7 @@ struct PlanView: View {
             if plan.monthlySpendable > 0 {
                 VStack(spacing: AppSpacing.xs) {
                     Text("That leaves")
-                        .font(.dmSans(.subheadline))
+                        .font(.dmSansSupporting())
                         .foregroundStyle(.secondary)
 
                     Text("\(plan.dailyRate.formatted(.currency(code: "USD"))) per day")
@@ -959,7 +810,7 @@ struct PlanView: View {
                 .accessibilityElement(children: .combine)
             } else {
                 Text("This plan leaves no money for daily spending. Lower your goal or go back and adjust your recurring expenses.")
-                    .font(.dmSans(.subheadline))
+                    .font(.dmSansSupporting())
                     .foregroundStyle(Color.leftFeedbackNegative)
                     .multilineTextAlignment(.center)
                     .frame(maxWidth: 300)
@@ -989,7 +840,7 @@ struct PlanView: View {
                 .foregroundStyle(.primary)
 
             Text(description)
-                .font(.dmSans(.body))
+                .font(.dmSansSupporting())
                 .multilineTextAlignment(.center)
                 .foregroundStyle(.secondary)
                 .frame(maxWidth: 320)
@@ -1051,15 +902,14 @@ struct PlanView: View {
             Button(action: continueOnboarding) {
                 Text(onboardingStep == .savings ? "See today's budget" : "Continue")
                     .font(.dmSans(.body, weight: .semibold))
-                    .foregroundStyle(Color.leftBackground)
+                    .foregroundStyle(canContinueOnboarding ? Color.leftBackground : Color.leftDisabledForeground)
                     .frame(maxWidth: .infinity)
                     .frame(minHeight: 52)
-                    .background(Color.primary)
+                    .background(canContinueOnboarding ? Color.primary : Color.leftDisabledFill)
                     .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
             }
-            .buttonStyle(.plain)
+            .buttonStyle(OpaqueButtonStyle())
             .disabled(!canContinueOnboarding)
-            .opacity(canContinueOnboarding ? 1 : 0.35)
         }
     }
 
@@ -1180,7 +1030,8 @@ struct PlanView: View {
         let title = cadence == .monthly ? cadence.label : "\(cadence.label), set aside monthly"
         let subtotal = expenses.reduce(Decimal.zero) { $0 + $1.monthlyAmount }.formatted(wholeDollarFormat)
 
-        return ListSectionHeader(title: title, value: subtotal, reservesAccessory: canEditPlan)
+        return ListSectionHeader(title: title, value: subtotal, titleWeight: .medium,
+                                 showsDivider: false, bottomPadding: AppSpacing.sm)
             .accessibilityLabel("\(title), \(subtotal) a month")
     }
 
@@ -1203,35 +1054,24 @@ private enum OnboardingStep: Int, CaseIterable, Identifiable {
     var id: Int { rawValue }
 }
 
-/// Returns from a plan detail screen, on that screen's ground.
-private struct PlanBackPill: View {
+/// A plain back link, with a full-height touch target.
+private struct PlanBackLink: View {
     @Environment(\.dismiss) private var dismiss
-    @Environment(\.periodPillFill) private var fill
 
     var body: some View {
-        Button {
-            dismiss()
-        } label: {
-            HStack(spacing: AppSpacing.sm) {
+        Button { dismiss() } label: {
+            HStack(spacing: 6) {
                 Image(systemName: "chevron.left")
-                    .font(.system(size: ScreenHeaderMetrics.menuChevronSize + 2, weight: .semibold))
-                    .foregroundStyle(.primary)
-
+                    .font(.system(size: 16, weight: .medium))
                 Text("Plan")
                     .font(.dmSans(.callout, weight: .medium))
-                    .tracking(BudgetTypography.tracking(for: ScreenHeaderMetrics.periodSize))
-                    .foregroundStyle(.primary)
             }
-            .padding(.leading, AppSpacing.md)
-            .padding(.trailing, AppSpacing.lg)
-            .padding(.vertical, 7)
-            .background(Capsule().fill(fill))
-            .frame(minHeight: ScreenHeaderMetrics.rowHeight)
-            .contentShape(Capsule())
+            .foregroundStyle(Color.leftTextSecondary)
+            .frame(minWidth: 44, minHeight: 44, alignment: .leading)
+            .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
-        .accessibilityLabel("Back")
-        .accessibilityHint("Returns to Plan")
+        .accessibilityLabel("Back to Plan")
     }
 }
 

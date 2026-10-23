@@ -240,18 +240,18 @@ struct TodayView: View {
         return ScreenHeader {
             periodRow
 
-            headlineSlot {
+            ScreenHeadlineSlot {
                 if let plan, needsIncome {
                     incomeSetup(plan)
                 } else {
-                    VStack(spacing: AppSpacing.xxs) {
+                    VStack(spacing: AppSpacing.sm) {
                         heroAmount(snapshot: snapshot)
                             // Expanding the explanation must not compress the headline.
                             .fixedSize(horizontal: false, vertical: true)
 
                         if overspent, let plan, let snapshot {
                             Text(overspentCaption(plan: plan, snapshot: snapshot))
-                                .font(.dmSans(.subheadline, weight: .medium))
+                                .font(.dmSansSupporting(weight: .medium))
                                 .foregroundStyle(.secondary)
                                 .multilineTextAlignment(.center)
                                 .fixedSize(horizontal: false, vertical: true)
@@ -260,7 +260,6 @@ struct TodayView: View {
                     }
                 }
             }
-            .padding(.top, AppSpacing.lg)
 
             if !needsIncome {
                 if let snapshot {
@@ -289,30 +288,6 @@ struct TodayView: View {
             }
         }
         .animation(reduceMotion ? nil : .easeInOut(duration: 0.3), value: overspent)
-    }
-
-    // Every state reserves the same room: the headline plus one line beneath
-    // it, tall enough for the 44-point income pill. Going over, waiting on
-    // income, or stepping between days then moves only the headline inside
-    // the room, never the spending list (DECISIONS 039). The placeholders are
-    // real text so the room grows with Dynamic Type; content that still needs
-    // more, such as a caption wrapping at accessibility sizes, grows it.
-    private func headlineSlot<Content: View>(@ViewBuilder _ content: () -> Content) -> some View {
-        ZStack {
-            VStack(spacing: AppSpacing.xxs) {
-                Text(verbatim: "$0")
-                    .font(.dmSans(size: heroSize, weight: .medium, relativeTo: .largeTitle))
-                    .frame(minHeight: 44)
-                Text(verbatim: "Tomorrow starts at $0.00.")
-                    .font(.dmSans(.subheadline, weight: .medium))
-                    .frame(minHeight: 44)
-            }
-            .hidden()
-            .accessibilityHidden(true)
-
-            content()
-        }
-        .frame(maxWidth: .infinity)
     }
 
     // Compare at display precision so a fractional-cent deficit that shows as
@@ -368,8 +343,8 @@ struct TodayView: View {
 
     private func incomeSetup(_ plan: MonthPlan) -> some View {
         let month = plan.monthStart.formatted(.dateTime.month(.wide))
-        // Same gap as the headline and caption, so the shared slot fits exactly.
-        return VStack(spacing: AppSpacing.xxs) {
+        // Match the spacing used by other headline supporting lines.
+        return VStack(spacing: AppSpacing.sm) {
             (Text("$–") + Text(" left").font(.dmSans(size: heroSize * 2 / 3, relativeTo: .largeTitle)))
                 .font(.dmSans(size: heroSize, weight: .medium, relativeTo: .largeTitle))
                 .foregroundStyle(Color.leftTextSecondary)
@@ -389,7 +364,7 @@ struct TodayView: View {
                 .buttonStyle(.plain)
             } else {
                 Text("Income wasn’t set for \(month).")
-                    .font(.dmSans(.subheadline))
+                    .font(.dmSansSupporting())
                     .foregroundStyle(.secondary)
             }
         }

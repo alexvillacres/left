@@ -44,7 +44,7 @@ struct TodayBalanceBreakdown: View {
             .animation(reduceMotion ? nil : .spring(duration: 0.4), value: amount)
             .fixedSize(horizontal: true, vertical: false)
         }
-        .font(.dmSans(.subheadline))
+        .font(.dmSansSupporting())
         .accessibilityElement(children: .ignore)
         .accessibilityLabel("\(title), \(amount.formatted(.currency(code: "USD")))")
     }

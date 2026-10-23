@@ -40,7 +40,7 @@ struct DerivationBar: View {
         Group {
             if needsIncomeSetup {
                 Text("Set \(plan.monthStart.formatted(.dateTime.month(.wide))) income to calculate your daily allowance.")
-                    .font(.dmSans(.subheadline))
+                    .font(.dmSansSupporting())
                     .foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
             } else if isMeterOnly {
@@ -73,7 +73,7 @@ struct DerivationBar: View {
             legend
 
             Text("That leaves \(dailyRate.formatted(dailyDollars)) per day for \(days) days")
-                .font(.dmSans(.subheadline, weight: .bold))
+                .font(.dmSansSupporting(weight: .bold))
                 .foregroundStyle(spendable > 0 ? Color.leftPlanSpendableText : Color.leftFeedbackNegative)
                 .monospacedDigit()
                 .contentTransition(.numericText())
@@ -167,7 +167,7 @@ struct DerivationBar: View {
                     Text("÷ \(days)")
                         .monospacedDigit()
                 }
-                .font(.dmSans(.subheadline))
+                .font(.dmSansSupporting())
                 .foregroundStyle(.secondary)
 
                 Text("That leaves \(dailyRate.formatted(dailyDollars)) per day")

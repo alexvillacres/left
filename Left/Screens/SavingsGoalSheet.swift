@@ -152,15 +152,14 @@ struct SavingsGoalSheet: View {
             Button(action: save) {
                 Text(goal == nil ? "Add goal" : "Save")
                     .font(.dmSans(.body, weight: .semibold))
-                    .foregroundStyle(Color.leftBackground)
+                    .foregroundStyle(canSave ? Color.leftBackground : Color.leftDisabledForeground)
                     .frame(maxWidth: .infinity)
                     .frame(minHeight: 52)
-                    .background(Color.primary)
+                    .background(canSave ? Color.primary : Color.leftDisabledFill)
                     .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
             }
-            .buttonStyle(.plain)
+            .buttonStyle(OpaqueButtonStyle())
             .disabled(!canSave)
-            .opacity(canSave ? 1 : 0.35)
 
             Button("Cancel") { dismiss() }
                 .font(.dmSans(.subheadline, weight: .medium))

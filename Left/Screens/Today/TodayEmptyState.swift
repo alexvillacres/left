@@ -24,7 +24,7 @@ struct TodayEmptyState: View {
                         ? "Tap + to log spending."
                         : "Tap + to log spending. Unused allowance carries forward.")
                      : "There are no entries for this day.")
-                    .font(.dmSans(.subheadline, weight: .medium))
+                    .font(.dmSansSupporting(weight: .medium))
                     .foregroundStyle(.secondary)
                     .multilineTextAlignment(.center)
                     .fixedSize(horizontal: false, vertical: true)

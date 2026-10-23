@@ -67,7 +67,7 @@ struct ListRow<Leading: View, Trailing: View>: View {
 
                     if let subtitle {
                         Text(subtitle)
-                            .font(.dmSans(.subheadline))
+                            .font(.dmSansSupporting())
                             .foregroundStyle(.secondary)
                     }
                 }
@@ -89,14 +89,14 @@ struct ListRow<Leading: View, Trailing: View>: View {
 
     private var titleText: some View {
         Text(title)
-            .font(.dmSans(.body, weight: .medium))
+            .font(.dmSansRowTitle())
             .foregroundStyle(.primary)
             .lineLimit(2)
     }
 
     private func detailText(_ detail: String) -> some View {
         Text(detail)
-            .font(.dmSans(.subheadline))
+            .font(.dmSansSupporting())
             .foregroundStyle(.secondary)
             .monospacedDigit()
     }
@@ -196,6 +196,8 @@ struct ListSectionHeader: View {
     let title: String
     var value: String?
     var titleWeight: Font.Weight = .semibold
+    var showsDivider = true
+    var bottomPadding: CGFloat = 0
     /// Holds the accessory lane so the value lines up with row amounts.
     var reservesAccessory = false
 
@@ -221,11 +223,14 @@ struct ListSectionHeader: View {
             }
             .foregroundStyle(.secondary)
 
-            Rectangle()
-                .fill(Color.leftDivider)
-                .frame(height: 1)
+            if showsDivider {
+                Rectangle()
+                    .fill(Color.leftDivider)
+                    .frame(height: 1)
+            }
         }
         .padding(.top, AppSpacing.sm)
+        .padding(.bottom, bottomPadding)
         .accessibilityElement(children: .ignore)
         .accessibilityLabel([title, value].compactMap { $0 }.joined(separator: ", "))
         .accessibilityAddTraits(.isHeader)
@@ -233,14 +238,14 @@ struct ListSectionHeader: View {
 
     private var titleText: some View {
         Text(title)
-            .font(.dmSans(.subheadline, weight: titleWeight))
+            .font(.dmSansSupporting(weight: titleWeight))
     }
 
     @ViewBuilder
     private var valueText: some View {
         if let value {
             Text(value)
-                .font(.dmSans(.subheadline, weight: .medium))
+                .font(.dmSansSupporting(weight: .medium))
                 .monospacedDigit()
                 .contentTransition(.numericText())
         }
@@ -266,7 +271,7 @@ struct ListAddRow: View {
                     .font(.system(size: 16, weight: .semibold))
                     .frame(width: 24, height: 24)
                 Text(title)
-                    .font(.dmSans(.body, weight: .semibold))
+                    .font(.dmSansRowTitle(weight: .semibold))
             }
             .foregroundStyle(.primary)
             .frame(maxWidth: .infinity, minHeight: 44, alignment: .leading)
@@ -281,16 +286,17 @@ struct ListAddRow: View {
 struct ListRowRemoveButton: View {
     let accessibilityLabel: String
     let action: () -> Void
+    @Environment(\.isEnabled) private var isEnabled
 
     var body: some View {
         Button(role: .destructive, action: action) {
             Image(systemName: "xmark")
                 .font(.caption.weight(.semibold))
-                .foregroundStyle(.secondary)
+                .foregroundStyle(isEnabled ? Color.leftTextSecondary : Color.leftDisabledForeground)
                 .frame(width: 44, height: 44)
                 .contentShape(Rectangle())
         }
-        .buttonStyle(.plain)
+        .buttonStyle(OpaqueButtonStyle())
         .accessibilityLabel(accessibilityLabel)
     }
 }

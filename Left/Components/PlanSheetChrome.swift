@@ -32,7 +32,7 @@ struct PlanSheetHeader: View {
                 .foregroundStyle(.primary)
 
             Text(subtitle)
-                .font(.dmSans(.subheadline))
+                .font(.dmSansSupporting())
                 .foregroundStyle(.secondary)
         }
         .fixedSize(horizontal: false, vertical: true)
@@ -51,7 +51,7 @@ struct PlanSheetRow<Content: View>: View {
     var body: some View {
         HStack(spacing: 8) {
             Text(label)
-                .font(.dmSans(.body, weight: .medium))
+                .font(.dmSansRowTitle())
                 .foregroundStyle(.secondary)
                 .frame(width: 96, alignment: .leading)
 
@@ -80,15 +80,14 @@ struct PlanSheetActions: View {
             Button(action: save) {
                 Text(primaryTitle)
                     .font(.dmSans(.body, weight: .semibold))
-                    .foregroundStyle(Color.leftBackground)
+                    .foregroundStyle(isEnabled ? Color.leftBackground : Color.leftDisabledForeground)
                     .frame(maxWidth: .infinity)
                     .frame(minHeight: 52)
-                    .background(Color.primary)
+                    .background(isEnabled ? Color.primary : Color.leftDisabledFill)
                     .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
             }
-            .buttonStyle(.plain)
+            .buttonStyle(OpaqueButtonStyle())
             .disabled(!isEnabled)
-            .opacity(isEnabled ? 1 : 0.35)
 
             Button("Cancel", action: cancel)
                 .font(.dmSans(.subheadline, weight: .medium))

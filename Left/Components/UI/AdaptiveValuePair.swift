@@ -1,6 +1,6 @@
 import SwiftUI
 
-/// Keeps labels and values together, placing the value below its label at
+/// Centers a value beside its label block, placing it below the label at
 /// accessibility text sizes. Callers retain their typography and semantics.
 struct AdaptiveValuePair<Label: View, Value: View>: View {
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
@@ -28,6 +28,6 @@ struct AdaptiveValuePair<Label: View, Value: View>: View {
     private var layout: AnyLayout {
         dynamicTypeSize.isAccessibilitySize
             ? AnyLayout(VStackLayout(alignment: .leading, spacing: AppSpacing.xs))
-            : AnyLayout(HStackLayout(alignment: .firstTextBaseline, spacing: AppSpacing.md))
+            : AnyLayout(HStackLayout(alignment: .center, spacing: AppSpacing.md))
     }
 }

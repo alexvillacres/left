@@ -31,13 +31,22 @@ files unless requested. `CLAUDE.md` is a symlink to this file; preserve it.
 - `Components/Navigation/`: shared period controls and app navigation.
 - `Components/Layout/`: shared screen structure and header chrome.
 - `Components/Spending/`: spending-specific components shared across screens.
-- `Screens/Today/`: Today and its screen-specific sections. Other screens can
-  adopt their own folders when they are next worked on.
+- `Screens/Today/`, `Screens/Activity/`, and `Screens/Plan/`: each screen and its specific sections.
+  Other screens can adopt their own folders when they are next worked on.
 - Keep small private helpers beside their owner. Extract substantial sections
   when it improves discoverability; move them into shared components when reused.
 - A container owns consistent layout or behavior, not the declarations of every
   control placed inside it. Independent shared components use clearly named files.
 - Remaining files directly in `Components/` have not yet been reorganized.
+
+The shared `ScreenHeader` design uses `leftBackground`, standard header spacing,
+and a 1-point `leftDivider` bottom border. Reuse this container for main-screen
+headers; period controls remain independent components. All main screens use centered `PeriodNavigationRow` controls and
+`ScreenHeadlineSlot` for matching headline height, with 44-point Medium amounts,
+smaller tertiary state labels, and a reserved supporting line. Plan’s three flat
+summary rows use neutral circular icons and unsigned whole-dollar totals. Settings is available in Plan’s month menu.
+Design dimensions map to
+SwiftUI points; reserve `1 / displayScale` for deliberate physical-pixel hairlines.
 
 ## Current file map
 
@@ -47,8 +56,12 @@ files unless requested. `CLAUDE.md` is a symlink to this file; preserve it.
 | `Left/BudgetModel.swift` | Monthly plans, income sources, savings goals/allocations, recurring expenses, spending and budget math |
 | `Left/Screens/Today/TodayView.swift` | Daily balance, day navigation, spending, and screen composition |
 | `Left/Screens/Today/TodayBalanceBreakdown.swift` | Explanation opened by tapping the balance |
-| `Left/Screens/ActivityView.swift` | Monthly spending history and editing |
-| `Left/Screens/PlanView.swift` | Monthly plan, historical review, setup steps and plan editors |
+| `Left/Screens/Activity/ActivityView.swift` | Monthly browsing, spending grouping, and editing presentation |
+| `Left/Screens/Activity/ActivityHeader.swift` | Month picker and total within shared header chrome |
+| `Left/Screens/Activity/ActivityHistoryList.swift` | Grouped day headers, spending rows, and deletion |
+| `Left/Screens/Plan/PlanView.swift` | Monthly plan composition, historical review, setup steps and plan editors |
+| `Left/Screens/Plan/PlanHeader.swift` | Month navigation, spendable headline, and Settings access |
+| `Left/Screens/Plan/PlanSummaryRow.swift` | Income, recurring-expense, and savings summary rows |
 | `Left/Screens/IncomeSheet.swift` | Monthly source amount and whether it repeats |
 | `Left/Screens/AddSpendingView.swift` | Full-screen cents-first spending entry |
 | `Left/Screens/WeeklyReportView.swift` | Weekly report ticket, tiers, and tear-off dismissal |

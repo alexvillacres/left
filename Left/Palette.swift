@@ -61,6 +61,10 @@ extension Color {
     static let leftAccent = Color.dynamic(light: Ramp.neutral950, dark: Ramp.neutral0)
     static let leftTextOnAccent = Color.dynamic(light: Ramp.neutral0, dark: Ramp.neutral950)
 
+    // Disabled controls stay opaque and reuse the structural neutral palette.
+    static let leftDisabledFill = leftNeutralFill
+    static let leftDisabledForeground = leftTextSecondary
+
     // Destructive swipe actions retain white system labels in both appearances.
     // Both red fills exceed 4.5:1 contrast against white.
     static let leftDestructiveFill = Color.dynamic(light: 0xC63735, dark: 0xB83230)

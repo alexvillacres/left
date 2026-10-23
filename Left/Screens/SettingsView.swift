@@ -128,7 +128,7 @@ struct SettingsView: View {
 
     private var versionLabel: some View {
         Text(versionString)
-            .font(.dmSans(size: 16, weight: .medium, relativeTo: .callout))
+            .font(.dmSansSupporting(weight: .medium))
             .foregroundStyle(Color(uiColor: .tertiaryLabel))
             .monospacedDigit()
             .frame(maxWidth: .infinity, alignment: .center)

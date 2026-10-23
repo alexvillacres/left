@@ -391,8 +391,8 @@ must not rely on built-in glass navigation chrome for their primary surface.
 
 ### 021. Organize around Today, Activity, and Plan
 **Date:** 2026-09-19 · **Status:** Active
-**Where:** `Left/Screens/Today/TodayView.swift`, `Left/Screens/ActivityView.swift`,
-`Left/Screens/PlanView.swift`, `Left/Screens/Today/TodayBalanceBreakdown.swift`
+**Where:** `Left/Screens/Today/TodayView.swift`, `Left/Screens/Activity/ActivityView.swift`,
+`Left/Screens/Plan/PlanView.swift`, `Left/Screens/Today/TodayBalanceBreakdown.swift`
 
 Today answers what is available, Activity records what happened, and Plan
 explains the allowance's basis. The month calendar and Today meter were removed
@@ -410,7 +410,7 @@ carry, logged spending, and the resulting balance.
 ### 022. Ask whether a monthly income amount repeats
 **Date:** 2026-09-19 · **Status:** Amended by 034
 **Where:** `Left/BudgetModel.swift` — `clone(for:)`, `needsMonthlyAmount`,
-`Left/Screens/IncomeSheet.swift`, `Left/Screens/PlanView.swift`
+`Left/Screens/IncomeSheet.swift`, `Left/Screens/Plan/PlanView.swift`
 
 Each source either repeats its amount next month or requires a fresh monthly
 amount. Retire the vague “Still expecting?” affirmation flow. Current-month
@@ -429,7 +429,7 @@ This replaces 003's per-source affirmation rationale.
 ### 023. Catch up with one additional spending total
 **Date:** 2026-09-19 · **Status:** Active
 **Where:** `Left/Screens/Today/TodayView.swift`, `Left/Components/CatchUpCard.swift`, `Left/Screens/CatchUpView.swift`,
-`Left/Screens/ActivityView.swift`, `Left/BudgetModel.swift`, `Left/DataTransfer.swift`
+`Left/Screens/Activity/ActivityView.swift`, `Left/BudgetModel.swift`, `Left/DataTransfer.swift`
 
 Offer catch-up from Today, with a prompt after three uncovered days. If the
 user makes no entry or acknowledgement, show it again after three more days,
@@ -577,8 +577,8 @@ so an expressive ground must never be chosen to imply a good or bad week.
 ### 030. Each main tab opens on a light ground that stays light in dark mode
 **Date:** 2026-10-01 · **Status:** Superseded by 036
 **Where:** `Left/Components/Layout/ScreenHeader.swift`, `Left/Palette.swift`,
-`Left/Screens/Today/TodayView.swift`, `Left/Screens/ActivityView.swift`,
-`Left/Screens/PlanView.swift`
+`Left/Screens/Today/TodayView.swift`, `Left/Screens/Activity/ActivityView.swift`,
+`Left/Screens/Plan/PlanView.swift`
 
 Today, Activity, and Plan each open on a solid ground block holding the period
 row and one headline number: butter for Today ("left"), tan for Activity
@@ -728,8 +728,8 @@ PRODUCT.md and APP_STORE_CHECKLIST.md at that time.
 ### 036. Screens are greyscale; color is kept for plan meaning and state
 **Date:** 2026-10-23 · **Status:** Active *(not yet implemented)* · **Supersedes:** 030 · **Amends:** 032
 **Where:** `Left/Components/Layout/ScreenHeader.swift`, `Left/Palette.swift`,
-`Left/Screens/Today/TodayView.swift`, `Left/Screens/ActivityView.swift`,
-`Left/Screens/PlanView.swift`
+`Left/Screens/Today/TodayView.swift`, `Left/Screens/Activity/ActivityView.swift`,
+`Left/Screens/Plan/PlanView.swift`
 
 Today, Activity, and Plan open on the same neutral grey ground. Each has the
 period row and one headline number, with a hairline separating the header from

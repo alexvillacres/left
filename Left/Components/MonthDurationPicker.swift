@@ -22,7 +22,7 @@ struct MonthDurationPicker: View {
             } label: {
                 HStack(spacing: 8) {
                     Text("Duration")
-                        .font(.dmSans(.body, weight: .medium))
+                        .font(.dmSansRowTitle())
                         .foregroundStyle(.secondary)
                         .frame(width: 96, alignment: .leading)
 

@@ -19,7 +19,7 @@ struct HeaderIconButton: View {
                 .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
-        .foregroundStyle(.secondary)
+        .foregroundStyle(isEnabled ? Color.leftTextSecondary : Color.leftDisabledForeground)
         .disabled(!isEnabled)
         .accessibilityLabel(label)
         .accessibilityHint(hint ?? "")

@@ -22,6 +22,7 @@ struct MoneyField: View {
         case compact
         case inline
         case prominent
+        case sheet
     }
 
     @Binding var value: Decimal
@@ -30,6 +31,7 @@ struct MoneyField: View {
     var alignment: TextAlignment? = nil
     var accessibilityLabel: String
     var focus: FocusState<Bool>.Binding? = nil
+    var text: Binding<String>? = nil
 
     var body: some View {
         container {
@@ -51,7 +53,14 @@ struct MoneyField: View {
     // MARK: - Pieces
 
     private var field: some View {
-        let base = TextField("0", value: $value, format: Decimal.FormatStyle())
+        let base = Group {
+            if let text {
+                TextField("0", text: text,
+                          prompt: Text("0").foregroundStyle(Color(uiColor: .placeholderText)))
+            } else {
+                TextField("0", value: $value, format: Decimal.FormatStyle())
+            }
+        }
             .font(fieldFont)
             .foregroundStyle(prominence == .compact ? Color.secondary : Color.primary)
             .keyboardType(.decimalPad)
@@ -72,13 +81,18 @@ struct MoneyField: View {
     private func symbol(_ text: String) -> some View {
         Text(text)
             .font(symbolFont)
-            .foregroundStyle(.secondary)
+            .foregroundStyle(symbolColor)
+    }
+
+    private var symbolColor: Color {
+        guard prominence == .sheet else { return .secondary }
+        return text?.wrappedValue.isEmpty == true ? Color(uiColor: .placeholderText) : .primary
     }
 
     @ViewBuilder
     private func container<Content: View>(@ViewBuilder content: () -> Content) -> some View {
         switch prominence {
-        case .compact:
+        case .compact, .sheet:
             content()
         case .inline:
             content()
@@ -100,6 +114,7 @@ struct MoneyField: View {
         switch prominence {
         case .compact:   .dmSans(.caption)
         case .inline:    .dmSans(.title3, weight: .medium)
+        case .sheet:     .dmSans(size: 48, weight: .medium, relativeTo: .largeTitle)
         case .prominent: .dmSans(size: 36, weight: .medium, relativeTo: .largeTitle)
         }
     }
@@ -108,24 +123,26 @@ struct MoneyField: View {
         switch prominence {
         case .compact:   .dmSans(.caption)
         case .inline:    .dmSans(.body)
+        case .sheet:     .dmSans(size: 48, weight: .medium, relativeTo: .largeTitle)
         case .prominent: .dmSans(size: 28, weight: .medium, relativeTo: .title)
         }
     }
 
     private var symbolAlignment: VerticalAlignment {
-        prominence == .prominent ? .firstTextBaseline : .center
+        (prominence == .prominent || prominence == .sheet) ? .firstTextBaseline : .center
     }
 
     private var symbolSpacing: CGFloat {
         switch prominence {
         case .compact:   AppSpacing.xxs
         case .inline:    unit == .percent ? AppSpacing.xxs : AppSpacing.sm
+        case .sheet: 0
         case .prominent: AppSpacing.xs
         }
     }
 
     private var defaultAlignment: TextAlignment {
-        guard prominence == .prominent else { return .leading }
+        guard prominence == .prominent || prominence == .sheet else { return .leading }
         return unit == .percent ? .trailing : .center
     }
 
@@ -146,6 +163,8 @@ private struct FieldWidth: ViewModifier {
 
     func body(content: Content) -> some View {
         switch (prominence, unit) {
+        case (.sheet, _):
+            content.fixedSize(horizontal: true, vertical: false)
         case (.compact, _):
             content.frame(width: 72)
         case (.inline, .currency):

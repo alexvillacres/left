@@ -22,7 +22,7 @@ struct StoreRecoveryView: View {
                 .fixedSize(horizontal: false, vertical: true)
 
             Text("Trying again is usually enough. If it keeps failing, you can start over with a fresh plan — that erases everything Left has stored on this device, and it can't be undone.")
-                .font(.dmSans(.body))
+                .font(.dmSansSupporting())
                 .foregroundStyle(.secondary)
                 .fixedSize(horizontal: false, vertical: true)
 

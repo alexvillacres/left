@@ -121,6 +121,10 @@ These questions still need product decisions:
   timing, expected versus received money, and income receipt history are not.
 - **Import:** natural-language entry, pasted LLM output, and bank CSV import are
   ideas. Debug JSON restore is not a transaction-import feature for users.
+- **Custom dialogs:** revisit branded confirmation dialogs with DM Sans and
+  shared spacing. For now, income removal uses a native centered alert with
+  explicit Cancel and Remove actions. Any custom replacement needs accessible
+  focus, Dynamic Type, dismissal, and Reduce Motion behavior.
 - **Guidance and onboarding:** contextual explainers and exploring before setup
   remain opportunities, not approved launch blockers.
 - **Weekly report range:** the low tiers need more variety, because most weeks

@@ -140,7 +140,7 @@ struct OnboardingView: View {
                     .frame(maxWidth: step == 0 ? 270 : step == 2 ? 320 : 300)
                     .accessibilityAddTraits(.isHeader)
                 Text(detail)
-                    .font(.dmSans(size: 16))
+                    .font(.dmSansSupporting())
                     .lineSpacing(3)
             }
             .multilineTextAlignment(.center)
@@ -168,7 +168,7 @@ struct OnboardingView: View {
                     .tracking(-0.44)
                     .accessibilityAddTraits(.isHeader)
                 Text(detail)
-                    .font(.dmSans(size: 16))
+                    .font(.dmSansSupporting())
                     .foregroundStyle(.secondary)
                     .lineSpacing(3)
             }
@@ -230,7 +230,7 @@ struct OnboardingView: View {
 
             if step == 5 && !canContinue {
                 Text("This plan leaves no money for daily spending. Lower savings or go back to adjust income and recurring expenses.")
-                    .font(.dmSans(.subheadline))
+                    .font(.dmSansSupporting())
                     .foregroundStyle(Color.leftFeedbackNegative)
                     .multilineTextAlignment(.center)
             }
@@ -250,7 +250,7 @@ struct OnboardingView: View {
                 }
                 .accessibilityElement(children: .combine)
                 Text("This is what’s available for everyday spending based on the plan you just made.")
-                    .font(.dmSans(size: 16))
+                    .font(.dmSansSupporting())
                     .foregroundStyle(.secondary)
                     .multilineTextAlignment(.center)
                     .fixedSize(horizontal: false, vertical: true)
@@ -278,7 +278,7 @@ struct OnboardingView: View {
                         .frame(maxWidth: .infinity, alignment: .leading)
                 }
             }
-            .font(.dmSans(.subheadline))
+            .font(.dmSansSupporting())
             .padding(16)
             .background(Color.leftBackground, in: RoundedRectangle(cornerRadius: 10))
             .overlay(RoundedRectangle(cornerRadius: 10).strokeBorder(Color.leftNeutralFill, lineWidth: 0.5))
@@ -395,7 +395,6 @@ struct OnboardingView: View {
                 if step == 6 { save() } else { move(by: 1) }
             }
             .disabled(!canContinue)
-            .opacity(canContinue ? 1 : 0.35)
         }
         .transition(.opacity)
         .padding(.horizontal, 24)
@@ -413,12 +412,12 @@ struct OnboardingView: View {
         Button(action: action) {
             Text(title)
                 .font(.dmSans(size: 16, weight: primary ? .semibold : .medium))
-                .foregroundStyle(primary ? Color.leftTextOnAccent : Color.leftAccent)
+                .foregroundStyle(primary && !canContinue ? Color.leftDisabledForeground : primary ? Color.leftTextOnAccent : Color.leftAccent)
                 .frame(maxWidth: .infinity, minHeight: 52)
-                .background(primary ? Color.leftAccent : isTeaching ? Color.leftBackground : Color.leftNeutralFill,
+                .background(primary && !canContinue ? Color.leftDisabledFill : primary ? Color.leftAccent : isTeaching ? Color.leftBackground : Color.leftNeutralFill,
                             in: RoundedRectangle(cornerRadius: 14))
         }
-        .buttonStyle(.plain)
+        .buttonStyle(OpaqueButtonStyle())
     }
 
     // Income is the neutral whole, so its focus ring stays neutral.

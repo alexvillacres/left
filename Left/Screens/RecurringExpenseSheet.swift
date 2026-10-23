@@ -328,7 +328,7 @@ struct RecurringExpenseSheet: View {
                     HStack(spacing: AppSpacing.md) {
                         VStack(alignment: .leading, spacing: 1) {
                             Text(cadence.label)
-                                .font(.dmSans(.body, weight: draftCadence == cadence ? .semibold : .medium))
+                                .font(.dmSansRowTitle(weight: draftCadence == cadence ? .semibold : .medium))
                                 .foregroundStyle(Color.leftAccent)
 
                             Text(cadenceDetail(cadence))
@@ -450,13 +450,12 @@ struct RecurringExpenseSheet: View {
         } label: {
             Image(systemName: symbol)
                 .font(.system(size: 13, weight: .semibold))
-                .foregroundStyle(Color.leftAccent)
+                .foregroundStyle(enabled ? Color.leftAccent : Color.leftDisabledForeground)
                 .frame(width: 44, height: 44)
                 .contentShape(Rectangle())
         }
-        .buttonStyle(.plain)
+        .buttonStyle(OpaqueButtonStyle())
         .disabled(!enabled)
-        .opacity(enabled ? 1 : 0.3)
         .accessibilityLabel(label)
     }
 
@@ -478,9 +477,9 @@ struct RecurringExpenseSheet: View {
         } label: {
             Text(month.formatted(.dateTime.month(.abbreviated)))
                 .font(.dmSans(.subheadline, weight: isSelected ? .semibold : .medium))
-                .foregroundStyle(isSelected ? Color.leftTextOnAccent : isDisabled ? Color.leftPlaceholder : Color.leftAccent)
+                .foregroundStyle(isDisabled ? Color.leftDisabledForeground : isSelected ? Color.leftTextOnAccent : Color.leftAccent)
                 .frame(maxWidth: .infinity, minHeight: 44)
-                .background(isSelected ? Color.leftAccent : isDisabled ? Color.leftNeutralFill : Color.leftBackground,
+                .background(isDisabled ? Color.leftDisabledFill : isSelected ? Color.leftAccent : Color.leftBackground,
                             in: RoundedRectangle(cornerRadius: 10, style: .continuous))
                 .overlay {
                     if !isSelected && !isDisabled {
@@ -489,7 +488,7 @@ struct RecurringExpenseSheet: View {
                     }
                 }
         }
-        .buttonStyle(.plain)
+        .buttonStyle(OpaqueButtonStyle())
         .disabled(isDisabled)
         .accessibilityLabel(month.formatted(.dateTime.month(.wide).year()))
         .accessibilityAddTraits(isSelected ? [.isSelected] : [])
@@ -573,14 +572,13 @@ struct RecurringExpenseSheet: View {
             Button(action: save) {
                 Text(expense == nil ? "Add expense" : "Save")
                     .font(.dmSans(.body, weight: .semibold))
-                    .foregroundStyle(Color.leftTextOnAccent)
+                    .foregroundStyle(canSave ? Color.leftTextOnAccent : Color.leftDisabledForeground)
                     .frame(maxWidth: .infinity)
                     .frame(minHeight: 52)
-                    .background(Color.leftAccent, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+                    .background(canSave ? Color.leftAccent : Color.leftDisabledFill, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
             }
-            .buttonStyle(.plain)
+            .buttonStyle(OpaqueButtonStyle())
             .disabled(!canSave)
-            .opacity(canSave ? 1 : 0.35)
         }
     }
 
