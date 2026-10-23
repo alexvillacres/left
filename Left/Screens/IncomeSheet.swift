@@ -149,11 +149,6 @@ struct IncomeSheet: View {
         .presentationDetents(dynamicTypeSize.isAccessibilitySize ? [.large] : [.height(contentHeight)])
         .presentationDragIndicator(.visible)
         .presentationCornerRadius(32)
-        .task {
-            if source == nil || source?.needsMonthlyAmount == true {
-                isAmountFocused = true
-            }
-        }
         .alert("Remove “\(source?.name ?? "income source")”?", isPresented: $showsDeleteConfirmation) {
             Button("Cancel", role: .cancel) { }
             Button("Remove", role: .destructive, action: removeSource)

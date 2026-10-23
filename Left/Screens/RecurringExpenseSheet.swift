@@ -1,668 +1,345 @@
 import SwiftUI
 import SwiftData
 
-// One recurring expense, edited on a sheet that stays as short as its content.
-//
-// The expense is a card: name and amount on one line, then a button for how
-// often it repeats and a button for how long it lasts. Each button opens its
-// options inside the card, so the sheet grows only when there is something to
-// choose. Only one panel is open at a time. The amount is one of those panels:
-// tapping it opens the app's numpad in the card, with whole-dollar entry and a
-// "." key, so typing 340 means $340 rather than the spending screen's $3.40.
-//
-// The daily allowance is deliberately absent. Rent is not optional because the
-// daily number moved, and putting that number here invites reading a bill as a
-// choice. The thin bar below the card is the plan context this screen owes the
-// user: how much of the month's income is already spoken for.
+// Draft values stay local until Save; dismissing the sheet discards them.
+// Reference pattern for fitted sheets: retain both detents and animate selection,
+// anchor actions in UIKit, and reveal expanding controls after resize.
 struct RecurringExpenseSheet: View {
     let plan: MonthPlan
     let expense: FixedExpense?
-
-    private enum Panel { case none, amount, repeats, duration }
-    private enum MonthTarget { case start, end }
 
     @Environment(\.dismiss) private var dismiss
     @Environment(\.modelContext) private var modelContext
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
-
     @State private var draftName: String
-    @State private var draftAmount: Decimal
-    // Typed digits, kept apart from the value so "14." and "14.0" survive
-    // while being entered.
-    @State private var amountEntry: String
+    @State private var amountText: String
     @State private var draftCadence: ExpenseCadence
-    @State private var draftStartsOn: Date?
     @State private var draftEndsAfter: Date?
-    @State private var panel: Panel = .none
-    @State private var monthTarget: MonthTarget = .end
+    @State private var showsEndPicker = false
+    @State private var pickerIsVisible = false
     @State private var gridYear: Int
-    @State private var contentHeight: CGFloat = 0
+    @State private var contentHeight: CGFloat = 350
+    @State private var actionsHeight: CGFloat = 92
+    @State private var pickerHeight: CGFloat = 240
+    @State private var selectedDetent: PresentationDetent = .height(442)
     @State private var isConfirmingDelete = false
     @FocusState private var isNameFocused: Bool
+    @FocusState private var isAmountFocused: Bool
 
     private let calendar = Calendar.current
+    // The new editor changes the end month only. Preserve existing start dates.
+    private var startsOn: Date? { expense?.startsOn }
+    private var startMonth: Date { startsOn ?? plan.monthStart }
+    private var minimumYear: Int { calendar.component(.year, from: startMonth) }
 
     init(plan: MonthPlan, expense: FixedExpense? = nil) {
         self.plan = plan
         self.expense = expense
         _draftName = State(initialValue: expense?.name ?? "")
-        _draftAmount = State(initialValue: expense?.amount ?? 0)
-        _amountEntry = State(initialValue: expense.map { Self.entry(for: $0.amount) } ?? "")
+        _amountText = State(initialValue: expense.map {
+            $0.amount.formatted(.number.precision(.fractionLength(0...2)))
+        } ?? "")
         _draftCadence = State(initialValue: expense?.effectiveCadence ?? .monthly)
-        _draftStartsOn = State(initialValue: expense?.startsOn)
         _draftEndsAfter = State(initialValue: expense?.endsAfter)
-        let anchor = expense?.endsAfter ?? expense?.startsOn ?? plan.monthStart
-        _gridYear = State(initialValue: Calendar.current.component(.year, from: anchor))
+        _gridYear = State(initialValue: Calendar.current.component(.year, from: expense?.endsAfter ?? expense?.startsOn ?? plan.monthStart))
     }
+
+    private var parsedAmount: Decimal? {
+        guard !amountText.isEmpty,
+              let value = try? Decimal(amountText, format: .number), value > 0 else { return nil }
+        // Keep legacy fractional bills intact; new plan amounts use whole dollars.
+        guard value == value.rounded(scale: 0) || value == expense?.amount else { return nil }
+        return value
+    }
+    private var draftAmount: Decimal { parsedAmount ?? 0 }
+    private var trimmedName: String { draftName.trimmingCharacters(in: .whitespacesAndNewlines) }
+    private var canSave: Bool { !trimmedName.isEmpty && parsedAmount != nil }
 
     var body: some View {
-        NavigationStack {
-            VStack(spacing: 0) {
-                ScrollView {
-                    VStack(alignment: .leading, spacing: AppSpacing.lg) {
-                        HStack(alignment: .firstTextBaseline, spacing: AppSpacing.sm) {
-                            Text(expense == nil ? "New recurring expense" : "Edit recurring expense")
-                                .font(.dmSans(size: BudgetTypography.headingSize, weight: .bold, relativeTo: .title2))
-                                .tracking(BudgetTypography.headingTracking)
-                                .accessibilityAddTraits(.isHeader)
+        VStack(spacing: 0) {
+            ScrollView {
+                VStack(spacing: 0) {
+                    Text(expense == nil ? "New recurring expense" : "Recurring expense")
+                        .font(.dmSans(.body, weight: .medium))
+                        .accessibilityAddTraits(.isHeader)
+                        .frame(maxWidth: .infinity, minHeight: 48)
 
-                            Spacer(minLength: 0)
-
-                            if expense != nil { deleteButton }
-                        }
-                        .padding(.bottom, AppSpacing.sm)
-
-                        card
-                        planContext
+                    VStack(spacing: AppSpacing.xl) {
+                        MoneyField(value: .constant(draftAmount), prominence: .sheet,
+                                   accessibilityLabel: "Recurring expense amount", focus: $isAmountFocused,
+                                   text: $amountText)
+                        TextField("Name this expense", text: $draftName)
+                            .font(.dmSans(.callout))
+                            .multilineTextAlignment(.center)
+                            .textInputAutocapitalization(.words)
+                            .focused($isNameFocused)
+                            .submitLabel(.next)
+                            .onSubmit { isNameFocused = false; isAmountFocused = true }
+                            .accessibilityLabel("Recurring expense name")
                     }
-                    .padding(.horizontal, AppSpacing.xl)
                     .padding(.top, AppSpacing.xl)
-                    .padding(.bottom, AppSpacing.lg)
-                    .background {
-                        GeometryReader { proxy in
-                            Color.clear.preference(key: ContentHeightKey.self, value: proxy.size.height)
+                    .padding(.bottom, AppSpacing.xxl)
+
+                    VStack(alignment: .leading, spacing: AppSpacing.sm) {
+                        cadenceControl
+                        Text(cadenceExplanation)
+                            .font(.dmSans(.footnote))
+                            .foregroundStyle(Color.leftTextTertiary)
+                            .fixedSize(horizontal: false, vertical: true)
+                            .padding(.horizontal, AppSpacing.xxs)
+                        endDateRow
+                        VStack(spacing: AppSpacing.sm) {
+                            yearStepper
+                            monthGrid
+                            Button {
+                                draftEndsAfter = nil
+                                setEndPicker(false)
+                            } label: {
+                                Text("No end date")
+                                    .font(.dmSans(.subheadline))
+                                    .foregroundStyle(Color.leftTextSecondary)
+                                    .frame(maxWidth: .infinity, minHeight: 44)
+                            }
                         }
+                        .fixedSize(horizontal: false, vertical: true)
+                        .background(GeometryReader { proxy in
+                            Color.clear.preference(key: ExpensePickerHeight.self, value: proxy.size.height)
+                        })
+                        .frame(height: showsEndPicker ? nil : 0, alignment: .top)
+                        .clipped()
+                        .opacity(showsEndPicker && pickerIsVisible ? 1 : 0)
+                        .allowsHitTesting(pickerIsVisible)
+                        .accessibilityHidden(!pickerIsVisible)
                     }
                 }
-                .scrollDismissesKeyboard(.interactively)
-                .scrollBounceBehavior(.basedOnSize)
+                .padding(.horizontal, AppSpacing.xl)
+                .padding(.top, AppSpacing.lg)
+                .background(GeometryReader { proxy in
+                    Color.clear.preference(key: ExpenseSheetHeight.self, value: proxy.size.height)
+                })
+            }
+            .clipped()
+            .scrollBounceBehavior(.basedOnSize)
+            .scrollDismissesKeyboard(.interactively)
 
+            Color.clear.frame(height: actionsHeight)
+        }
+        .background {
+            ExpenseSheetFooter {
                 actions
                     .padding(.horizontal, AppSpacing.xl)
-                    .padding(.bottom, AppSpacing.lg)
-                    .background(Color.leftBackground)
+                    .padding(.top, AppSpacing.lg)
+                    .padding(.bottom, AppSpacing.xl)
+                    .background(Color.leftSheet.ignoresSafeArea(.container, edges: .bottom))
+                    .background(GeometryReader { proxy in
+                        Color.clear.preference(key: ExpenseActionsHeight.self, value: proxy.size.height)
+                    })
+                    .onPreferenceChange(ExpenseActionsHeight.self) { height in
+                        if height > 0 { actionsHeight = height }
+                    }
             }
-            .background(Color.leftBackground.ignoresSafeArea())
         }
-        .onPreferenceChange(ContentHeightKey.self) { contentHeight = $0 }
-        // The keyboard and the numpad never share the sheet.
-        .onChange(of: isNameFocused) { _, focused in
-            if focused && panel != .none {
-                withAnimation(reduceMotion ? nil : .easeInOut(duration: 0.2)) { panel = .none }
+        .onPreferenceChange(ExpensePickerHeight.self) { height in
+            if height > 0 { pickerHeight = height }
+        }
+        .onPreferenceChange(ExpenseSheetHeight.self) { height in
+            let base = height - (showsEndPicker ? pickerHeight : 0)
+            guard base > 0, abs(base - contentHeight) > 0.5 else { return }
+            contentHeight = base
+            selectedDetent = dynamicTypeSize.isAccessibilitySize ? .large : .height(base + actionsHeight + (showsEndPicker ? pickerHeight : 0))
+        }
+        .task(id: showsEndPicker) {
+            guard showsEndPicker else {
+                pickerIsVisible = false
+                return
+            }
+            if !reduceMotion {
+                do { try await Task.sleep(for: .milliseconds(150)) }
+                catch { return }
+            }
+            guard !Task.isCancelled else { return }
+            withAnimation(reduceMotion ? nil : .easeOut(duration: 0.15)) {
+                pickerIsVisible = true
             }
         }
-        .presentationDetents(detents)
+        .onChange(of: isNameFocused) { _, focused in if focused { setEndPicker(false) } }
+        .onChange(of: isAmountFocused) { _, focused in
+            if focused { setEndPicker(false) }
+            else if let parsedAmount {
+                amountText = parsedAmount.formatted(.number.precision(.fractionLength(0...2)))
+            }
+        }
+        .background(Color.leftSheet.ignoresSafeArea())
+        .presentationBackground(Color.leftSheet)
+        .presentationDetents(dynamicTypeSize.isAccessibilitySize ? [.large] : [collapsedDetent, expandedDetent], selection: $selectedDetent)
+        .onChange(of: selectedDetent) { _, detent in
+            // Keep the picker in sync when the user drags between the two heights.
+            if !dynamicTypeSize.isAccessibilitySize {
+                showsEndPicker = detent == expandedDetent
+            }
+        }
         .presentationDragIndicator(.visible)
-        .presentationBackground(Color.leftBackground)
-    }
-
-    // Accessibility sizes outgrow any fitted height, so they get a full sheet.
-    private var detents: Set<PresentationDetent> {
-        guard !dynamicTypeSize.isAccessibilitySize, contentHeight > 0 else { return [.large] }
-        let actionsAndInset: CGFloat = 70
-        return [.height(min(contentHeight + actionsAndInset, 720))]
-    }
-
-    // A corner button is easy to hit by accident, so it asks once. Past months
-    // keep their own copy; only this plan and the months cloned after it lose it.
-    private var deleteButton: some View {
-        Button { isConfirmingDelete = true } label: {
-            Image(systemName: "trash")
-                .font(.system(.body, weight: .medium))
-                .foregroundStyle(Color.leftFeedbackNegative)
-                .frame(width: 44, height: 44)
-                .contentShape(Rectangle())
-        }
+        .presentationCornerRadius(32)
+        .tint(.leftAccent)
         .buttonStyle(.plain)
-        .accessibilityLabel("Delete \(expense?.name ?? "expense")")
-        .confirmationDialog("Delete \(expense?.name ?? "this expense")?",
-                            isPresented: $isConfirmingDelete,
-                            titleVisibility: .visible) {
-            Button("Delete", role: .destructive, action: delete)
+        .alert("Remove “\(expense?.name ?? "expense")”?", isPresented: $isConfirmingDelete) {
+            Button("Cancel", role: .cancel) { }
+            Button("Remove", role: .destructive, action: delete)
         } message: {
-            Text("It comes out of this month's plan and won't carry into next month. Earlier months keep it.")
+            Text("This removes this expense from this month's plan and future plans. Earlier months stay unchanged.")
         }
     }
 
-    // MARK: - Card
-
-    private var card: some View {
-        VStack(spacing: 0) {
-            nameAndAmount
-
-            if panel == .amount {
-                NumpadView(onDigit: appendDigit, onBackspace: deleteDigit, onDecimal: appendDecimal)
-                    .padding(.bottom, AppSpacing.md)
-                    .transition(.opacity)
-            }
-
-            Divider()
-                .overlay(Color.leftDivider)
-
-            (dynamicTypeSize.isAccessibilitySize
-                ? AnyLayout(VStackLayout(alignment: .leading, spacing: AppSpacing.sm))
-                : AnyLayout(HStackLayout(spacing: AppSpacing.sm))) {
-                chip(cadenceChipLabel, isOpen: panel == .repeats) { toggle(.repeats) }
-                chip(durationChipLabel, isOpen: panel == .duration) { toggle(.duration) }
-                Spacer(minLength: 0)
-            }
-            .padding(.vertical, AppSpacing.md)
-
-            switch panel {
-            case .repeats: repeatsPanel
-            case .duration: durationPanel
-            case .none, .amount: EmptyView()
-            }
-        }
-        .padding(.horizontal, AppSpacing.lg)
-        .padding(.bottom, panel == .none || panel == .amount ? AppSpacing.xxs : AppSpacing.md)
-        .background(Color.leftSurface, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
-        .overlay {
-            RoundedRectangle(cornerRadius: 18, style: .continuous)
-                .strokeBorder(Color.leftDivider, lineWidth: 0.5)
-        }
-    }
-
-    private var nameAndAmount: some View {
-        // Accessibility sizes can't fit both on one line, so the amount moves under the name.
-        let layout = dynamicTypeSize.isAccessibilitySize
-            ? AnyLayout(VStackLayout(alignment: .leading, spacing: AppSpacing.sm))
-            : AnyLayout(HStackLayout(spacing: AppSpacing.md))
-        return layout {
-            HStack(spacing: AppSpacing.md) {
-                // Orange names the category once, as a mark rather than a fill.
-                RoundedRectangle(cornerRadius: 2, style: .continuous)
-                    .fill(Color.leftPlanExpenses)
-                    .frame(width: 4, height: 26)
-                    .accessibilityHidden(true)
-
-                TextField("Name this expense", text: $draftName)
-                    .font(.dmSans(.title3, weight: .semibold))
-                    .textInputAutocapitalization(.words)
-                    .focused($isNameFocused)
-                    // Return finishes the name; a keyboard toolbar floats awkwardly
-                    // over a short sheet. With no amount yet, it goes on to the keypad.
-                    .submitLabel(amountEntry.isEmpty ? .next : .done)
-                    .onSubmit {
-                        isNameFocused = false
-                        if amountEntry.isEmpty { toggle(.amount) }
-                    }
-                    .accessibilityLabel("Recurring expense name")
-            }
-
-            amountButton
-        }
-        .padding(.vertical, AppSpacing.md)
-    }
-
-    private var amountButton: some View {
-        let isOpen = panel == .amount
-        return Button { toggle(.amount) } label: {
-            Text(amountDisplay)
-                .font(.dmSans(.title3, weight: .semibold))
-                .monospacedDigit()
-                .foregroundStyle(amountEntry.isEmpty ? Color.leftPlaceholder : Color.leftAccent)
-                .contentTransition(.numericText())
-                .lineLimit(1)
-                .padding(.horizontal, AppSpacing.sm)
-                .frame(minWidth: 72, minHeight: 44, alignment: .trailing)
-                .background {
-                    // The open amount reads as the field being typed into.
-                    RoundedRectangle(cornerRadius: 10, style: .continuous)
-                        .strokeBorder(isOpen ? Color.leftAccent : .clear, lineWidth: 1.5)
-                }
-                .contentShape(Rectangle())
-        }
-        .buttonStyle(.plain)
-        // The name gives way to the amount, never the reverse.
-        .fixedSize()
-        .accessibilityLabel("Recurring expense amount")
-        .accessibilityValue(amountEntry.isEmpty ? "Empty" : money(draftAmount))
-        .accessibilityAddTraits(isOpen ? [.isSelected] : [])
-        .accessibilityHint(isOpen ? "Closes the keypad" : "Opens the keypad")
-    }
-
-    private func chip(_ title: String, isOpen: Bool, action: @escaping () -> Void) -> some View {
-        Button(action: action) {
-            HStack(spacing: AppSpacing.xs) {
-                Text(title)
-                    .font(.dmSans(.subheadline, weight: .medium))
-                    .lineLimit(1)
-
-                Image(systemName: "chevron.down")
-                    .font(.system(size: 11, weight: .semibold))
-                    .rotationEffect(.degrees(isOpen ? 180 : 0))
-            }
-            .foregroundStyle(isOpen ? Color.leftTextOnAccent : Color.leftAccent)
-            .padding(.horizontal, AppSpacing.md)
-            .frame(minHeight: 44)
-            .background(isOpen ? Color.leftAccent : Color.leftBackground, in: Capsule())
-            .overlay {
-                Capsule().strokeBorder(isOpen ? .clear : Color.leftDivider, lineWidth: 0.5)
-            }
-        }
-        .buttonStyle(.plain)
-        .accessibilityAddTraits(isOpen ? [.isSelected] : [])
-        .accessibilityHint(isOpen ? "Closes the options" : "Opens the options")
-    }
-
-    private func toggle(_ target: Panel) {
-        isNameFocused = false
-        withAnimation(reduceMotion ? nil : .easeInOut(duration: 0.2)) {
-            panel = panel == target ? .none : target
-        }
-    }
-
-    // MARK: - Amount entry
-
-    private var amountDisplay: String {
-        guard !amountEntry.isEmpty else { return money(Decimal(0)) }
-        // Once "." is typed, show both cent places so the entry reads as cents.
-        guard amountEntry.contains(".") else { return money(draftAmount) }
-        return draftAmount.formatted(.currency(code: "USD").precision(.fractionLength(2)))
-    }
-
-    private func appendDigit(_ digit: Int) {
-        var next = amountEntry
-        if let dot = next.firstIndex(of: ".") {
-            guard next.distance(from: dot, to: next.endIndex) <= 2 else { return }
-        } else {
-            guard next.count < 7 else { return } // cap at $9,999,999
-            if next == "0" { next = "" }
-        }
-        next.append(String(digit))
-        setEntry(next)
-    }
-
-    private func appendDecimal() {
-        guard !amountEntry.contains(".") else { return }
-        setEntry((amountEntry.isEmpty ? "0" : amountEntry) + ".")
-    }
-
-    private func deleteDigit() {
-        guard !amountEntry.isEmpty else { return }
-        var next = amountEntry
-        next.removeLast()
-        setEntry(next == "0" ? "" : next)
-    }
-
-    private func setEntry(_ entry: String) {
-        amountEntry = entry
-        withAnimation(reduceMotion ? nil : .spring(duration: 0.2)) {
-            draftAmount = Decimal(string: entry, locale: Locale(identifier: "en_US_POSIX")) ?? 0
-        }
-    }
-
-    private static func entry(for amount: Decimal) -> String {
-        guard amount > 0 else { return "" }
-        let rounded = NSDecimalNumber(decimal: amount).rounding(
-            accordingToBehavior: NSDecimalNumberHandler(
-                roundingMode: .plain, scale: 2,
-                raiseOnExactness: false, raiseOnOverflow: false,
-                raiseOnUnderflow: false, raiseOnDivideByZero: false
-            )
-        )
-        return rounded.description(withLocale: Locale(identifier: "en_US_POSIX"))
-    }
-
-    // MARK: - Repeats
-
-    private var repeatsPanel: some View {
-        VStack(spacing: 0) {
+    private var cadenceControl: some View {
+        HStack(spacing: 0) {
             ForEach(ExpenseCadence.allCases) { cadence in
-                Button {
-                    draftCadence = cadence
-                    toggle(.repeats)
-                } label: {
-                    HStack(spacing: AppSpacing.md) {
-                        VStack(alignment: .leading, spacing: 1) {
-                            Text(cadence.label)
-                                .font(.dmSansRowTitle(weight: draftCadence == cadence ? .semibold : .medium))
-                                .foregroundStyle(Color.leftAccent)
-
-                            Text(cadenceDetail(cadence))
-                                .font(.dmSans(.caption))
-                                .foregroundStyle(.secondary)
-                        }
-                        .multilineTextAlignment(.leading)
-
-                        Spacer(minLength: AppSpacing.sm)
-
-                        if draftCadence == cadence {
-                            Image(systemName: "checkmark")
-                                .font(.system(size: 14, weight: .semibold))
-                                .foregroundStyle(Color.leftAccent)
-                        }
-                    }
-                    .padding(.horizontal, AppSpacing.md)
-                    .frame(maxWidth: .infinity, minHeight: 56)
-                    .background {
-                        if draftCadence == cadence {
-                            RoundedRectangle(cornerRadius: 12, style: .continuous)
-                                .fill(Color.leftBackground)
-                                .overlay {
-                                    RoundedRectangle(cornerRadius: 12, style: .continuous)
-                                        .strokeBorder(Color.leftDivider, lineWidth: 0.5)
-                                }
-                        }
-                    }
-                    .contentShape(Rectangle())
+                Button { draftCadence = cadence } label: {
+                    Text(cadence == .annually ? "Yearly" : cadence.label)
+                        .font(.dmSans(.callout, weight: draftCadence == cadence ? .medium : .regular))
+                        .foregroundStyle(draftCadence == cadence ? Color.leftTextPrimary : Color.leftTextSecondary)
+                        .frame(maxWidth: .infinity, minHeight: 38)
+                        .background(draftCadence == cadence ? Color.leftSurface : .clear,
+                                    in: RoundedRectangle(cornerRadius: 8))
                 }
-                .buttonStyle(.plain)
-                .accessibilityAddTraits(draftCadence == cadence ? [.isSelected] : [])
+                .accessibilityAddTraits(draftCadence == cadence ? .isSelected : [])
             }
         }
+        .padding(3)
+        .background(Color.leftTrack, in: RoundedRectangle(cornerRadius: 10))
     }
 
-    // Spelling out the monthly share is the whole point of showing cadences:
-    // a yearly bill still has to be divided before the plan can use it.
-    private func cadenceDetail(_ cadence: ExpenseCadence) -> String {
-        let amount = money(draftAmount)
-        let monthly = money(draftAmount / cadence.divisorToMonthly)
-        switch cadence {
-        case .monthly:
-            return "\(amount) every month"
-        case .quarterly:
-            return "\(amount) every 3 months · \(monthly)/mo in plan"
-        case .annually:
-            return "\(amount) once a year · \(monthly)/mo in plan"
+    private var cadenceExplanation: String {
+        let billing: String
+        switch draftCadence {
+        case .monthly: billing = "Billed every month"
+        case .quarterly: billing = "Billed every 3 months"
+        case .annually: billing = "Billed once a year"
         }
+        let monthly = (draftAmount / draftCadence.divisorToMonthly)
+            .formatted(.currency(code: "USD").precision(.fractionLength(0...2)))
+        return "\(billing) · \(monthly) a month in your plan"
     }
 
-    // MARK: - Duration
-
-    private var durationPanel: some View {
-        VStack(alignment: .leading, spacing: AppSpacing.md) {
-            SegmentedControl(options: [false, true], selection: endsAfterBinding) {
-                $0 ? "Ends after" : "No end date"
+    private var endDateRow: some View {
+        Button {
+            isNameFocused = false
+            isAmountFocused = false
+            if !showsEndPicker {
+                gridYear = calendar.component(.year, from: draftEndsAfter ?? startMonth)
             }
+            setEndPicker(!showsEndPicker)
+        } label: {
+            HStack(spacing: AppSpacing.lg) {
+                Text("Ends").foregroundStyle(Color.leftTextSecondary)
+                Spacer(minLength: AppSpacing.sm)
+                Text(draftEndsAfter.map { "After \($0.formatted(.dateTime.month(.wide).year()))" } ?? "No end date")
+                    .foregroundStyle(Color.leftTextPrimary)
+                Image(systemName: "chevron.right")
+                    .font(.system(size: 12))
+                    .foregroundStyle(Color.leftIconMuted)
+                    .frame(width: 13, height: 13)
+                    .rotationEffect(.degrees(showsEndPicker ? 90 : 0))
+            }
+            .font(.dmSans(.callout))
             .frame(minHeight: 44)
-
-            if draftEndsAfter != nil || monthTarget == .start {
-                yearStepper
-                monthGrid
-                durationSummary
-            } else {
-                Text("This expense stays in every month's plan until you give it an end.")
-                    .font(.dmSans(.caption))
-                    .foregroundStyle(.secondary)
-                    .fixedSize(horizontal: false, vertical: true)
-            }
+            .padding(.horizontal, AppSpacing.xxs)
+            .contentShape(Rectangle())
         }
-        .padding(.bottom, AppSpacing.xs)
+        .buttonStyle(EndDateRowButtonStyle())
+        .transaction { $0.animation = nil }
+        .accessibilityHint(showsEndPicker ? "Closes month selection" : "Opens month selection")
     }
 
-    private var endsAfterBinding: Binding<Bool> {
-        Binding(
-            get: { draftEndsAfter != nil },
-            set: { endsAfter in
-                withAnimation(reduceMotion ? nil : .easeInOut(duration: 0.2)) {
-                    if endsAfter {
-                        monthTarget = .end
-                        draftEndsAfter = calendar.date(byAdding: .month, value: 11, to: startMonth)
-                            .map { calendar.leftMonthStart(for: $0) }
-                        gridYear = calendar.component(.year, from: draftEndsAfter ?? startMonth)
-                    } else {
-                        monthTarget = .end
-                        draftEndsAfter = nil
-                    }
-                }
-            }
-        )
+    private var collapsedDetent: PresentationDetent { .height(contentHeight + actionsHeight) }
+    private var expandedDetent: PresentationDetent { .height(contentHeight + actionsHeight + pickerHeight) }
+
+    private func setEndPicker(_ visible: Bool) {
+        showsEndPicker = visible
+        withAnimation(reduceMotion ? nil : .easeInOut(duration: 0.25)) {
+            selectedDetent = dynamicTypeSize.isAccessibilitySize ? .large : (visible ? expandedDetent : collapsedDetent)
+        }
     }
 
     private var yearStepper: some View {
         HStack {
-            stepperButton("chevron.left", label: "Previous year", enabled: gridYear > minimumYear) {
-                gridYear -= 1
-            }
-
+            yearButton("chevron.left", label: "Previous year", enabled: gridYear > minimumYear, delta: -1)
             Spacer()
-
             Text(String(gridYear))
-                .font(.dmSans(.body, weight: .semibold))
+                .font(.dmSans(.callout, weight: .medium))
                 .monospacedDigit()
                 .contentTransition(.numericText())
-                .accessibilityLabel("Year \(String(gridYear))")
-
             Spacer()
-
-            stepperButton("chevron.right", label: "Next year", enabled: gridYear < minimumYear + 30) {
-                gridYear += 1
-            }
+            yearButton("chevron.right", label: "Next year", enabled: gridYear < max(minimumYear + 30, calendar.component(.year, from: draftEndsAfter ?? startMonth)), delta: 1)
         }
+        .padding(.horizontal, AppSpacing.xxs)
     }
 
-    private func stepperButton(_ symbol: String, label: String, enabled: Bool, action: @escaping () -> Void) -> some View {
+    private func yearButton(_ symbol: String, label: String, enabled: Bool, delta: Int) -> some View {
         Button {
-            withAnimation(reduceMotion ? nil : .easeInOut(duration: 0.15)) { action() }
+            withAnimation(reduceMotion ? nil : .easeInOut(duration: 0.15)) { gridYear += delta }
         } label: {
             Image(systemName: symbol)
-                .font(.system(size: 13, weight: .semibold))
-                .foregroundStyle(enabled ? Color.leftAccent : Color.leftDisabledForeground)
-                .frame(width: 44, height: 44)
+                .font(.system(size: 13))
+                .foregroundStyle(Color.leftTextSecondary)
+                .frame(width: 44, height: 32)
                 .contentShape(Rectangle())
         }
-        .buttonStyle(OpaqueButtonStyle())
         .disabled(!enabled)
         .accessibilityLabel(label)
     }
 
     private var monthGrid: some View {
-        LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: AppSpacing.xs), count: 4),
-                  spacing: AppSpacing.xs) {
-            ForEach(gridMonths, id: \.self) { month in
-                monthButton(month)
+        LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: AppSpacing.xs), count: 4), spacing: AppSpacing.xs) {
+            ForEach(1...12, id: \.self) { number in
+                if let month = calendar.date(from: DateComponents(year: gridYear, month: number, day: 1)) {
+                    monthButton(month)
+                }
             }
         }
     }
 
     private func monthButton(_ month: Date) -> some View {
-        let isSelected = month == (monthTarget == .start ? startMonth : draftEndsAfter)
-        let isDisabled = isUnavailable(month)
-
+        let selected = month == draftEndsAfter
         return Button {
-            select(month)
+            draftEndsAfter = month
+            HapticFeedback.lightImpact()
         } label: {
             Text(month.formatted(.dateTime.month(.abbreviated)))
-                .font(.dmSans(.subheadline, weight: isSelected ? .semibold : .medium))
-                .foregroundStyle(isDisabled ? Color.leftDisabledForeground : isSelected ? Color.leftTextOnAccent : Color.leftAccent)
+                .font(.dmSans(.callout, weight: selected ? .medium : .regular))
+                .foregroundStyle(selected ? Color.leftTextOnAccent : Color.leftTextPrimary)
                 .frame(maxWidth: .infinity, minHeight: 44)
-                .background(isDisabled ? Color.leftDisabledFill : isSelected ? Color.leftAccent : Color.leftBackground,
-                            in: RoundedRectangle(cornerRadius: 10, style: .continuous))
-                .overlay {
-                    if !isSelected && !isDisabled {
-                        RoundedRectangle(cornerRadius: 10, style: .continuous)
-                            .strokeBorder(Color.leftDivider, lineWidth: 0.5)
-                    }
-                }
+                .background(selected ? Color.leftAccent : Color.leftTrack,
+                            in: RoundedRectangle(cornerRadius: 10))
         }
-        .buttonStyle(OpaqueButtonStyle())
-        .disabled(isDisabled)
+        .disabled(month < startMonth)
+        .opacity(month < startMonth ? 0.4 : 1)
         .accessibilityLabel(month.formatted(.dateTime.month(.wide).year()))
-        .accessibilityAddTraits(isSelected ? [.isSelected] : [])
+        .accessibilityAddTraits(selected ? .isSelected : [])
     }
-
-    private var durationSummary: some View {
-        HStack(alignment: .firstTextBaseline, spacing: AppSpacing.sm) {
-            Text(rangeSummary)
-                .font(.dmSans(.caption))
-                .foregroundStyle(.secondary)
-
-            Spacer(minLength: 0)
-
-            Button {
-                withAnimation(reduceMotion ? nil : .easeInOut(duration: 0.15)) {
-                    monthTarget = monthTarget == .start ? .end : .start
-                    gridYear = calendar.component(.year, from: monthTarget == .start ? startMonth : (draftEndsAfter ?? startMonth))
-                }
-            } label: {
-                Text(monthTarget == .start ? "Change end" : "Change start")
-                    .font(.dmSans(.caption, weight: .semibold))
-                    .foregroundStyle(Color.leftAccent)
-                    .underline()
-                    .frame(minHeight: 44)
-            }
-            .buttonStyle(.plain)
-        }
-    }
-
-    // MARK: - Plan context
-
-    @ViewBuilder
-    private var planContext: some View {
-        if plan.incomeTotal > 0 {
-            VStack(alignment: .leading, spacing: AppSpacing.sm) {
-                GeometryReader { proxy in
-                    HStack(spacing: 3) {
-                        segment(width: proxy.size.width, share: previewFixedTotal - draftShare, color: Color.leftPlanExpenses.opacity(0.45))
-                        segment(width: proxy.size.width, share: draftShare, color: Color.leftPlanExpenses)
-                        segment(width: proxy.size.width, share: plan.savingsAmount, color: Color.leftPlanSavings.opacity(0.45))
-                        segment(width: proxy.size.width, share: previewSpendable, color: Color.leftPlanSpendable.opacity(0.45))
-                    }
-                }
-                .frame(height: 8)
-
-                HStack {
-                    Text("Recurring \(money(previewFixedTotal))")
-                    Spacer(minLength: AppSpacing.sm)
-                    Text("of \(money(plan.incomeTotal)) income")
-                }
-                .font(.dmSans(.caption))
-                .foregroundStyle(.secondary)
-                .monospacedDigit()
-            }
-            .accessibilityElement(children: .ignore)
-            .accessibilityLabel("Recurring expenses \(money(previewFixedTotal)) of \(money(plan.incomeTotal)) income")
-        }
-    }
-
-    private func segment(width: CGFloat, share: Decimal, color: Color) -> some View {
-        let fraction = (share / plan.incomeTotal as NSDecimalNumber).doubleValue
-        return RoundedRectangle(cornerRadius: 4, style: .continuous)
-            .fill(color)
-            .frame(width: max(0, width * CGFloat(min(1, max(0, fraction)))))
-    }
-
-    // MARK: - Actions
 
     private var actions: some View {
         HStack(spacing: AppSpacing.md) {
-            Button { dismiss() } label: {
-                Text("Cancel")
-                    .font(.dmSans(.body, weight: .medium))
-                    .foregroundStyle(Color.leftAccent)
-                    .frame(width: 100)
-                    .frame(minHeight: 52)
-                    .background(Color.leftNeutralFill, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+            if expense != nil {
+                Button { isConfirmingDelete = true } label: {
+                    Image(systemName: "trash")
+                        .foregroundStyle(Color.leftTextSecondary)
+                        .frame(width: 52, height: 52)
+                        .background(Color.leftTrack, in: RoundedRectangle(cornerRadius: 14))
+                }
+                .accessibilityLabel("Remove recurring expense")
             }
-            .buttonStyle(.plain)
-
             Button(action: save) {
                 Text(expense == nil ? "Add expense" : "Save")
-                    .font(.dmSans(.body, weight: .semibold))
+                    .font(.dmSans(.body, weight: .medium))
+                    .frame(maxWidth: .infinity, minHeight: 52)
                     .foregroundStyle(canSave ? Color.leftTextOnAccent : Color.leftDisabledForeground)
-                    .frame(maxWidth: .infinity)
-                    .frame(minHeight: 52)
-                    .background(canSave ? Color.leftAccent : Color.leftDisabledFill, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+                    .background(canSave ? Color.leftAccent : Color.leftDisabledFill,
+                                in: RoundedRectangle(cornerRadius: 14))
             }
             .buttonStyle(OpaqueButtonStyle())
             .disabled(!canSave)
         }
-    }
-
-    // MARK: - Values
-
-    // Cents only when there are any: $340, but $113.33 a month — never $340.5.
-    private func money(_ value: Decimal) -> String {
-        let hasCents = value.roundedToCents() != value.rounded(scale: 0)
-        return value.formatted(.currency(code: "USD").precision(.fractionLength(hasCents ? 2 : 0)))
-    }
-
-    private var cadenceChipLabel: String { draftCadence.label }
-
-    private var durationChipLabel: String {
-        guard let end = draftEndsAfter else { return "No end date" }
-        return "Until \(monthYear(end))"
-    }
-
-    private var trimmedName: String {
-        draftName.trimmingCharacters(in: .whitespacesAndNewlines)
-    }
-
-    private var canSave: Bool { !trimmedName.isEmpty && draftAmount > 0 }
-
-    private var startMonth: Date { draftStartsOn ?? plan.monthStart }
-    private var minimumYear: Int { calendar.component(.year, from: startMonth) }
-
-    private var gridMonths: [Date] {
-        (1...12).compactMap { month in
-            calendar.date(from: DateComponents(year: gridYear, month: month, day: 1))
-        }
-    }
-
-    // A window cannot end before it starts, and moving the start past the end
-    // would silently drop the expense out of every month.
-    private func isUnavailable(_ month: Date) -> Bool {
-        switch monthTarget {
-        case .end:
-            return month < startMonth
-        case .start:
-            return draftEndsAfter.map { month > $0 } ?? false
-        }
-    }
-
-    private func select(_ month: Date) {
-        withAnimation(reduceMotion ? nil : .easeInOut(duration: 0.15)) {
-            switch monthTarget {
-            case .end:
-                draftEndsAfter = month
-            case .start:
-                draftStartsOn = month
-                monthTarget = .end
-            }
-        }
-        HapticFeedback.lightImpact()
-    }
-
-    private var rangeSummary: String {
-        let start = monthYear(startMonth)
-        guard let end = draftEndsAfter else { return "From \(start) · no end date" }
-        let months = (calendar.dateComponents([.month], from: startMonth, to: end).month ?? 0) + 1
-        return "\(start) – \(monthYear(end)) · \(months) \(months == 1 ? "month" : "months")"
-    }
-
-    private func monthYear(_ date: Date) -> String {
-        date.formatted(.dateTime.month(.abbreviated).year())
-    }
-
-    private var draftCoversPlanMonth: Bool {
-        (draftStartsOn.map { $0 <= plan.monthStart } ?? true)
-            && (draftEndsAfter.map { plan.monthStart <= $0 } ?? true)
-    }
-
-    private var draftShare: Decimal {
-        draftCoversPlanMonth ? draftAmount / draftCadence.divisorToMonthly : 0
-    }
-
-    private var previewFixedTotal: Decimal {
-        let original = expense?.covers(month: plan.monthStart) == true ? expense?.monthlyAmount ?? 0 : 0
-        return plan.fixedTotal - original + draftShare
-    }
-
-    private var previewSpendable: Decimal {
-        max(0, plan.incomeTotal - previewFixedTotal - plan.savingsAmount)
     }
 
     private func delete() {
@@ -679,14 +356,14 @@ struct RecurringExpenseSheet: View {
             expense.name = trimmedName
             expense.amount = draftAmount
             expense.cadence = draftCadence
-            expense.startsOn = draftStartsOn
+            expense.startsOn = startsOn
             expense.endsAfter = draftEndsAfter
         } else {
             plan.fixedExpenses.append(
                 FixedExpense(name: trimmedName,
                              amount: draftAmount,
                              cadence: draftCadence,
-                             startsOn: draftStartsOn,
+                             startsOn: startsOn,
                              endsAfter: draftEndsAfter)
             )
         }
@@ -695,7 +372,97 @@ struct RecurringExpenseSheet: View {
     }
 }
 
-private struct ContentHeightKey: PreferenceKey {
+private struct EndDateRowButtonStyle: ButtonStyle {
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+    }
+}
+
+// UIKit owns the bottom anchor so it follows the presentation controller's
+// animated bounds, rather than SwiftUI's immediately updated target size.
+private struct ExpenseSheetFooter<Content: View>: UIViewControllerRepresentable {
+    @ViewBuilder var content: () -> Content
+
+    func makeUIViewController(context: Context) -> FooterController<Content> {
+        FooterController(content: content())
+    }
+
+    func updateUIViewController(_ controller: FooterController<Content>, context: Context) {
+        controller.host.rootView = content()
+        controller.host.view.invalidateIntrinsicContentSize()
+    }
+
+    static func dismantleUIViewController(_ controller: FooterController<Content>, coordinator: ()) {
+        controller.removeFooter()
+    }
+}
+
+private final class FooterController<Content: View>: UIViewController {
+    let host: UIHostingController<Content>
+
+    init(content: Content) {
+        host = UIHostingController(rootView: content)
+        host.sizingOptions = .intrinsicContentSize
+        super.init(nibName: nil, bundle: nil)
+    }
+
+    required init?(coder: NSCoder) { fatalError("init(coder:) has not been implemented") }
+
+    override func loadView() {
+        view = UIView()
+        view.isUserInteractionEnabled = false
+    }
+
+    override func viewWillAppear(_ animated: Bool) {
+        super.viewWillAppear(animated)
+        attachFooter()
+    }
+
+    override func viewDidLayoutSubviews() {
+        super.viewDidLayoutSubviews()
+        attachFooter()
+    }
+
+    private func attachFooter() {
+        guard host.parent == nil else { return }
+        var target: UIViewController? = parent
+        while let controller = target, !(controller.presentationController is UISheetPresentationController) {
+            target = controller.parent
+        }
+        guard let target else { return }
+        target.addChild(host)
+        host.view.backgroundColor = .clear
+        host.view.translatesAutoresizingMaskIntoConstraints = false
+        target.view.addSubview(host.view)
+        NSLayoutConstraint.activate([
+            host.view.leadingAnchor.constraint(equalTo: target.view.leadingAnchor),
+            host.view.trailingAnchor.constraint(equalTo: target.view.trailingAnchor),
+            host.view.bottomAnchor.constraint(equalTo: target.view.keyboardLayoutGuide.topAnchor)
+        ])
+        host.didMove(toParent: target)
+        target.view.layoutIfNeeded()
+    }
+
+    func removeFooter() {
+        host.willMove(toParent: nil)
+        host.view.removeFromSuperview()
+        host.removeFromParent()
+    }
+}
+
+private struct ExpensePickerHeight: PreferenceKey {
+    static let defaultValue: CGFloat = 0
+    static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) { value = max(value, nextValue()) }
+}
+
+private struct ExpenseActionsHeight: PreferenceKey {
+    static let defaultValue: CGFloat = 0
+    static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) {
+        value = max(value, nextValue())
+    }
+}
+
+private struct ExpenseSheetHeight: PreferenceKey {
     static var defaultValue: CGFloat = 0
     static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) {
         value = max(value, nextValue())
