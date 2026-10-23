@@ -36,13 +36,7 @@ struct TodayView: View {
         let transaction: Transaction?
     }
 
-    private struct DaySnapshot {
-        let date: Date
-        let allowance: Decimal
-        let spent: Decimal
-        let remaining: Decimal
-        let transactions: [Transaction]
-    }
+    private typealias DaySnapshot = BalanceDay
 
     private var plan: MonthPlan? {
         planContaining(displayedDate)
@@ -85,10 +79,10 @@ struct TodayView: View {
                         if let snapshot, snapshot.transactions.isEmpty {
                             emptySpendingState(needsIncomeSetup: plan?.needsIncomeSetup ?? false)
                         } else {
-                            transactionsSection(snapshot?.transactions ?? [])
+                            transactionsSection(snapshot?.transactions ?? [], crossingEntry: snapshot?.crossingEntry)
                         }
                     }
-                    .screenSheet(showsOutline: false)
+                    .screenContent()
                 }
                 .frame(width: geometry.size.width, height: geometry.size.height, alignment: .top)
             }
@@ -158,7 +152,6 @@ struct TodayView: View {
                         pastDate = nil
                     }
                 }
-                .environment(\.colorScheme, .light)
             }
         } trailing: {
             PeriodStepper(previousLabel: "Previous day",
@@ -267,13 +260,12 @@ struct TodayView: View {
     private func heroSection(plan: MonthPlan?, snapshot: DaySnapshot?,
                              maxBreakdownHeight: CGFloat) -> some View {
         let overspent = plan.map { !$0.needsIncomeSetup } == true && isOverspent(snapshot)
-        return ScreenGroundHeader(ground: overspent ? .todayNegative : .today) {
+        return ScreenHeader {
             periodRow
 
             if let plan, plan.needsIncomeSetup {
                 incomeSetup(plan)
                     .padding(.top, AppSpacing.sm)
-                    .environment(\.colorScheme, .light)
             } else {
                 heroAmount(snapshot: snapshot)
                     // Expanding the explanation must not compress the headline.
@@ -317,38 +309,17 @@ struct TodayView: View {
     }
 
     // Compare at display precision so a fractional-cent deficit that shows as
-    // $0.00 never turns the ground red.
+    // $0.00 never shows a negative state.
     private func isOverspent(_ snapshot: DaySnapshot?) -> Bool {
-        guard let snapshot else { return false }
-        return snapshot.remaining.rounded(scale: 2, mode: .bankers) < 0
+        snapshot?.isOver ?? false
     }
 
-    // Says where a deficit goes: it is drawn from the following days, and from
-    // next month when the month ends. Tomorrow assumes nothing else is logged.
     private func overspentCaption(plan: MonthPlan, snapshot: DaySnapshot) -> String {
-        guard isToday else { return "This came out of the days that followed." }
-        let calendar = Calendar.current
-        guard let tomorrow = calendar.date(byAdding: .day, value: 1, to: snapshot.date),
-              calendar.isDate(tomorrow, equalTo: plan.monthStart, toGranularity: .month) else {
-            return "This comes out of next month."
-        }
-        let tomorrowStart = (snapshot.remaining + plan.dailyRate).rounded(scale: 2, mode: .bankers)
-        return "This comes out of the coming days. Tomorrow starts at \(tomorrowStart.formatted(.currency(code: "USD")))."
+        plan.deficitCaption(for: snapshot)
     }
 
     private func balanceBreakdown(_ snapshot: DaySnapshot) -> some View {
-        let overspent = isOverspent(snapshot)
-        return TodayBalanceSheet(date: snapshot.date,
-                                 allowance: snapshot.allowance,
-                                 spent: snapshot.spent,
-                                 remaining: snapshot.remaining,
-                                 entryCount: snapshot.transactions.count,
-                                 secondaryInk: overspent
-                                    ? .leftGroundTodayNegativeTextSecondary
-                                    : .leftGroundTodayTextSecondary,
-                                 rule: overspent
-                                    ? .leftGroundTodayNegativeRule
-                                    : .leftReportButterPerforation)
+        TodayBalanceSheet(day: snapshot)
     }
 
     @ViewBuilder
@@ -362,10 +333,12 @@ struct TodayView: View {
                 // "left" names the number now that there is no screen title;
                 // the hero steps down a size before it would wrap.
                 HStack(alignment: .top, spacing: AppSpacing.xxs) {
-                    // Below zero the ground turns red and the amount stays ink;
-                    // the minus sign keeps it from relying on color alone.
-                    HeroMoneyText(amount: snapshot.remaining, size: heroSize, suffix: "left")
-                        .foregroundStyle(.primary)
+                    // Only the state word takes the negative color.
+                    HeroMoneyText(amount: snapshot.headlineAmount, size: heroSize,
+                                  suffix: snapshot.isOver ? "over" : "left",
+                                  suffixColor: snapshot.isOver ? .leftFeedbackNegative : .leftTextSecondary,
+                                  suffixSizeRatio: 2.0 / 3.0)
+                        .foregroundStyle(Color.leftTextPrimary)
                         .contentTransition(.numericText())
                         .animation(reduceMotion ? nil : .spring(duration: 0.4), value: snapshot.remaining)
                     Image(systemName: "info.circle")
@@ -378,7 +351,7 @@ struct TodayView: View {
                 .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
-            .accessibilityLabel("\(snapshot.remaining.formatted(.currency(code: "USD"))) left\(isToday ? " to spend today" : " on " + snapshot.date.formatted(.dateTime.month(.wide).day()))")
+            .accessibilityLabel("\(snapshot.headlineAmount.formatted(.currency(code: "USD"))) \(snapshot.isOver ? "over" : "left")\(isToday ? (snapshot.isOver ? " today" : " to spend today") : " on " + snapshot.date.formatted(.dateTime.month(.wide).day()))")
             .accessibilityValue(isShowingBalance ? "Expanded" : "Collapsed")
             .accessibilityHint(isShowingBalance
                                ? "Hides the balance breakdown"
@@ -392,25 +365,28 @@ struct TodayView: View {
 
     private func incomeSetup(_ plan: MonthPlan) -> some View {
         let month = plan.monthStart.formatted(.dateTime.month(.wide))
-        return VStack(alignment: .leading, spacing: AppSpacing.md) {
-            Text(isToday ? "Set up \(month)" : "Income wasn’t set")
-                .font(.dmSans(.title, weight: .semibold))
-            Text(isToday
-                 ? "Add this month’s income to see your daily allowance. You can still log spending."
-                 : "There’s no daily allowance for this month. Your logged spending is below.")
-                .font(.dmSans(.subheadline))
-                .foregroundStyle(.secondary)
+        return VStack(alignment: .leading, spacing: AppSpacing.sm) {
+            (Text("$–") + Text(" left").font(.dmSans(size: heroSize * 2 / 3, relativeTo: .largeTitle)))
+                .font(.dmSans(size: heroSize, weight: .semibold, relativeTo: .largeTitle))
+                .foregroundStyle(Color.leftTextSecondary)
                 .fixedSize(horizontal: false, vertical: true)
-            if isToday {
+                .accessibilityLabel("Daily balance unavailable, income incomplete")
+            if Calendar.current.isDate(plan.monthStart, equalTo: .now, toGranularity: .month) {
                 Button(action: onSetUpIncome) {
-                    Text("Set \(month) income")
-                        .font(.dmSans(.subheadline, weight: .semibold))
-                        .foregroundStyle(Color.leftBackground)
-                        .padding(.horizontal, AppSpacing.md)
-                        .frame(minHeight: 44)
-                        .background(Color.primary, in: Capsule())
+                    HStack(spacing: AppSpacing.xs) {
+                        Text("Add \(month) income")
+                        Image(systemName: "chevron.right").font(.system(size: 10, weight: .semibold))
+                    }
+                    .font(.dmSans(.subheadline, weight: .medium))
+                    .padding(.horizontal, AppSpacing.md)
+                    .frame(minHeight: 44)
+                    .background(Color.leftNeutralFill, in: Capsule())
                 }
                 .buttonStyle(.plain)
+            } else {
+                Text("Income wasn’t set for \(month).")
+                    .font(.dmSans(.subheadline))
+                    .foregroundStyle(.secondary)
             }
         }
     }
@@ -513,19 +489,19 @@ struct TodayView: View {
         !animateAddButtonEntrance || reduceMotion
     }
 
-    private func transactionsSection(_ transactions: [Transaction]) -> some View {
+    private func transactionsSection(_ transactions: [Transaction], crossingEntry: Transaction?) -> some View {
         VStack(alignment: .leading, spacing: AppSpacing.sm) {
             Text("Spending")
                 .font(.dmSans(.headline, weight: .semibold))
                 .accessibilityAddTraits(.isHeader)
                 .padding(.horizontal, AppSpacing.xl)
 
-            transactionList(transactions)
+            transactionList(transactions, crossingEntry: crossingEntry)
         }
         .padding(.top, AppSpacing.xl)
     }
 
-    private func transactionList(_ transactions: [Transaction]) -> some View {
+    private func transactionList(_ transactions: [Transaction], crossingEntry: Transaction?) -> some View {
         List {
             ForEach(transactions) { tx in
                 Button {
@@ -536,7 +512,7 @@ struct TodayView: View {
                         activeSpendingSheet = ActiveSpendingSheet(transaction: tx)
                     }
                 } label: {
-                    TransactionRow(transaction: tx)
+                    TransactionRow(transaction: tx, marksZeroCrossing: isShowingBalance && plan?.needsIncomeSetup == false && crossingEntry?.id == tx.id)
                         .padding(.horizontal, AppSpacing.xl)
                 }
                 .buttonStyle(.plain)
@@ -562,42 +538,9 @@ struct TodayView: View {
         .background(Color.leftBackground)
     }
 
-    // Resolve the displayed day's numbers in one pass. Accessing the SwiftData
-    // relationship can fault its contents into memory, so keeping all of the
-    // transaction-derived UI together avoids repeating that work per render.
+    // Use the same model snapshot for the headline, explanation, and list.
     private func makeSnapshot(for plan: MonthPlan) -> DaySnapshot {
-        let calendar = Calendar.current
-        let rate = plan.dailyRate
-        let asOf = balanceDate
-        let startOfDisplayedDay = calendar.startOfDay(for: asOf)
-
-        var spentAsOfBalance: Decimal = 0
-        var spentOnDisplayedDay: Decimal = 0
-        var displayedTransactions: [Transaction] = []
-
-        for transaction in plan.transactions {
-            if transaction.date <= asOf {
-                spentAsOfBalance += transaction.amount
-                if transaction.date >= startOfDisplayedDay {
-                    spentOnDisplayedDay += transaction.amount
-                }
-            }
-            if calendar.isDate(transaction.date, inSameDayAs: asOf) {
-                displayedTransactions.append(transaction)
-            }
-        }
-
-        displayedTransactions.sort { $0.date > $1.date }
-
-        return DaySnapshot(
-            date: asOf,
-            allowance: plan.earnedDays(through: asOf, calendar: calendar) > 0 ? rate : 0,
-            spent: spentOnDisplayedDay,
-            remaining: plan.remainingToday(on: asOf,
-                                           spentAsOf: spentAsOfBalance,
-                                           calendar: calendar),
-            transactions: displayedTransactions
-        )
+        plan.balanceDay(on: balanceDate)
     }
 }
 

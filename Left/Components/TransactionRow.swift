@@ -5,6 +5,7 @@ import SwiftUI
 /// beside the title.
 struct TransactionRow: View {
     let transaction: Transaction
+    var marksZeroCrossing = false
     @ScaledMetric(relativeTo: .body) private var iconSlot: CGFloat = 28
 
     var body: some View {
@@ -14,10 +15,17 @@ struct TransactionRow: View {
                 .foregroundStyle(.primary)
                 .frame(width: iconSlot)
         } trailing: {
-            RowAmount(spending: transaction.amount)
+            HStack(spacing: AppSpacing.xs) {
+                if marksZeroCrossing {
+                    Circle().fill(Color.leftFeedbackNegative)
+                        .frame(width: 6, height: 6)
+                        .accessibilityHidden(true)
+                }
+                RowAmount(spending: transaction.amount)
+            }
         }
         .accessibilityElement(children: .ignore)
-        .accessibilityLabel(accessibilityLabel)
+        .accessibilityLabel(accessibilityLabel + (marksZeroCrossing ? ", took the balance past zero" : ""))
     }
 
     private var title: String { transaction.displayTitle }

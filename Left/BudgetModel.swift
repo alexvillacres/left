@@ -685,6 +685,52 @@ extension MonthPlan {
         return earned - spentAsOf + carriedIn
     }
 
+    /// Resolve the displayed day once, including its explanation and list order.
+    func balanceDay(on date: Date, calendar: Calendar = .current) -> BalanceDay {
+        let start = calendar.startOfDay(for: date)
+        let entries = transactions.filter {
+            $0.date >= start && $0.date <= date
+        }.sorted {
+            if $0.date != $1.date { return $0.date > $1.date }
+            return $0.id.uuidString < $1.id.uuidString
+        }
+        let spent = entries.reduce(Decimal.zero) { $0 + $1.amount }
+        let remaining = remainingToday(on: date, calendar: calendar)
+        let allowance = earnedDays(through: date, calendar: calendar) > 0 ? dailyRate : 0
+        let opening = remaining + spent
+        var crossing: Transaction?
+        var beforeCrossing: Decimal = 0
+        var running = opening
+        if opening.rounded(scale: 2, mode: .bankers) >= 0 {
+            for entry in entries {
+                let before = running
+                running -= entry.amount
+                if running.rounded(scale: 2, mode: .bankers) < 0 {
+                    crossing = entry
+                    beforeCrossing = before.rounded(scale: 2, mode: .bankers)
+                    break
+                }
+            }
+        }
+        return BalanceDay(date: date, allowance: allowance, spent: spent,
+                          remaining: remaining, transactions: entries,
+                          crossingEntry: crossing, beforeCrossing: beforeCrossing)
+    }
+
+    func deficitCaption(for day: BalanceDay, calendar: Calendar = .current,
+                        today: Date = .now) -> String {
+        guard calendar.isDate(day.date, inSameDayAs: today) else {
+            return "This came out of the days that followed."
+        }
+        guard let tomorrow = calendar.date(byAdding: .day, value: 1, to: day.date) else { return "" }
+        guard calendar.isDate(tomorrow, equalTo: monthStart, toGranularity: .month) else {
+            return "This comes out of \(tomorrow.formatted(.dateTime.month(.wide)))."
+        }
+        let balance = (day.remaining + dailyRate).rounded(scale: 2, mode: .bankers)
+        let amount = abs(balance).formatted(.currency(code: "USD"))
+        return "Tomorrow starts at \(amount)\(balance < 0 ? " over" : "")."
+    }
+
     // Shown as the "+$27 rolled over" chip: how far ahead (or behind)
     // you were entering today.
     func carryover(into date: Date = .now, calendar: Calendar = .current) -> Decimal {
@@ -799,5 +845,30 @@ extension Calendar {
     func leftMonthStart(for date: Date) -> Date {
         let components = dateComponents([.year, .month], from: date)
         return startOfDay(for: self.date(from: components)!)
+    }
+}
+
+/// Currency-precision presentation values; no additional persisted balance.
+struct BalanceDay {
+    let date: Date
+    let allowance: Decimal
+    let spent: Decimal
+    let remaining: Decimal
+    let transactions: [Transaction]
+    let crossingEntry: Transaction?
+    let beforeCrossing: Decimal
+
+    var displayedAllowance: Decimal { allowance.rounded(scale: 2, mode: .bankers) }
+    var displayedSpent: Decimal { spent.rounded(scale: 2, mode: .bankers) }
+    var displayedRemaining: Decimal { remaining.rounded(scale: 2, mode: .bankers) }
+    var isOver: Bool { displayedRemaining < 0 }
+    var headlineAmount: Decimal { abs(displayedRemaining) }
+    var carriedForward: Decimal {
+        displayedRemaining - displayedAllowance + displayedSpent
+    }
+    var explanation: String {
+        guard isOver else { return "From your plan and what you’ve logged." }
+        guard let crossingEntry else { return "Earlier days carried this balance past zero." }
+        return "\(crossingEntry.displayTitle) took you past zero. You had \(beforeCrossing.formatted(.currency(code: "USD"))) left before it."
     }
 }

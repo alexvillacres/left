@@ -1,14 +1,6 @@
 import SwiftUI
 
-// Shared chrome for Today, Activity, Plan, and Settings. The point is
-// continuity: every screen opens with a title row and, where the screen shows
-// a period, a period row — same gutter, same row height, same type. Switching
-// tabs then moves the content inside the frame instead of rebuilding the frame.
-//
-// The two rows are separate views rather than one fixed stack because the
-// screens order them differently: Today puts its balance between the title and
-// the period (the pill labels the day's spending list below it), while Activity
-// and Plan pair title and period together above their totals.
+// Shared period navigation and headline chrome for the main screens.
 enum ScreenHeaderMetrics {
     static let rowHeight: CGFloat = 44
     // Every icon in the header is one size, so icons sit on the same optical
@@ -23,53 +15,11 @@ enum ScreenHeaderMetrics {
     static let periodSize: CGFloat = 16
 }
 
-// MARK: - Ground
+// MARK: - Screen foundation
 
-/// The light color a main tab opens on (DECISIONS 030). It keeps its light
-/// value in dark mode, so everything drawn on it uses fixed ground ink.
-struct ScreenGround {
-    let fill: Color
-    let controlFill: Color
-    let secondaryInk: Color
-
-    static let today = ScreenGround(fill: .leftGroundToday,
-                                    controlFill: .leftGroundTodayFill,
-                                    secondaryInk: .leftGroundTodayTextSecondary)
-    // Replaces Today's butter while the balance is below zero.
-    static let todayNegative = ScreenGround(fill: .leftGroundTodayNegative,
-                                            controlFill: .leftGroundTodayNegativeFill,
-                                            secondaryInk: .leftGroundTodayNegativeTextSecondary)
-    static let activity = ScreenGround(fill: .leftGroundActivity,
-                                       controlFill: .leftGroundActivityFill,
-                                       secondaryInk: .leftGroundActivityTextSecondary)
-    static let plan = ScreenGround(fill: .leftGroundPlan,
-                                   controlFill: .leftGroundPlanFill,
-                                   secondaryInk: .leftGroundPlanTextSecondary)
-    static let income = ScreenGround(fill: .leftGroundIncome,
-                                     controlFill: .leftGroundIncomeFill,
-                                     secondaryInk: .leftGroundIncomeTextSecondary)
-    static let expenses = ScreenGround(fill: .leftGroundExpenses,
-                                       controlFill: .leftGroundExpensesFill,
-                                       secondaryInk: .leftGroundExpensesTextSecondary)
-    static let savings = ScreenGround(fill: .leftGroundSavings,
-                                      controlFill: .leftGroundSavingsFill,
-                                      secondaryInk: .leftGroundSavingsTextSecondary)
-}
-
-enum ScreenGroundMetrics {
-    static let cornerRadius: CGFloat = 16
-    static let sheetCornerRadius: CGFloat = 34
-    // How far the content sheet rises over the bottom of the ground.
-    static let sheetOverlap: CGFloat = 24
-}
-
-/// The period row and headline number, set on the tab's ground. `.primary`
-/// and `.secondary` resolve to the ground's fixed ink in both appearances.
-/// Anything on the ground that uses an appearance-dependent color, such as a
-/// state color, must also be resolved with `.environment(\.colorScheme, .light)`;
-/// menus are left alone so they still follow the system.
-struct ScreenGroundHeader<Content: View>: View {
-    let ground: ScreenGround
+/// A neutral, adaptive header with one headline and optional exception content.
+struct ScreenHeader<Content: View>: View {
+    @Environment(\.displayScale) private var displayScale
     @ViewBuilder var content: Content
 
     var body: some View {
@@ -77,42 +27,23 @@ struct ScreenGroundHeader<Content: View>: View {
             content
         }
         .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(.horizontal, AppSpacing.md)
+        .padding(.horizontal, AppSpacing.xl)
         .padding(.top, AppSpacing.xs)
-        .padding(.bottom, AppSpacing.lg + ScreenGroundMetrics.sheetOverlap)
-        .foregroundStyle(Color.leftGroundTextPrimary, ground.secondaryInk, ground.secondaryInk)
-        .environment(\.periodPillFill, ground.controlFill)
-        .background(
-            RoundedRectangle(cornerRadius: ScreenGroundMetrics.cornerRadius, style: .continuous)
-                .fill(ground.fill)
-        )
-        .padding(.horizontal, AppSpacing.md)
-        .padding(.top, AppSpacing.xs)
+        .padding(.bottom, AppSpacing.xl)
+        .foregroundStyle(Color.leftTextPrimary, Color.leftTextSecondary, Color.leftTextSecondary)
+        .environment(\.periodPillFill, Color.leftNeutralFill)
+        .background(Color.leftBackground)
+        .overlay(alignment: .bottom) {
+            Color.leftDivider.frame(height: 1 / displayScale)
+        }
     }
 }
 
 extension View {
-    /// The rounded sheet that rises over a ground header and holds the
-    /// screen's content. Today uses a soft shadow; other screens retain
-    /// their hairline edge.
-    func screenSheet(showsOutline: Bool = true) -> some View {
-        let shape = UnevenRoundedRectangle(topLeadingRadius: ScreenGroundMetrics.sheetCornerRadius,
-                                           topTrailingRadius: ScreenGroundMetrics.sheetCornerRadius,
-                                           style: .continuous)
-        return self
-            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
-            .clipShape(shape)
-            .background(
-                shape.fill(Color.leftBackground)
-                    .shadow(color: .black.opacity(showsOutline ? 0 : 0.08),
-                            radius: 8, x: 0, y: -2)
-            )
-            .overlay {
-                if showsOutline {
-                    shape.strokeBorder(Color.leftTabBarBorder, lineWidth: 1)
-                }
-            }
-            .padding(.top, -ScreenGroundMetrics.sheetOverlap)
+    /// Flat content continues on the same neutral surface below the header.
+    func screenContent() -> some View {
+        frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+            .background(Color.leftBackground)
     }
 }
 

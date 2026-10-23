@@ -9,25 +9,25 @@ import UIKit
 //            action color, Plan hues each mean one part of the monthly plan,
 //            Feedback means near-limit/behind, Surfaces and Chrome are
 //            structural.
-//   Grounds  per-screen and per-ticket colors built from the ramp (029, 030).
+//   Grounds  per-ticket colors built from the ramp (029).
 //
 // Every exposed color resolves per appearance.
 private enum Ramp {
-    // Green-gray neutral ramp. Light mode reads from the top, dark mode from
+    // Achromatic neutral ramp. Light mode reads from the top, dark mode from
     // the bottom; 700, 850, and 950 exist so dark surfaces can step closely.
-    static let neutral0: UInt = 0xFBFDF7
-    static let neutral50: UInt = 0xF5F7F1
-    static let neutral100: UInt = 0xE8EAE4
-    static let neutral200: UInt = 0xD4D6D0
-    static let neutral300: UInt = 0xC5C7C1
-    static let neutral400: UInt = 0xA7A9A3
-    static let neutral500: UInt = 0x858782
-    static let neutral600: UInt = 0x686A65
-    static let neutral700: UInt = 0x515350
-    static let neutral800: UInt = 0x3A3C37
-    static let neutral850: UInt = 0x2A2C27
-    static let neutral900: UInt = 0x1C1E19
-    static let neutral950: UInt = 0x121410
+    static let neutral0: UInt = 0xFFFFFF
+    static let neutral50: UInt = 0xF3F3F3
+    static let neutral100: UInt = 0xE4E4E4
+    static let neutral200: UInt = 0xD4D4D4
+    static let neutral300: UInt = 0xC5C5C5
+    static let neutral400: UInt = 0xA7A7A7
+    static let neutral500: UInt = 0x858585
+    static let neutral600: UInt = 0x686868
+    static let neutral700: UInt = 0x515151
+    static let neutral800: UInt = 0x3A3A3A
+    static let neutral850: UInt = 0x2A2A2A
+    static let neutral900: UInt = 0x1C1C1C
+    static let neutral950: UInt = 0x121212
 
     // Hue steps share one scale: 100 is a pale tint for a ground, 200 is the
     // solid control fill on that tint, 500 is the brand mark, 600 is a darker
@@ -62,8 +62,10 @@ extension Color {
     // MARK: - Surfaces
 
     // Opaque screens and sheets paint these instead of the system backgrounds.
-    static let leftBackground = Color.dynamic(light: Ramp.neutral0, dark: Ramp.neutral950)
-    static let leftSurface = Color.dynamic(light: Ramp.neutral50, dark: Ramp.neutral900)
+    static let leftBackground = Color.dynamic(light: Ramp.neutral50, dark: Ramp.neutral950)
+    static let leftSurface = Color.dynamic(light: Ramp.neutral0, dark: Ramp.neutral900)
+    static let leftTextPrimary = Color.dynamic(light: Ramp.neutral950, dark: Ramp.neutral0)
+    static let leftTextSecondary = Color.dynamic(light: 0x6E6E73, dark: 0xAAAAAF)
     // Spending entry is always presented dark, in both appearances.
     static let leftEntryBackground = Color.dynamic(light: Ramp.neutral900, dark: Ramp.neutral900)
 
@@ -145,52 +147,6 @@ extension Color {
     // The one intentionally translucent color: its job is to let Today show
     // through behind the ticket.
     static let leftReportScrim = Color.black.opacity(0.4)
-
-    // MARK: - Screen grounds (DECISIONS 030)
-
-    // Each main tab opens on one light ground that stays light in dark mode,
-    // so the tab reads the same at night. Like the report tickets, every role
-    // resolves to the same value in both appearances. Secondary ink meets
-    // 4.5:1 on both the ground and its control fill. A ground is the 100 step
-    // of its hue, its fill is the 200, and secondary ink is the 700.
-    static let leftGroundTextPrimary = Color.dynamic(light: Ramp.neutral950, dark: Ramp.neutral950)
-
-    static let leftGroundToday = Color.dynamic(light: Ramp.butter100, dark: Ramp.butter100)
-    static let leftGroundTodayFill = Color.dynamic(light: Ramp.butter200, dark: Ramp.butter200)
-    static let leftGroundTodayTextSecondary = Color.dynamic(light: Ramp.butter700, dark: Ramp.butter700)
-
-    // Today's ground below zero. The ground carries the state so the headline
-    // can stay ink; red type on butter read poorly. Secondary ink meets 4.5:1
-    // on the ground and its fill.
-    static let leftGroundTodayNegative = Color.dynamic(light: 0xF7DEDD, dark: 0xF7DEDD)
-    static let leftGroundTodayNegativeFill = Color.dynamic(light: 0xEFC8C6, dark: 0xEFC8C6)
-    static let leftGroundTodayNegativeTextSecondary = Color.dynamic(light: 0x6E3432, dark: 0x6E3432)
-    static let leftGroundTodayNegativeRule = Color.dynamic(light: 0xDDA9A7, dark: 0xDDA9A7)
-
-    static let leftGroundActivity = Color.dynamic(light: Ramp.tan100, dark: Ramp.tan100)
-    static let leftGroundActivityFill = Color.dynamic(light: Ramp.tan200, dark: Ramp.tan200)
-    static let leftGroundActivityTextSecondary = Color.dynamic(light: Ramp.tan700, dark: Ramp.tan700)
-
-    // Plan's ground is a pale spendable, since its headline is the spendable
-    // amount (027).
-    static let leftGroundPlan = Color.dynamic(light: Ramp.sage100, dark: Ramp.sage100)
-    static let leftGroundPlanFill = Color.dynamic(light: Ramp.sage200, dark: Ramp.sage200)
-    static let leftGroundPlanTextSecondary = Color.dynamic(light: Ramp.sage700, dark: Ramp.sage700)
-
-    // Plan detail screens (Income, Expenses, Savings) open on the tint of the
-    // plan part they edit. Income is the neutral whole, so it takes the neutral
-    // ramp rather than a hue.
-    static let leftGroundIncome = Color.dynamic(light: Ramp.neutral100, dark: Ramp.neutral100)
-    static let leftGroundIncomeFill = Color.dynamic(light: Ramp.neutral200, dark: Ramp.neutral200)
-    static let leftGroundIncomeTextSecondary = Color.dynamic(light: Ramp.neutral700, dark: Ramp.neutral700)
-
-    static let leftGroundExpenses = Color.dynamic(light: Ramp.orange100, dark: Ramp.orange100)
-    static let leftGroundExpensesFill = Color.dynamic(light: Ramp.orange200, dark: Ramp.orange200)
-    static let leftGroundExpensesTextSecondary = Color.dynamic(light: Ramp.orange700, dark: Ramp.orange700)
-
-    static let leftGroundSavings = Color.dynamic(light: Ramp.periwinkle100, dark: Ramp.periwinkle100)
-    static let leftGroundSavingsFill = Color.dynamic(light: Ramp.periwinkle200, dark: Ramp.periwinkle200)
-    static let leftGroundSavingsTextSecondary = Color.dynamic(light: Ramp.periwinkle700, dark: Ramp.periwinkle700)
 
     // MARK: - Chrome (structural neutrals)
 

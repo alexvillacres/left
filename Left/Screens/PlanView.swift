@@ -151,7 +151,7 @@ struct PlanView: View {
                 .padding(.top, AppSpacing.xl)
                 .padding(.bottom, AppSpacing.xl)
             }
-            .screenSheet()
+            .screenContent()
         }
         .navigationDestination(isPresented: $isSettingsPresented) {
             SettingsView(onResetDemo: onResetDemo)
@@ -164,7 +164,7 @@ struct PlanView: View {
     }
 
     private var planHeader: some View {
-        ScreenGroundHeader(ground: .plan) {
+        ScreenHeader {
             PeriodRow {
                 PeriodPill(
                     label: plan.monthStart.formatted(.dateTime.month(.wide).year()),
@@ -341,7 +341,7 @@ struct PlanView: View {
     // MARK: - Editors
 
     private var incomeEditor: some View {
-        editorScreen(ground: .income, label: "income", total: plan.incomeTotal, note: incomeFooter) {
+        editorScreen(label: "income", total: plan.incomeTotal, note: incomeFooter) {
             if plan.incomeSources.isEmpty, plan.monthlyIncome > 0 {
                 historicalRow("Income", amount: plan.monthlyIncome, note: monthName)
             }
@@ -374,7 +374,7 @@ struct PlanView: View {
     }
 
     private var fixedExpensesEditor: some View {
-        editorScreen(ground: .expenses, label: "expenses", total: plan.fixedTotal, note: nil) {
+        editorScreen(label: "expenses", total: plan.fixedTotal, note: nil) {
             ForEach(fixedExpenseGroups, id: \.cadence) { group in
                 VStack(alignment: .leading, spacing: 0) {
                     expenseGroupHeader(group.cadence, expenses: group.expenses)
@@ -402,7 +402,7 @@ struct PlanView: View {
     }
 
     private var savingsEditor: some View {
-        editorScreen(ground: .savings, label: "savings", total: plan.savingsAmount,
+        editorScreen(label: "savings", total: plan.savingsAmount,
                      note: "The monthly amount comes out of what you can spend. Savings you set aside are not spending.") {
             ForEach(sortedSavingsGoals) { goal in
                 if canEditPlan {
@@ -426,17 +426,15 @@ struct PlanView: View {
         }
     }
 
-    // The ground names the plan part being edited; the sheet beneath holds its
-    // rows, with an optional note pinned to the bottom.
+    // Detail screens share the neutral header and content foundation.
     private func editorScreen<Content: View>(
-        ground: ScreenGround,
         label: String,
         total: Decimal,
         note: String?,
         @ViewBuilder content: () -> Content
     ) -> some View {
         VStack(spacing: 0) {
-            ScreenGroundHeader(ground: ground) {
+            ScreenHeader {
                 PeriodRow {
                     PlanBackPill()
                 } trailing: {
@@ -476,7 +474,7 @@ struct PlanView: View {
                         .padding(.bottom, AppSpacing.lg)
                 }
             }
-            .screenSheet()
+            .screenContent()
         }
         .background(Color.leftBackground.ignoresSafeArea())
         .navigationTitle("")

@@ -32,6 +32,8 @@ struct HeroMoneyText: View {
     var size: CGFloat = 56
     var suffix: String? = nil
     var showsCents = true
+    var suffixColor: Color? = nil
+    var suffixSizeRatio: CGFloat? = nil
 
     private static let scales: [CGFloat] = [1, 0.85, 0.7, 0.55]
 
@@ -42,7 +44,7 @@ struct HeroMoneyText: View {
             }
             // The last candidate must accept the available width, even for
             // accessibility text sizes or unusually long amounts.
-            label
+            label(pointSize: size * Self.scales.last!)
                 .font(.dmSans(size: size * Self.scales.last!, weight: .semibold, relativeTo: .largeTitle))
                 .monospacedDigit()
                 .fixedSize(horizontal: false, vertical: true)
@@ -50,7 +52,7 @@ struct HeroMoneyText: View {
     }
 
     private func styledText(pointSize: CGFloat) -> some View {
-        label
+        label(pointSize: pointSize)
             .font(.dmSans(size: pointSize, weight: .semibold, relativeTo: .largeTitle))
             .tracking(BudgetTypography.tracking(for: pointSize))
             .monospacedDigit()
@@ -58,13 +60,18 @@ struct HeroMoneyText: View {
             .fixedSize()
     }
 
-    private var label: Text {
+    private func label(pointSize: CGFloat) -> Text {
         let format = showsCents
             ? Decimal.FormatStyle.Currency(code: "USD")
             : Decimal.FormatStyle.Currency(code: "USD").precision(.fractionLength(0))
         guard let suffix else {
             return Text(amount, format: format)
         }
-        return Text("\(amount, format: format) \(suffix)")
+        let suffixText = Text(" \(suffix)").foregroundColor(suffixColor)
+        if let suffixSizeRatio {
+            return Text(amount, format: format)
+                + suffixText.font(.dmSans(size: pointSize * suffixSizeRatio, relativeTo: .largeTitle))
+        }
+        return Text(amount, format: format) + suffixText
     }
 }

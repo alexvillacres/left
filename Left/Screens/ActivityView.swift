@@ -42,7 +42,7 @@ struct ActivityView: View {
             let days = plan.map(spendingDays) ?? []
 
             VStack(alignment: .leading, spacing: 0) {
-                ScreenGroundHeader(ground: .activity) {
+                ScreenHeader {
                     header(plan)
 
                     if plan != nil {
@@ -67,7 +67,7 @@ struct ActivityView: View {
                             .frame(maxWidth: .infinity, maxHeight: .infinity)
                     }
                 }
-                .screenSheet()
+                .screenContent()
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
             .background(Color.leftBackground.ignoresSafeArea())
