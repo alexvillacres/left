@@ -208,7 +208,7 @@ bottom inset. Any new scrolling screen must consume it.
 
 ### 011. `ViewThatFits` over `minimumScaleFactor` for the hero number
 **Date:** 2026-07-15 · **Status:** Active
-**Where:** `Left/MoneyText.swift`
+**Where:** `Left/Components/UI/MoneyText.swift`
 
 The hero amount steps down through fixed sizes.
 
@@ -218,7 +218,7 @@ matters for the count-down animation.
 
 ### 012. The "+" glyph is the one thing that does not scale with Dynamic Type
 **Date:** 2026-07-31 · **Status:** Amended by 026
-**Where:** `Left/Screens/TodayView.swift`, [PRODUCT.md](PRODUCT.md#vocabulary)
+**Where:** `Left/Screens/Today/TodayView.swift`, [PRODUCT.md](PRODUCT.md#vocabulary)
 
 Fixed `.system(size: 24, weight: .semibold)` rather than the app's scaling
 `.dmSans`.
@@ -391,8 +391,8 @@ must not rely on built-in glass navigation chrome for their primary surface.
 
 ### 021. Organize around Today, Activity, and Plan
 **Date:** 2026-09-19 · **Status:** Active
-**Where:** `Left/Screens/TodayView.swift`, `Left/Screens/ActivityView.swift`,
-`Left/Screens/PlanView.swift`, `Left/Screens/TodayBalanceSheet.swift`
+**Where:** `Left/Screens/Today/TodayView.swift`, `Left/Screens/ActivityView.swift`,
+`Left/Screens/PlanView.swift`, `Left/Screens/Today/TodayBalanceBreakdown.swift`
 
 Today answers what is available, Activity records what happened, and Plan
 explains the allowance's basis. The month calendar and Today meter were removed
@@ -428,7 +428,7 @@ This replaces 003's per-source affirmation rationale.
 
 ### 023. Catch up with one additional spending total
 **Date:** 2026-09-19 · **Status:** Active
-**Where:** `Left/Screens/TodayView.swift`, `Left/Components/CatchUpCard.swift`, `Left/Screens/CatchUpView.swift`,
+**Where:** `Left/Screens/Today/TodayView.swift`, `Left/Components/CatchUpCard.swift`, `Left/Screens/CatchUpView.swift`,
 `Left/Screens/ActivityView.swift`, `Left/BudgetModel.swift`, `Left/DataTransfer.swift`
 
 Offer catch-up from Today, with a prompt after three uncovered days. If the
@@ -531,7 +531,7 @@ describes the direction.
 
 ### 028. The tab bar navigates; + logs spending on Today
 **Date:** 2026-09-22 · **Status:** Active
-**Where:** `Left/Components/AppTabBar.swift`, `Left/Screens/TodayView.swift`,
+**Where:** `Left/Components/Navigation/AppTabBar.swift`, `Left/Screens/Today/TodayView.swift`,
 `Left/LeftApp.swift`
 
 The floating capsule became a full-width, opaque bar with a hairline top edge.
@@ -576,8 +576,8 @@ so an expressive ground must never be chosen to imply a good or bad week.
 
 ### 030. Each main tab opens on a light ground that stays light in dark mode
 **Date:** 2026-10-01 · **Status:** Superseded by 036
-**Where:** `Left/Components/ScreenHeader.swift`, `Left/Palette.swift`,
-`Left/Screens/TodayView.swift`, `Left/Screens/ActivityView.swift`,
+**Where:** `Left/Components/Layout/ScreenHeader.swift`, `Left/Palette.swift`,
+`Left/Screens/Today/TodayView.swift`, `Left/Screens/ActivityView.swift`,
 `Left/Screens/PlanView.swift`
 
 Today, Activity, and Plan each open on a solid ground block holding the period
@@ -634,8 +634,8 @@ catch-up totals separately, since they are stored as `.other`.
 
 ### 032. Today's ground turns red below zero
 **Date:** 2026-10-15 · **Status:** Superseded by 037 · **Amends:** 030
-**Where:** `Left/Screens/TodayView.swift`, `Left/Screens/TodayBalanceSheet.swift`,
-`Left/Components/ScreenHeader.swift`, `Left/Palette.swift`
+**Where:** `Left/Screens/Today/TodayView.swift`, `Left/Screens/Today/TodayBalanceBreakdown.swift`,
+`Left/Components/Layout/ScreenHeader.swift`, `Left/Palette.swift`
 
 When the displayed balance is below zero, Today's butter ground becomes a pale
 negative red and the headline returns to ink, keeping its minus sign. One
@@ -713,7 +713,7 @@ end months. An explicitly entered zero is still a valid amount.
 
 ### 035. The weekly report is held out of the first release
 **Date:** 2026-10-23 · **Status:** Deferred
-**Where:** `Left/Screens/WeeklyReportView.swift`, `Left/Screens/TodayView.swift`
+**Where:** `Left/Screens/WeeklyReportView.swift`, `Left/Screens/Today/TodayView.swift`
 
 The weekly report ticket will not ship in the first App Store release.
 
@@ -727,8 +727,8 @@ PRODUCT.md and APP_STORE_CHECKLIST.md at that time.
 
 ### 036. Screens are greyscale; color is kept for plan meaning and state
 **Date:** 2026-10-23 · **Status:** Active *(not yet implemented)* · **Supersedes:** 030 · **Amends:** 032
-**Where:** `Left/Components/ScreenHeader.swift`, `Left/Palette.swift`,
-`Left/Screens/TodayView.swift`, `Left/Screens/ActivityView.swift`,
+**Where:** `Left/Components/Layout/ScreenHeader.swift`, `Left/Palette.swift`,
+`Left/Screens/Today/TodayView.swift`, `Left/Screens/ActivityView.swift`,
 `Left/Screens/PlanView.swift`
 
 Today, Activity, and Plan open on the same neutral grey ground. Each has the
@@ -753,7 +753,7 @@ behavior should be decided when the grounds are removed. Paper designs: the
 
 ### 037. Below zero, Today says "over"
 **Date:** 2026-10-23 · **Status:** Active *(not yet implemented)* · **Supersedes:** 032 · **Amends:** 036
-**Where:** `Left/Screens/TodayView.swift`, `Left/Screens/TodayBalanceSheet.swift`,
+**Where:** `Left/Screens/Today/TodayView.swift`, `Left/Screens/Today/TodayBalanceBreakdown.swift`,
 `Left/BudgetModel.swift`
 
 When the displayed balance is below zero, Today's headline shows the amount
@@ -803,3 +803,25 @@ backup support so existing stores and backups remain compatible.
 **Why:** Catch-up is being sunset for now while Today is refined. Removing its
 active flow does not require deleting or reinterpreting historical spending.
 
+
+### 039. Today's header reserves one line for exceptions
+**Date:** 2026-10-23 · **Status:** Active · **Amends:** 036, 037
+**Where:** `Left/Screens/Today/TodayView.swift` — `headlineSlot`
+
+Today's header keeps the same height whether the day is normal, over, or
+waiting on income. It reserves room for the headline and one line beneath it:
+the "over" caption, or the "Add November income" pill at its 44-point touch
+height. The headline and that line are centered as a group inside the room.
+On a normal day the spare space splits above and below the number.
+
+**Why:** Showing the caption only when the day is over pushed the spending
+list down by a line each time the balance crossed zero and each time the user
+stepped between an over day and a normal one. A caption on every day would
+have avoided the shift but brought back the everyday subtext that 036 removed.
+Centering keeps the reserved room from reading as an empty line.
+
+**Constrains:** Reserve the room with hidden text in the real fonts, so it
+scales with Dynamic Type. Content that needs more room, such as a caption
+wrapping at accessibility sizes, may grow the header; do not clip it.
+Expanding the balance breakdown still moves the list, because the user asked
+for it. Paper design: "Today header · v2 reserved slot".

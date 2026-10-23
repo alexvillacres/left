@@ -108,10 +108,10 @@ extension Color {
     static let leftHandle = Color.dynamic(light: Ramp.neutral200, dark: Ramp.neutral700)
     static let leftScrim = Color.black.opacity(0.2)
 
-    // The bar is opaque, not a material, and separates from content on a
-    // hairline. Selection is carried by icon color alone.
-    static let leftTabBarSurface = Color.dynamic(light: Ramp.neutral0, dark: Ramp.neutral900)
-    static let leftTabBarBorder = Color.dynamic(light: Ramp.neutral100, dark: Ramp.neutral850)
+    // The bar shares the screen and sheet background and standard divider color.
+    // Selection is carried by icon color alone.
+    static let leftTabBarSurface = leftBackground
+    static let leftTabBarBorder = leftDivider
     static let leftTabInactive = Color.dynamic(light: Ramp.neutral400, dark: Ramp.neutral600)
 
     // MARK: - Resolution

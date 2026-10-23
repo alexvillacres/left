@@ -25,7 +25,7 @@ enum AppTab: String, CaseIterable, Identifiable {
     }
 }
 
-// A full-width bar under the screen, separated from content by a hairline.
+// A full-width bar under the screen, separated from content by a 1-point divider.
 // It holds navigation only: the add-spending action belongs to Today.
 struct AppTabBar: View {
     @Binding var selection: AppTab
@@ -51,7 +51,7 @@ struct AppTabBar: View {
         .overlay(alignment: .top) {
             Rectangle()
                 .fill(Color.leftTabBarBorder)
-                .frame(height: 0.5)
+                .frame(height: 1)
         }
         .accessibilityElement(children: .contain)
     }

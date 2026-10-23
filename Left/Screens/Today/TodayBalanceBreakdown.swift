@@ -1,7 +1,7 @@
 import SwiftUI
 
 /// The expanded, inline explanation beneath Today's balance.
-struct TodayBalanceSheet: View {
+struct TodayBalanceBreakdown: View {
     let day: BalanceDay
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 

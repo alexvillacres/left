@@ -30,6 +30,7 @@ struct MoneyText: View {
 struct HeroMoneyText: View {
     let amount: Decimal
     var size: CGFloat = 56
+    var weight: Font.Weight = .semibold
     var suffix: String? = nil
     var showsCents = true
     var suffixColor: Color? = nil
@@ -45,7 +46,7 @@ struct HeroMoneyText: View {
             // The last candidate must accept the available width, even for
             // accessibility text sizes or unusually long amounts.
             label(pointSize: size * Self.scales.last!)
-                .font(.dmSans(size: size * Self.scales.last!, weight: .semibold, relativeTo: .largeTitle))
+                .font(.dmSans(size: size * Self.scales.last!, weight: weight, relativeTo: .largeTitle))
                 .monospacedDigit()
                 .fixedSize(horizontal: false, vertical: true)
         }
@@ -53,7 +54,7 @@ struct HeroMoneyText: View {
 
     private func styledText(pointSize: CGFloat) -> some View {
         label(pointSize: pointSize)
-            .font(.dmSans(size: pointSize, weight: .semibold, relativeTo: .largeTitle))
+            .font(.dmSans(size: pointSize, weight: weight, relativeTo: .largeTitle))
             .tracking(BudgetTypography.tracking(for: pointSize))
             .monospacedDigit()
             .lineLimit(1)

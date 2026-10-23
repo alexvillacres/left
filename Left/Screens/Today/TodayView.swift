@@ -63,7 +63,7 @@ struct TodayView: View {
                                 maxBreakdownHeight: geometry.size.height * 0.45)
                     VStack(spacing: 0) {
                         if let snapshot, snapshot.transactions.isEmpty {
-                            emptySpendingState(needsIncomeSetup: plan?.needsIncomeSetup ?? false)
+                            TodayEmptyState(isToday: isToday, needsIncomeSetup: plan?.needsIncomeSetup ?? false)
                         } else {
                             transactionsSection(snapshot?.transactions ?? [], crossingEntry: snapshot?.crossingEntry)
                         }
@@ -236,26 +236,33 @@ struct TodayView: View {
     private func heroSection(plan: MonthPlan?, snapshot: DaySnapshot?,
                              maxBreakdownHeight: CGFloat) -> some View {
         let overspent = plan.map { !$0.needsIncomeSetup } == true && isOverspent(snapshot)
+        let needsIncome = plan?.needsIncomeSetup == true
         return ScreenHeader {
             periodRow
 
-            if let plan, plan.needsIncomeSetup {
-                incomeSetup(plan)
-                    .padding(.top, AppSpacing.sm)
-            } else {
-                heroAmount(snapshot: snapshot)
-                    // Expanding the explanation must not compress the headline.
-                    .fixedSize(horizontal: false, vertical: true)
-                    .padding(.top, AppSpacing.xxl)
+            headlineSlot {
+                if let plan, needsIncome {
+                    incomeSetup(plan)
+                } else {
+                    VStack(spacing: AppSpacing.xxs) {
+                        heroAmount(snapshot: snapshot)
+                            // Expanding the explanation must not compress the headline.
+                            .fixedSize(horizontal: false, vertical: true)
 
-                if overspent, let plan, let snapshot {
-                    Text(overspentCaption(plan: plan, snapshot: snapshot))
-                        .font(.dmSans(.subheadline, weight: .medium))
-                        .foregroundStyle(.secondary)
-                        .fixedSize(horizontal: false, vertical: true)
-                        .padding(.top, AppSpacing.xxs)
+                        if overspent, let plan, let snapshot {
+                            Text(overspentCaption(plan: plan, snapshot: snapshot))
+                                .font(.dmSans(.subheadline, weight: .medium))
+                                .foregroundStyle(.secondary)
+                                .multilineTextAlignment(.center)
+                                .fixedSize(horizontal: false, vertical: true)
+                                .transition(.opacity)
+                        }
+                    }
                 }
+            }
+            .padding(.top, AppSpacing.lg)
 
+            if !needsIncome {
                 if let snapshot {
                     // Grow the ground to move spending down. At larger text
                     // sizes, scroll the explanation so spending stays reachable.
@@ -284,6 +291,30 @@ struct TodayView: View {
         .animation(reduceMotion ? nil : .easeInOut(duration: 0.3), value: overspent)
     }
 
+    // Every state reserves the same room: the headline plus one line beneath
+    // it, tall enough for the 44-point income pill. Going over, waiting on
+    // income, or stepping between days then moves only the headline inside
+    // the room, never the spending list (DECISIONS 039). The placeholders are
+    // real text so the room grows with Dynamic Type; content that still needs
+    // more, such as a caption wrapping at accessibility sizes, grows it.
+    private func headlineSlot<Content: View>(@ViewBuilder _ content: () -> Content) -> some View {
+        ZStack {
+            VStack(spacing: AppSpacing.xxs) {
+                Text(verbatim: "$0")
+                    .font(.dmSans(size: heroSize, weight: .medium, relativeTo: .largeTitle))
+                    .frame(minHeight: 44)
+                Text(verbatim: "Tomorrow starts at $0.00.")
+                    .font(.dmSans(.subheadline, weight: .medium))
+                    .frame(minHeight: 44)
+            }
+            .hidden()
+            .accessibilityHidden(true)
+
+            content()
+        }
+        .frame(maxWidth: .infinity)
+    }
+
     // Compare at display precision so a fractional-cent deficit that shows as
     // $0.00 never shows a negative state.
     private func isOverspent(_ snapshot: DaySnapshot?) -> Bool {
@@ -295,7 +326,7 @@ struct TodayView: View {
     }
 
     private func balanceBreakdown(_ snapshot: DaySnapshot) -> some View {
-        TodayBalanceSheet(day: snapshot)
+        TodayBalanceBreakdown(day: snapshot)
     }
 
     @ViewBuilder
@@ -310,9 +341,9 @@ struct TodayView: View {
                 // the hero steps down a size before it would wrap.
                 HStack(alignment: .firstTextBaseline, spacing: AppSpacing.xxs) {
                     // Only the state word takes the negative color.
-                    HeroMoneyText(amount: snapshot.headlineAmount, size: heroSize,
+                    HeroMoneyText(amount: snapshot.headlineAmount, size: heroSize, weight: .medium,
                                   suffix: snapshot.isOver ? "over" : "left",
-                                  suffixColor: snapshot.isOver ? .leftFeedbackNegative : .leftTextSecondary,
+                                  suffixColor: snapshot.isOver ? .leftFeedbackNegative : .leftTextTertiary,
                                   suffixSizeRatio: 2.0 / 3.0)
                         .foregroundStyle(Color.leftTextPrimary)
                         .contentTransition(.numericText())
@@ -330,16 +361,17 @@ struct TodayView: View {
                                : "Shows the allowance, carried-forward balance, and logged spending based on your plan")
         } else {
             Text("$–")
-                .font(.dmSans(size: heroSize, weight: .semibold, relativeTo: .largeTitle))
+                .font(.dmSans(size: heroSize, weight: .medium, relativeTo: .largeTitle))
                 .foregroundStyle(.secondary)
         }
     }
 
     private func incomeSetup(_ plan: MonthPlan) -> some View {
         let month = plan.monthStart.formatted(.dateTime.month(.wide))
-        return VStack(alignment: .leading, spacing: AppSpacing.sm) {
+        // Same gap as the headline and caption, so the shared slot fits exactly.
+        return VStack(spacing: AppSpacing.xxs) {
             (Text("$–") + Text(" left").font(.dmSans(size: heroSize * 2 / 3, relativeTo: .largeTitle)))
-                .font(.dmSans(size: heroSize, weight: .semibold, relativeTo: .largeTitle))
+                .font(.dmSans(size: heroSize, weight: .medium, relativeTo: .largeTitle))
                 .foregroundStyle(Color.leftTextSecondary)
                 .fixedSize(horizontal: false, vertical: true)
                 .accessibilityLabel("Daily balance unavailable, income incomplete")
@@ -364,40 +396,6 @@ struct TodayView: View {
     }
 
     // MARK: - Transactions
-
-    private func emptySpendingState(needsIncomeSetup: Bool) -> some View {
-        ScrollView {
-            VStack(spacing: AppSpacing.sm) {
-                Image("TodayEmptyState")
-                    .resizable()
-                    .scaledToFit()
-                    .foregroundStyle(Color.leftAccent)
-                    .frame(maxWidth: 288)
-                    .accessibilityHidden(true)
-
-                Text("No spending today")
-                    .font(.dmSans(size: 16, weight: .semibold, relativeTo: .headline))
-                    .foregroundStyle(.primary)
-
-                Text(isToday
-                     ? (needsIncomeSetup
-                        ? "Tap + to log spending."
-                        : "Tap + to log spending. Unused allowance carries forward.")
-                     : "There are no entries for this day.")
-                    .font(.dmSans(.subheadline, weight: .medium))
-                    .foregroundStyle(.secondary)
-                    .multilineTextAlignment(.center)
-                    .fixedSize(horizontal: false, vertical: true)
-                    .frame(maxWidth: 250)
-            }
-            .padding(.horizontal, AppSpacing.xl)
-            .padding(.top, AppSpacing.xxl * 2)
-            .padding(.bottom, Self.addButtonSize + AppSpacing.xl * 2)
-            .frame(maxWidth: .infinity)
-        }
-        .scrollIndicators(.hidden)
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
-    }
 
     // Today's one add action; it always means logging spending.
     private var addSpendingButton: some View {
@@ -456,11 +454,6 @@ struct TodayView: View {
 
     private func transactionsSection(_ transactions: [Transaction], crossingEntry: Transaction?) -> some View {
         VStack(alignment: .leading, spacing: AppSpacing.sm) {
-            Text("Spending")
-                .font(.dmSans(.headline, weight: .semibold))
-                .accessibilityAddTraits(.isHeader)
-                .padding(.horizontal, AppSpacing.xl)
-
             transactionList(transactions, crossingEntry: crossingEntry)
         }
         .padding(.top, AppSpacing.xl)

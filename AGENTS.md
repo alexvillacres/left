@@ -25,25 +25,40 @@ files unless requested. `CLAUDE.md` is a symlink to this file; preserve it.
   automatically. Do not edit the project file for target membership. Use
   `git mv` for renames of tracked files.
 
+## Component organization
+
+- `Components/UI/`: shared visual primitives and controls.
+- `Components/Navigation/`: shared period controls and app navigation.
+- `Components/Layout/`: shared screen structure and header chrome.
+- `Components/Spending/`: spending-specific components shared across screens.
+- `Screens/Today/`: Today and its screen-specific sections. Other screens can
+  adopt their own folders when they are next worked on.
+- Keep small private helpers beside their owner. Extract substantial sections
+  when it improves discoverability; move them into shared components when reused.
+- A container owns consistent layout or behavior, not the declarations of every
+  control placed inside it. Independent shared components use clearly named files.
+- Remaining files directly in `Components/` have not yet been reorganized.
+
 ## Current file map
 
 | File | Responsibility |
 |---|---|
 | `Left/LeftApp.swift` | Store loading/recovery, root navigation, onboarding, month creation and carry reconciliation |
 | `Left/BudgetModel.swift` | Monthly plans, income sources, savings goals/allocations, recurring expenses, spending and budget math |
-| `Left/Screens/TodayView.swift` | Daily balance, day navigation, spending, catch-up entry and prompt |
-| `Left/Screens/TodayBalanceSheet.swift` | Explanation opened by tapping the balance |
+| `Left/Screens/Today/TodayView.swift` | Daily balance, day navigation, spending, and screen composition |
+| `Left/Screens/Today/TodayBalanceBreakdown.swift` | Explanation opened by tapping the balance |
 | `Left/Screens/ActivityView.swift` | Monthly spending history and editing |
 | `Left/Screens/PlanView.swift` | Monthly plan, historical review, setup steps and plan editors |
 | `Left/Screens/IncomeSheet.swift` | Monthly source amount and whether it repeats |
 | `Left/Screens/AddSpendingView.swift` | Full-screen cents-first spending entry |
-| `Left/Screens/CatchUpView.swift` | One additional spending total for a date range |
 | `Left/Screens/WeeklyReportView.swift` | Weekly report ticket, tiers, and tear-off dismissal |
 | `Left/Screens/OnboardingView.swift` | Introduction leading into monthly setup |
 | `Left/Screens/SettingsView.swift` | Privacy/support links and debug-only backup access |
 | `Left/DataTransfer.swift` | Debug-only JSON export/import and validation |
 | `Left/Components/` | Shared controls, derivation, keypad, navigation and sheet chrome |
-| `Left/Palette.swift`, `BudgetFont.swift`, `AppSpacing.swift`, `MoneyText.swift` | Shared visual and currency conventions |
+| `Left/Palette.swift`, `BudgetFont.swift`, `AppSpacing.swift` | Shared visual conventions |
+| `Left/Components/UI/MoneyText.swift` | Shared currency display |
+| `Left/Screens/Today/TodayEmptyState.swift` | Empty spending illustration and copy |
 
 ## Budget invariants
 
@@ -91,7 +106,7 @@ carriedIn        = carriedGross − carriedAllocated
   tinted one; see DECISIONS 027, 029, and 036.
 - Use shared currency helpers and Foundation USD currency formatting. Never
   manually assemble currency strings.
-- Spending uses cents-first `NumpadView`; catch-up also keeps `NumpadView`. Plan
+- Spending uses cents-first `NumpadView`. Plan
   amounts are whole-dollar and use the system decimal keyboard through
   `MoneyField` on a short sheet. This covers every Plan editor and the onboarding
   setup steps. Onboarding and the recurring-expense sheet still use `NumpadView`
