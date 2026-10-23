@@ -301,3 +301,44 @@ private struct Perforation: Shape {
         }
     }
 }
+
+private extension Color {
+    // MARK: - Weekly report (DECISIONS 029)
+
+    // Celebration grounds, not plan meaning. The ticket keeps its light ground
+    // in both appearances because the artwork is drawn on light paper, so each
+    // role resolves to the same value in dark mode. Every tint is solid: labels
+    // meet 4.5:1 on their ground, and nothing layers opacity over the artwork.
+    static let leftReportTan = reportColor(0xE7E2D0)
+    static let leftReportTanLabel = reportColor(0x636259)
+    static let leftReportTanRule = reportColor(0xD6D2C1)
+    static let leftReportTanPerforation = reportColor(0xBCB9AA)
+    static let leftReportTanStub = reportColor(0xF2EFE5)
+
+    static let leftReportPeriwinkle = reportColor(0xA5B7F1)
+    static let leftReportPeriwinkleLabel = reportColor(0x414858)
+    static let leftReportPeriwinkleRule = reportColor(0x99AADF)
+    static let leftReportPeriwinklePerforation = reportColor(0x8896C4)
+    static let leftReportPeriwinkleStub = reportColor(0xCED7F7)
+
+    static let leftReportButter = reportColor(0xF5F2AE)
+    static let leftReportButterLabel = reportColor(0x68684C)
+    static let leftReportButterRule = reportColor(0xE3E0A1)
+    static let leftReportButterPerforation = reportColor(0xC8C68E)
+    static let leftReportButterStub = reportColor(0xFAF8D2)
+
+    // Ink on every report ground, regardless of appearance.
+    static let leftReportInk = reportColor(0x121212)
+
+    // Intentionally translucent: its job is to let Today show
+    // through behind the ticket.
+    static let leftReportScrim = Color.black.opacity(0.4)
+
+    static func reportColor(_ hex: UInt) -> Color {
+        Color(.sRGB,
+              red: Double((hex >> 16) & 0xFF) / 255,
+              green: Double((hex >> 8) & 0xFF) / 255,
+              blue: Double(hex & 0xFF) / 255,
+              opacity: 1)
+    }
+}

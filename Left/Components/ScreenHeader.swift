@@ -6,8 +6,8 @@ enum ScreenHeaderMetrics {
     // Every icon in the header is one size, so icons sit on the same optical
     // line as the text beside them instead of each control setting its own.
     static let iconSize: CGFloat = 16
-    // Steppers are narrower than a full target but keep the 44-point height.
-    static let stepperWidth: CGFloat = 36
+    // Keep adjacent-period controls comfortably tappable.
+    static let stepperWidth: CGFloat = 44
     // The pill's chevron is set with the label rather than as a control of its
     // own, so it takes a type-ornament size instead of the 16-point icon size.
     static let menuChevronSize: CGFloat = 10
@@ -116,10 +116,33 @@ private extension PeriodRow {
     }
 }
 
+/// A centered period picker flanked by independently accessible navigation.
+struct PeriodNavigationRow<Label: View>: View {
+    let stepper: PeriodStepper
+    @ViewBuilder var label: Label
+
+    var body: some View {
+        HStack(spacing: AppSpacing.sm) {
+            HeaderIconButton(systemImage: "chevron.left",
+                             label: stepper.previousLabel,
+                             isEnabled: stepper.canGoPrevious,
+                             action: stepper.onPrevious)
+            label
+                .frame(maxWidth: .infinity)
+            HeaderIconButton(systemImage: "chevron.right",
+                             label: stepper.nextLabel,
+                             isEnabled: stepper.canGoNext,
+                             action: stepper.onNext)
+        }
+        .frame(minHeight: ScreenHeaderMetrics.rowHeight)
+    }
+}
+
 /// The capsule that names the current period and opens the list of the others.
 struct PeriodPill<Menu: View>: View {
     let label: String
     var isEnabled = true
+    var cornerRadius: CGFloat = 100
     var accessibilityLabel: String
     var accessibilityHint: String?
     @ViewBuilder var menu: Menu
@@ -131,7 +154,7 @@ struct PeriodPill<Menu: View>: View {
         } label: {
             HStack(spacing: AppSpacing.xs) {
                 Text(label)
-                    .font(.dmSans(.callout, weight: .medium))
+                    .font(.dmSans(.callout, weight: .regular))
                     .tracking(BudgetTypography.tracking(for: ScreenHeaderMetrics.periodSize))
                     .monospacedDigit()
 
@@ -142,8 +165,9 @@ struct PeriodPill<Menu: View>: View {
             .foregroundStyle(.primary)
             .padding(.horizontal, AppSpacing.md)
             .padding(.vertical, 7)
-            .background(Capsule().fill(fill))
-            .contentShape(Capsule())
+            .frame(minHeight: 44)
+            .background(RoundedRectangle(cornerRadius: cornerRadius).fill(fill))
+            .contentShape(RoundedRectangle(cornerRadius: cornerRadius))
         }
         .disabled(!isEnabled)
         .accessibilityLabel(accessibilityLabel)

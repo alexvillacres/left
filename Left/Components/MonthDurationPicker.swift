@@ -38,7 +38,7 @@ struct MonthDurationPicker: View {
                         .rotationEffect(.degrees(isExpanded ? 90 : 0))
                 }
                 .font(.dmSans(.body))
-                .padding(.vertical, AppSpacing.lg)
+                .padding(.vertical, AppSpacing.md)
                 .contentShape(Rectangle())
             }
             .buttonStyle(.plain)

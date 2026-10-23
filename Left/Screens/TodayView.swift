@@ -124,15 +124,27 @@ struct TodayView: View {
 
     @ViewBuilder
     private var periodRow: some View {
-        PeriodRow {
+        PeriodNavigationRow(
+            stepper: PeriodStepper(previousLabel: "Previous day",
+                                   nextLabel: "Next day",
+                                   canGoPrevious: navigationTarget(for: -1) != nil,
+                                   canGoNext: navigationTarget(for: 1) != nil,
+                                   onPrevious: { shiftDay(-1) },
+                                   onNext: { shiftDay(1) })
+        ) {
             PeriodPill(
                 label: dayLabel(displayedDate),
                 isEnabled: selectableDays.count > 1,
+                cornerRadius: AppSpacing.xs,
                 accessibilityLabel: isToday
                     ? "Today, \(displayedDate.formatted(.dateTime.weekday(.wide).month(.wide).day()))"
                     : displayedDate.formatted(.dateTime.weekday(.wide).month(.wide).day()),
                 accessibilityHint: "Choose another day this month"
             ) {
+                if !isToday {
+                    Button("Return to Today") { selectDay(.now) }
+                    Divider()
+                }
                 ForEach(selectableDays, id: \.self) { day in
                     Button {
                         selectDay(day)
@@ -145,21 +157,6 @@ struct TodayView: View {
                     }
                 }
             }
-
-            if !isToday {
-                PeriodResetButton(title: "Today") {
-                    withAnimation(reduceMotion ? nil : .spring(duration: 0.4)) {
-                        pastDate = nil
-                    }
-                }
-            }
-        } trailing: {
-            PeriodStepper(previousLabel: "Previous day",
-                          nextLabel: "Next day",
-                          canGoPrevious: navigationTarget(for: -1) != nil,
-                          canGoNext: navigationTarget(for: 1) != nil,
-                          onPrevious: { shiftDay(-1) },
-                          onNext: { shiftDay(1) })
         }
     }
 
@@ -270,7 +267,7 @@ struct TodayView: View {
                 heroAmount(snapshot: snapshot)
                     // Expanding the explanation must not compress the headline.
                     .fixedSize(horizontal: false, vertical: true)
-                    .padding(.top, AppSpacing.sm)
+                    .padding(.top, AppSpacing.xxl)
 
                 if overspent, let plan, let snapshot {
                     Text(overspentCaption(plan: plan, snapshot: snapshot))
@@ -332,7 +329,7 @@ struct TodayView: View {
             } label: {
                 // "left" names the number now that there is no screen title;
                 // the hero steps down a size before it would wrap.
-                HStack(alignment: .top, spacing: AppSpacing.xxs) {
+                HStack(alignment: .firstTextBaseline, spacing: AppSpacing.xxs) {
                     // Only the state word takes the negative color.
                     HeroMoneyText(amount: snapshot.headlineAmount, size: heroSize,
                                   suffix: snapshot.isOver ? "over" : "left",
@@ -341,13 +338,9 @@ struct TodayView: View {
                         .foregroundStyle(Color.leftTextPrimary)
                         .contentTransition(.numericText())
                         .animation(reduceMotion ? nil : .spring(duration: 0.4), value: snapshot.remaining)
-                    Image(systemName: "info.circle")
-                        .font(.system(size: ScreenHeaderMetrics.iconSize))
-                        .foregroundStyle(.secondary)
-                        .padding(.top, AppSpacing.sm)
-                        .accessibilityHidden(true)
+
                 }
-                .frame(maxWidth: .infinity, minHeight: 44, alignment: .leading)
+                .frame(maxWidth: .infinity, minHeight: 44, alignment: .center)
                 .contentShape(Rectangle())
             }
             .buttonStyle(.plain)

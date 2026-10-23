@@ -99,8 +99,8 @@ struct MoneyField: View {
     private var fieldFont: Font {
         switch prominence {
         case .compact:   .dmSans(.caption)
-        case .inline:    .dmSans(.title3, weight: .semibold)
-        case .prominent: .dmSans(size: 44, weight: .semibold, relativeTo: .largeTitle)
+        case .inline:    .dmSans(.title3, weight: .medium)
+        case .prominent: .dmSans(size: 36, weight: .medium, relativeTo: .largeTitle)
         }
     }
 
