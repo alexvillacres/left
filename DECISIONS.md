@@ -792,3 +792,14 @@ only order there is. Mark only that one entry. The line
 describes, it does not advise; do not suggest cutting back or name a
 category. Paper design: "Today over · v1".
 
+### 038. Catch-up is suspended
+
+**Decision:** Remove the catch-up prompt, creation flow, dedicated editor, and
+weekly-report catch-up gate. Existing catch-up totals remain ordinary spending
+on their recorded date, with their range labels retained. Edit them through the
+normal spending editor. Keep persisted model fields, undo metadata, and JSON
+backup support so existing stores and backups remain compatible.
+
+**Why:** Catch-up is being sunset for now while Today is refined. Removing its
+active flow does not require deleting or reinterpreting historical spending.
+

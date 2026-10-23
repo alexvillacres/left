@@ -116,7 +116,6 @@ struct AppRoot: View {
     @State private var onboardingPlan: MonthPlan?
     @State private var weeklyReport: WeeklyReport?
     @State private var selectedTab: AppTab = .today
-    @State private var todayVisitID = UUID()
     @State private var animateTodayAddButtonOnEntry = false
     @State private var coversZoomCorners = false
     @State private var tabDirection: CGFloat = 1
@@ -257,7 +256,6 @@ struct AppRoot: View {
         print("Tab \(selectedTab.title) → \(tab.title): removal x = \(tabRemovalOffset)")
         #endif
         if tab == .today {
-            todayVisitID = UUID()
             animateTodayAddButtonOnEntry = true
         }
         selectedTab = tab
@@ -267,8 +265,7 @@ struct AppRoot: View {
     private var currentScreen: some View {
         switch selectedTab {
         case .today:
-            TodayView(visitID: todayVisitID,
-                      animateAddButtonEntrance: animateTodayAddButtonOnEntry,
+            TodayView(animateAddButtonEntrance: animateTodayAddButtonOnEntry,
                       coversZoomCorners: $coversZoomCorners) {
                 browsedMonth = nil
                 opensPlanIncome = true
@@ -374,15 +371,6 @@ struct AppRoot: View {
 #endif
 
         guard lastWeek.timeIntervalSinceReferenceDate > reportedWeekStart else { return }
-
-        // While Today is asking to catch up on days from last week, the total
-        // is still incomplete. Wait until the gap is logged or acknowledged.
-        if let currentPlan,
-           let period = CatchUpPeriod.current(for: currentPlan, now: now),
-           period.hasThreeQuietDays,
-           period.range.lowerBound < thisWeek {
-            return
-        }
 
         reportedWeekStart = lastWeek.timeIntervalSinceReferenceDate
         guard let report = WeeklyReport.make(weekStart: lastWeek, plans: allPlans),

@@ -6,7 +6,6 @@ struct ActivityView: View {
     // Owned by AppRoot so Plan stays on the same month. nil is the current month.
     @Binding var browsedMonth: Date?
     @State private var activeSpendingSheet: ActiveSpendingSheet?
-    @State private var activeCatchUpSheet: ActiveCatchUpSheet?
     @Environment(\.deleteSpending) private var deleteSpending
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @ScaledMetric private var heroSize = 44
@@ -15,13 +14,6 @@ struct ActivityView: View {
         let id = UUID()
         let plan: MonthPlan
         var transaction: Transaction?
-    }
-
-    private struct ActiveCatchUpSheet: Identifiable {
-        let id = UUID()
-        let plan: MonthPlan
-        let period: ClosedRange<Date>
-        let transaction: Transaction
     }
 
     private struct SpendingDay: Identifiable {
@@ -79,11 +71,6 @@ struct ActivityView: View {
                             date: dates.upperBound,
                             transaction: sheet.transaction,
                             dateRange: dates)
-        }
-        .fullScreenCover(item: $activeCatchUpSheet) { sheet in
-            CatchUpView(plan: sheet.plan,
-                        period: sheet.period,
-                        transaction: sheet.transaction)
         }
     }
 
@@ -178,15 +165,7 @@ struct ActivityView: View {
     }
 
     private func edit(_ transaction: Transaction, in plan: MonthPlan) {
-        if transaction.isCatchUp,
-           let start = transaction.catchUpStartDate,
-           let end = transaction.catchUpEndDate {
-            activeCatchUpSheet = ActiveCatchUpSheet(plan: plan,
-                                                     period: start...end,
-                                                     transaction: transaction)
-        } else {
-            activeSpendingSheet = ActiveSpendingSheet(plan: plan, transaction: transaction)
-        }
+        activeSpendingSheet = ActiveSpendingSheet(plan: plan, transaction: transaction)
     }
 
     private func spendingDays(in plan: MonthPlan) -> [SpendingDay] {

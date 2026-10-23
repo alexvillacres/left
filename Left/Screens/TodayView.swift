@@ -5,7 +5,6 @@ import UIKit
 struct TodayView: View {
     @Query(sort: \MonthPlan.monthStart, order: .reverse) private var plans: [MonthPlan]
     @State private var activeSpendingSheet: ActiveSpendingSheet?
-    @State private var activeCatchUp: ActiveCatchUp?
     @State private var isShowingBalance = false
     @State private var balanceBreakdownHeight: CGFloat = 0
     @State private var pastDate: Date? = nil
@@ -14,7 +13,6 @@ struct TodayView: View {
     @State private var isAddButtonOpaque = false
     @Namespace private var addSpendingMorph
     private static let addSpendingMorphID = "add-spending"
-    var visitID: UUID = UUID()
     var animateAddButtonEntrance = false
     // Owned by the root so it can also cover the tab bar.
     var coversZoomCorners: Binding<Bool> = .constant(false)
@@ -28,12 +26,6 @@ struct TodayView: View {
     private struct ActiveSpendingSheet: Identifiable {
         let id = UUID()
         var transaction: Transaction?
-    }
-
-    private struct ActiveCatchUp: Identifiable {
-        let id = UUID()
-        let period: ClosedRange<Date>
-        let transaction: Transaction?
     }
 
     private typealias DaySnapshot = BalanceDay
@@ -70,12 +62,6 @@ struct TodayView: View {
                     heroSection(plan: plan, snapshot: snapshot,
                                 maxBreakdownHeight: geometry.size.height * 0.45)
                     VStack(spacing: 0) {
-                        if let plan, isToday {
-                            CatchUpCard(plan: plan, visitID: visitID) { period in
-                                openCatchUp(period)
-                            }
-                            .padding(.top, AppSpacing.sm)
-                        }
                         if let snapshot, snapshot.transactions.isEmpty {
                             emptySpendingState(needsIncomeSetup: plan?.needsIncomeSetup ?? false)
                         } else {
@@ -109,13 +95,6 @@ struct TodayView: View {
                 .morphDestination(id: Self.addSpendingMorphID,
                                   in: addSpendingMorph,
                                   active: sheet.transaction == nil && !reduceMotion)
-            }
-        }
-        .fullScreenCover(item: $activeCatchUp) { catchUp in
-            if let plan {
-                CatchUpView(plan: plan,
-                            period: catchUp.period,
-                            transaction: catchUp.transaction)
             }
         }
     }
@@ -384,13 +363,6 @@ struct TodayView: View {
         }
     }
 
-    // MARK: - Catch up
-
-    private func openCatchUp(_ period: CatchUpPeriod) {
-        activeCatchUp = ActiveCatchUp(period: period.range,
-                                      transaction: period.transaction)
-    }
-
     // MARK: - Transactions
 
     private func emptySpendingState(needsIncomeSetup: Bool) -> some View {
@@ -498,12 +470,7 @@ struct TodayView: View {
         List {
             ForEach(transactions) { tx in
                 Button {
-                    if tx.isCatchUp, let start = tx.catchUpStartDate, let end = tx.catchUpEndDate {
-                        activeCatchUp = ActiveCatchUp(period: start...end,
-                                                      transaction: tx)
-                    } else {
-                        activeSpendingSheet = ActiveSpendingSheet(transaction: tx)
-                    }
+                    activeSpendingSheet = ActiveSpendingSheet(transaction: tx)
                 } label: {
                     TransactionRow(transaction: tx, marksZeroCrossing: isShowingBalance && plan?.needsIncomeSetup == false && crossingEntry?.id == tx.id)
                         .padding(.horizontal, AppSpacing.xl)

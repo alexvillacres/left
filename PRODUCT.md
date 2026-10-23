@@ -36,25 +36,17 @@ spending, and remaining balance. Plan bills and savings are already deducted:
 logging them again as daily spending would count them twice. The calendar and
 spending meter have been removed.
 
-### Recording and catching up
+### Recording spending
 
 Normal spending entry is full-screen and cents-first, with an optional note and
 an optional category. No category chip starts selected; spending logged without
 one is uncategorized and shows a dashed icon. Tapping a selected chip clears it.
 The primary flow stays open → type amount → log.
 
-Today offers catch-up when there is a prior active day. After at least three
-uncovered days, it also shows an inline prompt, then waits three days before
-showing it again if there is still no entry. One total records **additional
-spending not already logged** for the displayed period. It is saved once on the
-period's last day and remains identifiable and editable in Today and Activity.
-It does not reconstruct individual purchases or spread the amount across days.
-
-“Nothing spent” acknowledges the period without creating spending. Currently,
-closing the prompt also acknowledges it; it is not a temporary snooze. Merely
-seeing the prompt does not acknowledge the gap. Gap detection uses logged dates
-and acknowledgements, so it is a convenience prompt, not a guarantee that
-records are complete.
+Catch-up is suspended. Today has no catch-up prompt or entry flow. Existing
+catch-up totals remain counted once on their recorded date, retain their range
+labels, and can be edited through the normal spending editor. Persisted fields
+and JSON backup support remain for compatibility.
 
 ### Weekly report
 
@@ -71,8 +63,7 @@ skipped weeks do not pile up.
 
 There is no report for a week with no active plan days, a week whose plan was
 still waiting on income, or a leftover under $4, including zero and overspent
-weeks, until that ticket is designed. While Today's catch-up prompt covers days
-from last week, the report waits until the gap is logged or acknowledged.
+weeks, until that ticket is designed.
 
 ### Monthly planning and income
 
@@ -115,7 +106,7 @@ recurring costs. Keep the existing SwiftData model names for compatibility.
 ## Scope and open questions
 
 The core remains a trustworthy daily number, fast manual entry, understandable
-monthly planning, and a forgiving way to catch up. No bank connection is planned.
+monthly planning, and easy manual spending entry. No bank connection is planned.
 A widget is intended after v1 and is not required for launch.
 
 These questions still need product decisions:
@@ -134,10 +125,6 @@ These questions still need product decisions:
   remain opportunities, not approved launch blockers.
 - **Weekly report range:** the low tiers need more variety, because most weeks
   land under $100, and weeks under $4 or overspent need their own ticket.
-- **Catch-up itself:** whether to keep catch-up at all is being reconsidered.
-  It would be a larger refactor and is set aside for later.
-- **Correction safety:** decide whether closing catch-up should differ from
-  acknowledging no spending. Swipe deletion offers Undo (DECISIONS 031).
 
 Record an agreed direction in DECISIONS.md before treating any of these as a
 standing product rule. Release verification belongs in APP_STORE_CHECKLIST.md.
