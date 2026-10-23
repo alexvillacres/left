@@ -6,14 +6,10 @@ import SwiftUI
 struct TransactionRow: View {
     let transaction: Transaction
     var marksZeroCrossing = false
-    @ScaledMetric(relativeTo: .body) private var iconSlot: CGFloat = 28
 
     var body: some View {
         ListRow(title: title, titleDetail: catchUpRange) {
-            CategoryIcon(category: transaction.category, isCatchUp: transaction.isCatchUp)
-                .font(.dmSans(.body))
-                .foregroundStyle(.primary)
-                .frame(width: iconSlot)
+            SpendingRowIcon(category: transaction.category, isCatchUp: transaction.isCatchUp)
         } trailing: {
             HStack(spacing: AppSpacing.xs) {
                 if marksZeroCrossing {

@@ -456,7 +456,7 @@ struct TodayView: View {
         VStack(alignment: .leading, spacing: AppSpacing.sm) {
             transactionList(transactions, crossingEntry: crossingEntry)
         }
-        .padding(.top, AppSpacing.xl)
+        .padding(.top, AppSpacing.xs)
     }
 
     private func transactionList(_ transactions: [Transaction], crossingEntry: Transaction?) -> some View {

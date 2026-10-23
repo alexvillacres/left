@@ -101,6 +101,10 @@ extension Color {
     static let leftTrack = Color.dynamic(light: 0xEBEBEB, dark: 0x222222)
     static let leftDivider = Color.dynamic(light: 0xE0E0E0, dark: Ramp.neutral800)
     static let leftDividerSubtle = Color.dynamic(light: 0xEDEDED, dark: Ramp.neutral850)
+    // Icon roles mirror Paper and inherit the appearance-aware neutral colors.
+    static let leftBorder = leftDivider
+    static let leftIconWell = leftTrack
+    static let leftIconSecondary = leftTextSecondary
     // Empty fields, decorative amount prefixes, and the version label.
     static let leftPlaceholder = Color.dynamic(light: 0xA1A1A6, dark: 0x717176)
     static let leftIconMuted = Color.dynamic(light: 0xBBBBBB, dark: Ramp.neutral600)
