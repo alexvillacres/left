@@ -111,7 +111,7 @@ struct IncomeSheet: View {
                 HStack(spacing: 12) {
                     if source != nil {
                         Button { showsDeleteConfirmation = true } label: {
-                            Image(systemName: "trash")
+                            AppIcon(asset: "IconTrash", size: 20)
                                 .frame(width: 52, height: 52)
                                 .background(Color.leftTrack, in: RoundedRectangle(cornerRadius: 14))
                         }

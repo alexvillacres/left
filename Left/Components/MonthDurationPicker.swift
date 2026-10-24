@@ -32,8 +32,7 @@ struct MonthDurationPicker: View {
                         .lineLimit(1)
                         .minimumScaleFactor(0.85)
 
-                    Image(systemName: "chevron.right")
-                        .font(.system(size: 13, weight: .semibold))
+                    AppIcon(asset: "IconChevronRight", size: 16)
                         .foregroundStyle(Color(uiColor: .tertiaryLabel))
                         .rotationEffect(.degrees(isExpanded ? 90 : 0))
                 }

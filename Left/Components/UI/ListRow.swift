@@ -107,9 +107,9 @@ struct ListRow<Leading: View, Trailing: View>: View {
         case .none:
             EmptyView()
         case .chevron:
-            ListRowAccessoryImage(systemName: "chevron.right")
+            ListRowAccessoryImage()
         case .external:
-            ListRowAccessoryImage(systemName: "arrow.up.right")
+            ListRowAccessoryImage(asset: "IconExternalLink")
         }
     }
 }
@@ -141,11 +141,10 @@ extension ListRow where Leading == EmptyView, Trailing == EmptyView {
 
 /// The accessory glyph, also used hidden to hold the lane in section headers.
 struct ListRowAccessoryImage: View {
-    var systemName = "chevron.right"
+    var asset = "IconChevronRight"
 
     var body: some View {
-        Image(systemName: systemName)
-            .font(.caption.weight(.semibold))
+        AppIcon(asset: asset, size: 16)
             .foregroundStyle(Color(uiColor: .tertiaryLabel))
             .accessibilityHidden(true)
     }
@@ -267,8 +266,7 @@ struct ListAddRow: View {
     var body: some View {
         Button(action: action) {
             HStack(spacing: AppSpacing.md) {
-                Image(systemName: "plus")
-                    .font(.system(size: 16, weight: .semibold))
+                AppIcon(asset: "IconPlus", size: 20)
                     .frame(width: 24, height: 24)
                 Text(title)
                     .font(.dmSansRowTitle(weight: .semibold))
@@ -290,8 +288,7 @@ struct ListRowRemoveButton: View {
 
     var body: some View {
         Button(role: .destructive, action: action) {
-            Image(systemName: "xmark")
-                .font(.caption.weight(.semibold))
+            AppIcon(asset: "IconClose", size: 16)
                 .foregroundStyle(isEnabled ? Color.leftTextSecondary : Color.leftDisabledForeground)
                 .frame(width: 44, height: 44)
                 .contentShape(Rectangle())

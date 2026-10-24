@@ -36,13 +36,13 @@ struct PeriodNavigationRow<Label: View>: View {
 
     var body: some View {
         HStack(spacing: AppSpacing.sm) {
-            HeaderIconButton(systemImage: "chevron.left",
+            HeaderIconButton(asset: "IconChevronLeft",
                              label: stepper.previousLabel,
                              isEnabled: stepper.canGoPrevious,
                              action: stepper.onPrevious)
             label
                 .frame(maxWidth: .infinity)
-            HeaderIconButton(systemImage: "chevron.right",
+            HeaderIconButton(asset: "IconChevronRight",
                              label: stepper.nextLabel,
                              isEnabled: stepper.canGoNext,
                              action: stepper.onNext)
@@ -62,13 +62,13 @@ struct PeriodStepper: View {
 
     var body: some View {
         HStack(spacing: AppSpacing.xxs) {
-            HeaderIconButton(systemImage: "chevron.left",
+            HeaderIconButton(asset: "IconChevronLeft",
                              label: previousLabel,
                              width: ScreenHeaderMetrics.stepperWidth,
                              isEnabled: canGoPrevious,
                              action: onPrevious)
 
-            HeaderIconButton(systemImage: "chevron.right",
+            HeaderIconButton(asset: "IconChevronRight",
                              label: nextLabel,
                              width: ScreenHeaderMetrics.stepperWidth,
                              isEnabled: canGoNext,
@@ -103,8 +103,8 @@ struct PeriodResetButton: View {
 #Preview {
     VStack(alignment: .leading, spacing: 0) {
         ScreenTitleRow(title: "Activity") {
-            HeaderIconButton(systemImage: "clock.arrow.circlepath",
-                             label: "Catch up spending") {}
+            HeaderIconButton(asset: "IconChevronLeft",
+                             label: "Previous month") {}
         }
 
         PeriodRow {

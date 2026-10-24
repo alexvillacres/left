@@ -178,7 +178,7 @@ struct SavingsGoalSheet: View {
         HStack(spacing: AppSpacing.md) {
             if goal != nil {
                 Button { showsDeleteConfirmation = true } label: {
-                    Image(systemName: "trash")
+                    AppIcon(asset: "IconTrash", size: 20)
                         .foregroundStyle(Color.leftTextSecondary)
                         .frame(width: 52, height: 52)
                         .background(Color.leftTrack, in: RoundedRectangle(cornerRadius: 14))

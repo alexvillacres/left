@@ -25,7 +25,7 @@ struct PlanHeader: View {
                                        onNext: onNext)
             ) {
                 PeriodPill(
-                    label: plan.monthStart.formatted(.dateTime.month(.wide).year()),
+                    label: plan.monthStart.formatted(.dateTime.month(.abbreviated).year()),
                     isEnabled: true,
                     cornerRadius: AppSpacing.xs,
                     accessibilityLabel: "Plan month, \(plan.monthStart.formatted(.dateTime.month(.wide).year()))",
@@ -37,14 +37,14 @@ struct PlanHeader: View {
                         } label: {
                             if candidate.monthStart == plan.monthStart {
                                 Label(candidate.monthStart.formatted(.dateTime.month(.wide).year()),
-                                      systemImage: "checkmark")
+                                      image: "IconCheckmark")
                             } else {
                                 Text(candidate.monthStart, format: .dateTime.month(.wide).year())
                             }
                         }
                     }
                     Divider()
-                    Button("Settings", systemImage: "gearshape", action: onSettings)
+                    Button("Settings", image: .iconSettings, action: onSettings)
                 }
             }
 

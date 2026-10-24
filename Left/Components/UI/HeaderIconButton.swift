@@ -4,7 +4,7 @@ import SwiftUI
 
 /// One icon size, one touch target. Used for every control in the header.
 struct HeaderIconButton: View {
-    let systemImage: String
+    let asset: String
     let label: String
     var hint: String?
     var width: CGFloat = ScreenHeaderMetrics.rowHeight
@@ -13,8 +13,7 @@ struct HeaderIconButton: View {
 
     var body: some View {
         Button(action: action) {
-            Image(systemName: systemImage)
-                .font(.system(size: ScreenHeaderMetrics.iconSize, weight: .medium))
+            AppIcon(asset: asset, size: ScreenHeaderMetrics.iconSize)
                 .frame(width: width, height: ScreenHeaderMetrics.rowHeight)
                 .contentShape(Rectangle())
         }

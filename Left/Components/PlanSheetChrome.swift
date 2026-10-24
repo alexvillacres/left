@@ -8,8 +8,7 @@ struct FlatBackButton: View {
         Button {
             dismiss()
         } label: {
-            Image(systemName: "chevron.left")
-                .font(.dmSans(.subheadline, weight: .semibold))
+            AppIcon(asset: "IconChevronLeft", size: 18)
                 .foregroundStyle(.primary)
                 .frame(width: 44, height: 44)
                 .background(Color(uiColor: .secondarySystemFill))

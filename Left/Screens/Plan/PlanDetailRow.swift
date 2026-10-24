@@ -72,8 +72,7 @@ struct PlanDetailAddButton: View {
     var body: some View {
         Button(action: action) {
             HStack(spacing: AppSpacing.sm) {
-                Image(systemName: "plus")
-                    .font(.system(size: 18, weight: .semibold))
+                AppIcon(asset: "IconPlus", size: 20)
                 Text(title)
                     .font(.dmSans(.body, weight: .medium))
             }

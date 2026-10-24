@@ -235,8 +235,7 @@ struct RecurringExpenseSheet: View {
                 Spacer(minLength: AppSpacing.sm)
                 Text(draftEndsAfter.map { "After \($0.formatted(.dateTime.month(.wide).year()))" } ?? "No end date")
                     .foregroundStyle(Color.leftTextPrimary)
-                Image(systemName: "chevron.right")
-                    .font(.system(size: 12))
+                AppIcon(asset: "IconChevronRight", size: 16)
                     .foregroundStyle(Color.leftIconMuted)
                     .frame(width: 13, height: 13)
                     .rotationEffect(.degrees(showsEndPicker ? 90 : 0))
@@ -279,8 +278,7 @@ struct RecurringExpenseSheet: View {
         Button {
             withAnimation(reduceMotion ? nil : .easeInOut(duration: 0.15)) { gridYear += delta }
         } label: {
-            Image(systemName: symbol)
-                .font(.system(size: 13))
+            AppIcon(asset: symbol == "chevron.left" ? "IconChevronLeft" : "IconChevronRight", size: 16)
                 .foregroundStyle(Color.leftTextSecondary)
                 .frame(width: 44, height: 32)
                 .contentShape(Rectangle())
@@ -322,7 +320,7 @@ struct RecurringExpenseSheet: View {
         HStack(spacing: AppSpacing.md) {
             if expense != nil {
                 Button { isConfirmingDelete = true } label: {
-                    Image(systemName: "trash")
+                    AppIcon(asset: "IconTrash", size: 20)
                         .foregroundStyle(Color.leftTextSecondary)
                         .frame(width: 52, height: 52)
                         .background(Color.leftTrack, in: RoundedRectangle(cornerRadius: 14))
@@ -383,24 +381,26 @@ private struct EndDateRowButtonStyle: ButtonStyle {
 private struct ExpenseSheetFooter<Content: View>: UIViewControllerRepresentable {
     @ViewBuilder var content: () -> Content
 
-    func makeUIViewController(context: Context) -> FooterController<Content> {
-        FooterController(content: content())
+    func makeUIViewController(context: Context) -> FooterController {
+        FooterController(content: AnyView(content()))
     }
 
-    func updateUIViewController(_ controller: FooterController<Content>, context: Context) {
-        controller.host.rootView = content()
+    func updateUIViewController(_ controller: FooterController, context: Context) {
+        controller.host.rootView = AnyView(content())
         controller.host.view.invalidateIntrinsicContentSize()
     }
 
-    static func dismantleUIViewController(_ controller: FooterController<Content>, coordinator: ()) {
+    static func dismantleUIViewController(_ controller: FooterController, coordinator: ()) {
         controller.removeFooter()
     }
 }
 
-private final class FooterController<Content: View>: UIViewController {
-    let host: UIHostingController<Content>
+// Keep the UIKit controller non-generic to avoid a Release optimizer crash
+// when Swift specializes its deinitializer for the footer's view hierarchy.
+private final class FooterController: UIViewController {
+    let host: UIHostingController<AnyView>
 
-    init(content: Content) {
+    init(content: AnyView) {
         host = UIHostingController(rootView: content)
         host.sizingOptions = .intrinsicContentSize
         super.init(nibName: nil, bundle: nil)

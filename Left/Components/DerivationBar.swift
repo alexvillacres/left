@@ -131,7 +131,7 @@ struct DerivationBar: View {
             legendItem("Spendable", color: Color.leftPlanSpendable)
             Spacer(minLength: 0)
             if showsDetails {
-                Image(systemName: "info.circle")
+                AppIcon(asset: "IconInfo", size: 16)
                     .foregroundStyle(.tertiary)
             }
         }

@@ -27,12 +27,11 @@ struct PeriodPill<Menu: View>: View {
         } label: {
             HStack(spacing: AppSpacing.xs) {
                 Text(label)
-                    .font(.dmSans(.callout, weight: .regular))
-                    .tracking(BudgetTypography.tracking(for: ScreenHeaderMetrics.periodSize))
-                    .monospacedDigit()
+                .font(.dmSans(.callout, weight: .regular))
+                .tracking(BudgetTypography.tracking(for: ScreenHeaderMetrics.periodSize))
+                .monospacedDigit()
 
-                Image(systemName: "chevron.down")
-                    .font(.system(size: ScreenHeaderMetrics.menuChevronSize, weight: .semibold))
+                AppIcon(asset: "IconChevronDown", size: 12)
                     .foregroundStyle(isEnabled ? Color.leftTextSecondary : Color.leftDisabledForeground)
             }
             .foregroundStyle(isEnabled ? Color.leftTextPrimary : Color.leftDisabledForeground)
@@ -43,6 +42,8 @@ struct PeriodPill<Menu: View>: View {
             .contentShape(RoundedRectangle(cornerRadius: cornerRadius))
         }
         .buttonStyle(OpaqueButtonStyle())
+        // Keep the native menu label out of surrounding content animations.
+        .transaction { $0.animation = nil }
         .disabled(!isEnabled)
         .accessibilityLabel(accessibilityLabel)
         .accessibilityHint(accessibilityHint ?? "")

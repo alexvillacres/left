@@ -367,7 +367,7 @@ struct PlanView: View {
         .buttonStyle(.plain)
         .contextMenu {
             if canDeleteIncome {
-                Button("Delete \(source.name)", systemImage: "trash", role: .destructive) {
+                Button("Delete \(source.name)", image: .iconTrash, role: .destructive) {
                     deleteIncome(source)
                 }
             }
@@ -418,7 +418,7 @@ struct PlanView: View {
         }
         .buttonStyle(.plain)
         .contextMenu {
-            Button("Delete \(expense.name)", systemImage: "trash", role: .destructive) {
+            Button("Delete \(expense.name)", image: .iconTrash, role: .destructive) {
                 deleteExpense(expense)
             }
         }
@@ -443,7 +443,7 @@ struct PlanView: View {
         }
         .buttonStyle(.plain)
         .contextMenu {
-            Button("Delete \(goal.name)", systemImage: "trash", role: .destructive) {
+            Button("Delete \(goal.name)", image: .iconTrash, role: .destructive) {
                 deleteSavingsGoal(goal)
             }
         }
@@ -681,7 +681,7 @@ struct PlanView: View {
             Button {
                 activeIncomeSheet = ActiveIncomeSheet()
             } label: {
-                Label("Add income source", systemImage: "plus")
+                Label("Add income source", image: "IconPlus")
                     .font(.dmSans(.body, weight: .medium))
                     .foregroundStyle(.primary)
                     .frame(maxWidth: .infinity)
@@ -758,7 +758,7 @@ struct PlanView: View {
             Button {
                 presentExpenseEditor()
             } label: {
-                Label("Add recurring expense", systemImage: "plus")
+                Label("Add recurring expense", image: "IconPlus")
                     .font(.dmSans(.body, weight: .medium))
                     .foregroundStyle(.primary)
                     .frame(maxWidth: .infinity)
@@ -1061,8 +1061,7 @@ private struct PlanBackLink: View {
     var body: some View {
         Button { dismiss() } label: {
             HStack(spacing: 6) {
-                Image(systemName: "chevron.left")
-                    .font(.system(size: 16, weight: .medium))
+                AppIcon(asset: "IconChevronLeft", size: 18)
                 Text("Plan")
                     .font(.dmSans(.callout, weight: .medium))
             }

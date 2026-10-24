@@ -68,7 +68,7 @@ private struct NumpadKeys: View {
             .accessibilityLabel("Decimal point")
         case .backspace:
             keyButton { onBackspace() } label: {
-                Image(systemName: "delete.backward")
+                AppIcon(asset: "IconBackspace", size: 26)
             }
             .accessibilityLabel("Backspace")
         case .blank:

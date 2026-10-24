@@ -39,7 +39,7 @@ struct ActivityHeader: View {
                                            onNext: onNext)
                 ) {
                     PeriodPill(
-                        label: plan.monthStart.formatted(.dateTime.month(.wide).year()),
+                        label: plan.monthStart.formatted(.dateTime.month(.abbreviated).year()),
                         isEnabled: plans.count > 1,
                         cornerRadius: AppSpacing.xs,
                         accessibilityLabel: "Month, \(plan.monthStart.formatted(.dateTime.month(.wide).year()))",
@@ -51,7 +51,7 @@ struct ActivityHeader: View {
                             } label: {
                                 if candidate.monthStart == plan.monthStart {
                                     Label(candidate.monthStart.formatted(.dateTime.month(.wide).year()),
-                                          systemImage: "checkmark")
+                                          image: "IconCheckmark")
                                 } else {
                                     Text(candidate.monthStart, format: .dateTime.month(.wide).year())
                                 }

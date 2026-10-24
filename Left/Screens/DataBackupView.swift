@@ -40,7 +40,7 @@ struct DataBackupView: View {
                 Button {
                     isChoosingImport = true
                 } label: {
-                    Label("Choose JSON backup", systemImage: "square.and.arrow.down")
+                    Label("Choose JSON backup", image: "IconDownload")
                 }
             } header: {
                 Text("Import")

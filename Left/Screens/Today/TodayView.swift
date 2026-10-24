@@ -129,7 +129,7 @@ struct TodayView: View {
                         selectDay(day)
                     } label: {
                         if Calendar.current.isDate(day, inSameDayAs: displayedDate) {
-                            Label(dayLabel(day), systemImage: "checkmark")
+                            Label(dayLabel(day), image: "IconCheckmark")
                         } else {
                             Text(dayLabel(day))
                         }
@@ -354,7 +354,7 @@ struct TodayView: View {
                 Button(action: onSetUpIncome) {
                     HStack(spacing: AppSpacing.xs) {
                         Text("Add \(month) income")
-                        Image(systemName: "chevron.right").font(.system(size: 10, weight: .semibold))
+                        AppIcon(asset: "IconChevronRight", size: 12)
                     }
                     .font(.dmSans(.subheadline, weight: .medium))
                     .padding(.horizontal, AppSpacing.md)
@@ -378,8 +378,7 @@ struct TodayView: View {
             activeSpendingSheet = ActiveSpendingSheet()
             blendZoomCorners()
         } label: {
-            Image(systemName: "plus")
-                .font(.system(size: 20, weight: .semibold))
+            AppIcon(asset: "IconPlus", size: 20)
                 .foregroundStyle(Color.leftTextOnAccent)
                 .frame(width: Self.addButtonSize, height: Self.addButtonSize)
                 .background(Circle().fill(Color.leftAccent))
@@ -451,7 +450,7 @@ struct TodayView: View {
                     Button(role: .destructive) {
                         deleteSpending(tx)
                     } label: {
-                        Label("Delete", systemImage: "trash")
+                        Label("Delete", image: "IconTrash")
                     }
                     .tint(Color.leftDestructiveFill)
                 }

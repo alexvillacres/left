@@ -45,7 +45,7 @@ struct ActivityHistoryList: View {
                         Button(role: .destructive) {
                             deleteSpending(transaction)
                         } label: {
-                            Label("Delete", systemImage: "trash")
+                            Label("Delete", image: "IconTrash")
                         }
                         .tint(Color.leftDestructiveFill)
                     }
